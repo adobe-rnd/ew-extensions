@@ -1,0 +1,77 @@
+/**
+ * Authenticated fetch for DA services.
+ *
+ * Unlike the da-nx version, this does NOT import IMS or nx.js.
+ * The token is provided once by the DA App SDK (via skills.js bootstrap)
+ * and reused for all subsequent requests.
+ */
+
+const AEM_ORIGIN = 'https://admin.hlx.page';
+
+const TOKEN_URL_PREFIXES = [
+  'https://admin.da.live',
+  'https://stage-admin.da.live',
+  'http://localhost:8787',
+  'https://content.da.live',
+  'https://stage-content.da.live',
+  'http://localhost:8788',
+];
+
+let _token = null;
+
+/**
+ * Called once at boot with the IMS token from the DA App SDK.
+ * @param {string} token
+ */
+export function initAuth(token) {
+  _token = token;
+}
+
+function resolveOrigin() {
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get('da-admin');
+  if (override === 'local') return 'http://localhost:8787';
+  if (override === 'stage') return 'https://stage-admin.da.live';
+  return 'https://admin.da.live';
+}
+
+export const DA_ORIGIN = resolveOrigin();
+
+function shouldAttachToken(url) {
+  try {
+    const resolved = new URL(url, window.location.href).href;
+    if (resolved.startsWith(AEM_ORIGIN)) return true;
+    return TOKEN_URL_PREFIXES.some((prefix) => resolved.startsWith(prefix));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch with optional IMS bearer for DA admin / content / AEM URLs.
+ * @param {string} url
+ * @param {RequestInit} [opts]
+ * @returns {Promise<Response>}
+ */
+export async function daFetch(url, opts = {}) {
+  const nextOpts = {
+    ...opts,
+    headers: { ...(opts.headers || {}) },
+  };
+
+  if (_token && shouldAttachToken(url)) {
+    nextOpts.headers.Authorization = `Bearer ${_token}`;
+    if (typeof url === 'string' && url.startsWith(AEM_ORIGIN)) {
+      nextOpts.headers['x-content-source-authorization'] = `Bearer ${_token}`;
+    }
+  }
+
+  let resp;
+  try {
+    resp = await fetch(url, nextOpts);
+  } catch (err) {
+    resp = new Response(null, { status: 500, statusText: String(err?.message || err) });
+  }
+
+  return resp;
+}

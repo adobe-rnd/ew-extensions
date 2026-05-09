@@ -1,0 +1,331 @@
+:host {
+  --local-purple-bg: color-mix(in srgb, #7c3aed 12%, transparent);
+  --local-purple-fg: #7c3aed;
+  --local-orange-bg: color-mix(in srgb, #ea580c 12%, transparent);
+  --local-orange-fg: #c2410c;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: calc(100vh - var(--s2-nav-height, 0px));
+  min-height: calc(100dvh - var(--s2-nav-height, 0px));
+  font-family: var(--s2-font-family);
+  color: var(--s2-gray-900);
+}
+
+/* ─── loading / empty ───────────────────────────────────────────────────────── */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s2-spacing-400);
+  color: var(--s2-gray-600);
+  font-size: var(--s2-body-size-s);
+}
+
+.refresh-indicator {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.refresh-indicator-label {
+  align-self: flex-end;
+  padding: 2px var(--s2-spacing-100);
+  margin: var(--s2-spacing-50) var(--s2-spacing-100) 0 0;
+  border-radius: 999px;
+  background: light-dark(var(--s2-blue-100), color-mix(in srgb, var(--s2-blue-900) 18%, transparent));
+  color: var(--s2-blue-900);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.refresh-indicator-track {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: light-dark(var(--s2-gray-200), var(--s2-gray-300));
+  overflow: hidden;
+}
+
+.refresh-indicator-bar {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--s2-blue-900);
+  animation: refresh-progress 1.1s ease-in-out infinite;
+}
+
+.empty {
+  padding: var(--s2-spacing-200);
+  text-align: center;
+  color: var(--s2-gray-600);
+  font-size: var(--s2-body-size-s);
+}
+
+/* ─── org/site entry gate ───────────────────────────────────────────────────── */
+
+.gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--s2-spacing-400);
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-200);
+  padding: var(--s2-spacing-300);
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-corner-radius-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+}
+
+.gate-heading {
+  margin: 0;
+  font-size: var(--s2-heading-size-s);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-900);
+}
+
+.gate-desc {
+  margin: 0;
+  font-size: var(--s2-body-size-s);
+  color: var(--s2-gray-600);
+  line-height: 1.5;
+}
+
+.gate-form {
+  gap: var(--s2-spacing-150);
+}
+
+.gate-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-50);
+  font-size: var(--s2-body-size-s);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-800);
+}
+
+.gate-actions {
+  margin-top: var(--s2-spacing-100);
+}
+
+/* ─── button primitives ─────────────────────────────────────────────────────── */
+
+/* Shared base for all icon-sized buttons (close, more, row actions) */
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--s2-corner-radius-100);
+  background: transparent;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+
+.btn-icon:hover {
+  background: var(--s2-gray-200);
+  color: var(--s2-gray-900);
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid var(--s2-blue-900);
+  outline-offset: 2px;
+}
+
+/* ─── root layout ───────────────────────────────────────────────────────────── */
+
+.root {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden; /* required to clip the drawer while it slides */
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── list column: fills 100% until the drawer opens ───────────────────────── */
+
+.col-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--s2-gray-200);
+}
+
+/* ─── editor drawer: collapsed (zero width) by default ─────────────────────── */
+
+.col-editor {
+  flex: 0 0 62%;
+  max-width: 0;
+  overflow: hidden;
+  display: flex;
+  transition: max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Drawer slides in when is-drawer-open is on the root */
+.root.is-drawer-open .col-editor {
+  max-width: 62%;
+}
+
+/* Inner content fills the drawer so it never reflows during the slide */
+.col-editor-inner {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--s2-gray-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+}
+
+/* ─── chat toggle button ─────────────────────────────────────────────────────── */
+
+.chat-toggle-btn {
+  margin-left: auto;
+  padding: var(--s2-spacing-50) var(--s2-spacing-150, var(--s2-spacing-100));
+  border: 1px solid var(--s2-gray-300);
+  border-radius: var(--s2-corner-radius-200);
+  background: none;
+  color: var(--s2-gray-700);
+  font-size: var(--s2-body-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.chat-toggle-btn:hover {
+  background: var(--s2-gray-100);
+  color: var(--s2-gray-900);
+}
+
+.chat-toggle-btn.is-active {
+  background: var(--s2-blue-100);
+  border-color: var(--s2-blue-400);
+  color: var(--s2-blue-900);
+}
+
+/* ─── chat drawer: collapsed by default, slides in from the left ─────────── */
+
+.chat-drawer {
+  flex: 0 0 380px;
+  max-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.root.is-chat-open .chat-drawer {
+  max-width: 380px;
+  border-right: 1px solid var(--s2-gray-200);
+}
+
+.chat-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2-spacing-100) var(--s2-spacing-200);
+  border-bottom: 1px solid var(--s2-gray-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
+}
+
+.chat-drawer-title {
+  font-weight: 700;
+  font-size: var(--s2-body-size-m);
+  color: var(--s2-gray-900);
+}
+
+.chat-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-drawer-body nx-chat {
+  flex: 1;
+  min-height: 0;
+}
+
+/* When both drawers are open, shrink the editor so everything fits */
+.root.is-drawer-open.is-chat-open .col-editor {
+  max-width: 45%;
+}
+
+/* ─── keyframes ──────────────────────────────────────────────────────────────── */
+
+@keyframes refresh-progress {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+
+/* ─── responsive ──────────────────────────────────────────────────────────────── */
+
+@media (width <= 900px) {
+  .root {
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .col-list {
+    border-right: none;
+    border-bottom: 1px solid var(--s2-gray-200);
+    max-height: 50vh;
+  }
+
+  /* Drawer slides in from below on mobile */
+  .col-editor {
+    flex: 0 0 100%;
+    max-width: unset;
+    max-height: 0;
+    transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .root.is-drawer-open .col-editor {
+    max-width: unset;
+    max-height: 50vh;
+  }
+
+  .col-editor-inner {
+    border-left: none;
+    border-top: 1px solid var(--s2-gray-200);
+  }
+
+  .chat-drawer {
+    flex: 0 0 100%;
+    max-width: unset;
+    max-height: 0;
+    transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .root.is-chat-open .chat-drawer {
+    max-width: unset;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--s2-gray-200);
+  }
+}
