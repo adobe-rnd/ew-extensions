@@ -50,6 +50,13 @@ import {
   renderEditorPanel,
 } from './renderers.js';
 import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
+import {
+  onMessage,
+  sendMessage,
+  consumeSuggestionFromStorage,
+  consumeNavHint,
+  onStorageSuggestion,
+} from './utils/skills-channel.js';
 
 const [styles, catalogStyles, editorStyles, toolsStyles] = await Promise.all([
   loadStyle(import.meta.url),
@@ -178,22 +185,36 @@ class NxSkillsEditor extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [styles, catalogStyles, editorStyles, toolsStyles];
-    this._isChatOpen = sessionStorage.getItem('nx-skills-editor-chat-open') === '1';
+    this._isChatOpen = false;
+
+    // BroadcastChannel listeners (future da-nx + cross-tab)
+    this._unsubBC = [
+      onMessage('suggestion-handoff', (payload) => this._onSuggestionFromChannel(payload)),
+      onMessage('clear-form', () => this._onClearFormHandler()),
+    ];
+
+    // Legacy: window events for same-document compat (testing, fallback)
     window.addEventListener(DA_SKILLS_EDITOR_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.addEventListener(DA_SKILLS_LAB_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.addEventListener(DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
     window.addEventListener(DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
+
+    // Cross-tab: listen for storage events (legacy chat writes to sessionStorage)
+    this._unsubStorage = onStorageSuggestion((data) => this._onSuggestionFromChannel(data));
+
+    // Check sessionStorage for a suggestion left before we loaded
+    const pending = consumeSuggestionFromStorage();
+    if (pending) this._onSuggestionFromChannel(pending);
+
     window.addEventListener('popstate', this._onPopstateHandler);
-    // Seed initial history state so back navigation knows which tab was active
     history.replaceState({ ...history.state, skillsEditorTab: this._catalogTab }, '');
-    if (this._isChatOpen) {
-      this._chatLoaded = false; // Chat drawer not available in standalone app
-    }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     clearTimeout(this._statusTimer);
+    this._unsubBC?.forEach((unsub) => unsub());
+    this._unsubStorage?.();
     window.removeEventListener(DA_SKILLS_EDITOR_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.removeEventListener(DA_SKILLS_LAB_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.removeEventListener(DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
@@ -470,14 +491,17 @@ class NxSkillsEditor extends LitElement {
 
   _applySuggestion() {
     const suggestion = consumeSuggestionHandoff();
-    if (suggestion) {
-      this._formSkillId = suggestion.id || '';
-      this._formSkillBody = suggestion.body || '';
-      this._isFormEdit = false;
-      this._hasSuggestion = true;
-      this._catalogTab = 'skills';
-      this._isEditorOpen = true;
-    }
+    if (suggestion) this._onSuggestionFromChannel(suggestion);
+  }
+
+  _onSuggestionFromChannel(suggestion) {
+    if (!suggestion) return;
+    this._formSkillId = suggestion.id || '';
+    this._formSkillBody = suggestion.body || '';
+    this._isFormEdit = false;
+    this._hasSuggestion = true;
+    this._catalogTab = 'skills';
+    this._isEditorOpen = true;
   }
 
   // ─── form helpers ─────────────────────────────────────────────────────────
@@ -497,8 +521,7 @@ class NxSkillsEditor extends LitElement {
     this._clearDirty();
     this._clearForm();
     this._isEditorOpen = false;
-    window.dispatchEvent(new CustomEvent(DA_SKILLS_EDITOR_FORM_DISMISS, { bubbles: true }));
-    window.dispatchEvent(new CustomEvent(DA_SKILLS_LAB_FORM_DISMISS, { bubbles: true }));
+    sendMessage('form-dismiss');
   }
 
   _closeEditor() {
@@ -1184,10 +1207,8 @@ class NxSkillsEditor extends LitElement {
   // ─── prompt → chat dispatch ───────────────────────────────────────────────
 
   _dispatchPromptToChat(eventName, prompt) {
-    window.dispatchEvent(new CustomEvent(eventName, {
-      detail: { prompt: String(prompt || '') },
-      bubbles: true,
-    }));
+    const type = eventName.includes('send') ? 'prompt-send' : 'prompt-add';
+    sendMessage(type, { prompt: String(prompt || '') });
   }
 
   async _onSaveAgent() {
