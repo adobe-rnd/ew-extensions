@@ -5,6 +5,13 @@
 
 export { DA_ORIGIN, daFetch } from './da-fetch.js';
 
+/** Only allow safe slug characters to prevent path traversal via hash. */
+const SAFE_SLUG = /^[a-zA-Z0-9_-]+$/;
+
+function sanitizeSlug(value) {
+  return value && SAFE_SLUG.test(value) ? value : undefined;
+}
+
 const parse = (location = window.location) => {
   const pathView = location.pathname.slice(1);
   const view = pathView === '' ? 'browse' : pathView;
@@ -13,8 +20,8 @@ const parse = (location = window.location) => {
   const [org, site, ...parts] = hashPath.split('/');
   return {
     view,
-    org: org || undefined,
-    site: site || undefined,
+    org: sanitizeSlug(org),
+    site: sanitizeSlug(site),
     path: parts?.join('/') || undefined,
   };
 };
