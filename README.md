@@ -12,12 +12,12 @@ Users access it at `https://da.live/apps/skills#/{org}/{site}`.
 
 ## Local development
 
-da-nx's shim supports a `?da-skills=local` override (stored in localStorage) that makes it load the component from `http://localhost:3000` instead of the CDN.
+da-nx's shim supports a `?da-skills=local` override (stored in localStorage) that makes it load the component from `http://localhost:3001` instead of the CDN. Port 3001 avoids conflict with da-live (port 3000).
 
 ```bash
 # 1. Serve da-skills locally
 cd ~/Projects/DA/da-skills
-python3 -m http.server 3000
+python3 -m http.server 3001
 
 # 2. Open da.live with the local override
 # https://da.live/apps/skills?da-skills=local#/{org}/{site}
