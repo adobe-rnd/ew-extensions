@@ -53,16 +53,22 @@ function shouldAttachToken(url) {
  * @param {RequestInit} [opts]
  * @returns {Promise<Response>}
  */
+function getToken() {
+  if (_token) return _token;
+  try { return window.adobeIMS?.getAccessToken()?.token; } catch { return null; }
+}
+
 export async function daFetch(url, opts = {}) {
   const nextOpts = {
     ...opts,
     headers: { ...(opts.headers || {}) },
   };
 
-  if (_token && shouldAttachToken(url)) {
-    nextOpts.headers.Authorization = `Bearer ${_token}`;
+  const token = getToken();
+  if (token && shouldAttachToken(url)) {
+    nextOpts.headers.Authorization = `Bearer ${token}`;
     if (typeof url === 'string' && url.startsWith(AEM_ORIGIN)) {
-      nextOpts.headers['x-content-source-authorization'] = `Bearer ${_token}`;
+      nextOpts.headers['x-content-source-authorization'] = `Bearer ${token}`;
     }
   }
 

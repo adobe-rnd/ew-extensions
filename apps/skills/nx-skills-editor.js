@@ -116,6 +116,7 @@ class NxSkillsEditor extends LitElement {
     _isChatOpen: { state: true },
     _gateOrg: { state: true },
     _gateSite: { state: true },
+    chatImportUrl: { type: String, attribute: 'chat-import-url' },
   };
 
   // ─── non-reactive instance fields (simple inits, not LitElement state) ────
@@ -185,7 +186,12 @@ class NxSkillsEditor extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [styles, catalogStyles, editorStyles, toolsStyles];
-    this._isChatOpen = false;
+    this._isChatOpen = this.chatImportUrl
+      ? sessionStorage.getItem('nx-skills-editor-chat-open') === '1'
+      : false;
+    if (this._isChatOpen && this.chatImportUrl) {
+      import(this.chatImportUrl).then(() => { this._chatLoaded = true; });
+    }
 
     // BroadcastChannel listeners (future da-nx + cross-tab)
     this._unsubBC = [
@@ -534,8 +540,9 @@ class NxSkillsEditor extends LitElement {
   async _toggleChat() {
     this._isChatOpen = !this._isChatOpen;
     sessionStorage.setItem('nx-skills-editor-chat-open', this._isChatOpen ? '1' : '0');
-    if (this._isChatOpen && !this._chatLoaded) {
-      this._chatLoaded = false; // Chat drawer not available in standalone app
+    if (this._isChatOpen && !this._chatLoaded && this.chatImportUrl) {
+      await import(this.chatImportUrl);
+      this._chatLoaded = true;
     }
   }
 
@@ -1447,4 +1454,4 @@ class NxSkillsEditor extends LitElement {
   }
 }
 
-customElements.define('nx-skills-editor', NxSkillsEditor);
+if (!customElements.get('nx-skills-editor')) customElements.define('nx-skills-editor', NxSkillsEditor);
