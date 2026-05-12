@@ -116,6 +116,7 @@ class NxSkillsEditor extends LitElement {
     _isChatOpen: { state: true },
     _gateOrg: { state: true },
     _gateSite: { state: true },
+    _confirmDialog: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
   };
 
@@ -139,10 +140,14 @@ class NxSkillsEditor extends LitElement {
   /** Count of in-flight operations that want the refresh indicator shown. */
   _refreshingCount = 0;
 
+  _resolveConfirm = null;
+
   // ─── stable event-handler references (class fields so connect/disconnect are symmetric) ────
   _onSuggestionHandler = () => this._applySuggestion();
 
   _onClearFormHandler = () => this._clearForm();
+
+  _onSkillsChangedHandler = () => this._loadSkills({ silent: true, showRefreshIndicator: true });
 
   _onPopstateHandler = (e) => this._onPopstate(e);
 
@@ -183,6 +188,25 @@ class NxSkillsEditor extends LitElement {
 
   get _site() { return this._hash.value?.site; }
 
+  /**
+   * Promise-based replacement for window.confirm().
+   * @param {string} itemType - e.g. "skill", "prompt", "MCP server"
+   * @param {string} itemId   - the identifier shown to the user
+   * @returns {Promise<boolean>}
+   */
+  _confirm(itemType, itemId) {
+    return new Promise((resolve) => {
+      this._resolveConfirm = resolve;
+      this._confirmDialog = { itemType, itemId };
+    });
+  }
+
+  _closeConfirm(accepted) {
+    this._resolveConfirm?.(accepted);
+    this._resolveConfirm = null;
+    this._confirmDialog = null;
+  }
+
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [styles, catalogStyles, editorStyles, toolsStyles];
@@ -204,6 +228,7 @@ class NxSkillsEditor extends LitElement {
     window.addEventListener(DA_SKILLS_LAB_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.addEventListener(DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
     window.addEventListener(DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
+    window.addEventListener('da-skills-changed', this._onSkillsChangedHandler);
 
     // Cross-tab: listen for storage events (legacy chat writes to sessionStorage)
     this._unsubStorage = onStorageSuggestion((data) => this._onSuggestionFromChannel(data));
@@ -225,6 +250,7 @@ class NxSkillsEditor extends LitElement {
     window.removeEventListener(DA_SKILLS_LAB_SUGGESTION_HANDOFF, this._onSuggestionHandler);
     window.removeEventListener(DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
     window.removeEventListener(DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
+    window.removeEventListener('da-skills-changed', this._onSkillsChangedHandler);
     window.removeEventListener('popstate', this._onPopstateHandler);
   }
 
@@ -796,8 +822,7 @@ class NxSkillsEditor extends LitElement {
   async _onDeleteSkill() {
     const id = this._formSkillId.trim();
     if (!id) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete skill "${id}"? This cannot be undone.`)) return;
+    if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
     // Read existing content before deleting, so we can rollback if needed.
@@ -827,8 +852,7 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onDeleteSkillById(id) {
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete skill "${id}"? This cannot be undone.`)) return;
+    if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
     const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
@@ -981,8 +1005,7 @@ class NxSkillsEditor extends LitElement {
   async _onDeletePrompt() {
     const title = this._formPromptTitle.trim();
     if (!title) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete prompt "${title}"? This cannot be undone.`)) return;
+    if (!await this._confirm('prompt', title)) return;
     this._isSaveBusy = true;
 
     const result = await deletePromptFromConfig(this._org, this._site, title);
@@ -1015,8 +1038,7 @@ class NxSkillsEditor extends LitElement {
   async _deletePromptDirect(row) {
     const title = row.title || '';
     if (!title) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete prompt "${title}"? This cannot be undone.`)) return;
+    if (!await this._confirm('prompt', title)) return;
     const result = await deletePromptFromConfig(this._org, this._site, title);
     if (!result.ok) {
       this._setStatus(result.error || 'Failed to delete prompt', STATUS_TYPE.ERR);
@@ -1066,8 +1088,7 @@ class NxSkillsEditor extends LitElement {
   async _onDeleteMcpDirect(row) {
     const key = String(row?.key || '').trim();
     if (!key) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Remove MCP server "${key}"? This cannot be undone.`)) return;
+    if (!await this._confirm('MCP server', key)) return;
     this._isSaveBusy = true;
     const result = await deleteMcpServer(this._org, this._site, key);
     this._isSaveBusy = false;
@@ -1440,6 +1461,7 @@ class NxSkillsEditor extends LitElement {
     ].filter(Boolean).join(' ');
 
     const vm = this._buildViewModel();
+    const dlg = this._confirmDialog;
     return html`<div class="${rootCls}" role="region" aria-label="Skills Editor">
       ${this._refreshingCount > 0 ? html`
         <div class="refresh-indicator" role="status" aria-live="polite">
@@ -1450,6 +1472,26 @@ class NxSkillsEditor extends LitElement {
       ${renderChatDrawer(vm)}
       ${renderListCol(vm)}
       ${renderEditorPanel(vm)}
+      ${dlg ? html`
+        <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
+          <div class="confirm-dialog" role="alertdialog"
+               aria-labelledby="confirm-title"
+               aria-describedby="confirm-desc"
+               @click=${(e) => e.stopPropagation()}>
+            <p id="confirm-title" class="confirm-heading">
+              You're about to delete ${dlg.itemType}:
+            </p>
+            <p id="confirm-desc" class="confirm-id"><code>${dlg.itemId}</code></p>
+            <p class="confirm-warning">This action cannot be undone</p>
+            <div class="confirm-actions">
+              <button class="confirm-btn confirm-btn-cancel"
+                      @click=${() => this._closeConfirm(false)}>Cancel</button>
+              <button class="confirm-btn confirm-btn-confirm"
+                      @click=${() => this._closeConfirm(true)}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      ` : nothing}
     </div>`;
   }
 }
