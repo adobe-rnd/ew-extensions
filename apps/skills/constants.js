@@ -8,7 +8,7 @@ const TAB_MEMORY = 'memory';
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
   { id: TAB_SKILLS, label: 'Skills' },
-  { id: TAB_AGENTS, label: 'Agents' },
+  { id: TAB_AGENTS, label: 'Plugins' },
   { id: TAB_PROMPTS, label: 'Prompts' },
   { id: TAB_MCPS, label: 'MCPs' },
   { id: TAB_MEMORY, label: 'Memory' },
@@ -17,7 +17,7 @@ const CATALOG_TABS = [
 /** Per-tab metadata for the "new" button label and the opener method name. */
 const TAB_ACTIONS = {
   [TAB_SKILLS]: { btnLabel: '+ New Skill', opener: 'openNewSkillEditor' },
-  [TAB_AGENTS]: { btnLabel: '+ New Agent', opener: 'openNewAgentEditor' },
+  [TAB_AGENTS]: { btnLabel: '+ New Plugin', opener: 'openNewAgentEditor' },
   [TAB_PROMPTS]: { btnLabel: '+ New Prompt', opener: 'openNewEditor' },
   [TAB_MCPS]: { btnLabel: '+ Register MCP', opener: 'openNewMcpEditor' },
 };
