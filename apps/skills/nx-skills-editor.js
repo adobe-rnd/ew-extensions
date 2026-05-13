@@ -1243,7 +1243,7 @@ class NxSkillsEditor extends LitElement {
     const id = this._newAgentId.trim().replace(/\.json$/i, '');
     const name = this._newAgentName.trim() || id;
     if (!id) {
-      this._setStatus('Plugin id required', STATUS_TYPE.ERR);
+      this._setStatus('Agent id required', STATUS_TYPE.ERR);
       return;
     }
     this._isSaveBusy = true;
@@ -1257,13 +1257,13 @@ class NxSkillsEditor extends LitElement {
     const result = await saveAgentPresetFile(this._org, this._site, id, preset);
     this._isSaveBusy = false;
     if (!result.ok) {
-      this._setStatus(result.error || 'Failed to save plugin file', STATUS_TYPE.ERR);
+      this._setStatus(result.error || 'Failed to save agent file', STATUS_TYPE.ERR);
       return;
     }
     this._newAgentId = '';
     this._newAgentName = '';
     this._clearDirty();
-    this._setStatus('Plugin saved');
+    this._setStatus('Agent file saved');
     await this._reload();
   }
 
