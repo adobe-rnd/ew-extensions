@@ -357,6 +357,19 @@ async function deleteSheetRow(org, site, sheetName, matchFn, label = 'row') {
 
 const SKILLS_SHEET = 'skills';
 
+const recentlyDeletedSkills = new Set();
+const DELETED_GUARD_MS = 15_000;
+
+export function markSkillDeleted(skillId) {
+  const id = String(skillId || '').trim().replace(/\.md$/i, '');
+  recentlyDeletedSkills.add(id);
+  setTimeout(() => recentlyDeletedSkills.delete(id), DELETED_GUARD_MS);
+}
+
+export function isSkillRecentlyDeleted(skillId) {
+  return recentlyDeletedSkills.has(String(skillId || '').trim().replace(/\.md$/i, ''));
+}
+
 export function skillRowStatus(row) {
   if (!row || typeof row !== 'object') return 'approved';
   return String(row.status ?? '').trim().toLowerCase() === 'draft' ? 'draft' : 'approved';
@@ -489,8 +502,10 @@ export async function syncOrphanSkillsToConfig(org, site) {
   );
   const fileKeys = new Set(Object.keys(fileMap));
 
-  // 1. .md files missing from config → add config rows
-  const configBackfilled = [...fileKeys].filter((k) => k && !configKeys.has(k));
+  // 1. .md files missing from config → add config rows (skip recently deleted)
+  const configBackfilled = [...fileKeys].filter(
+    (k) => k && !configKeys.has(k) && !isSkillRecentlyDeleted(k),
+  );
 
   // 2. Config rows missing .md files → write files
   const configOnlyIds = [...configKeys].filter((k) => k && !fileKeys.has(k));
@@ -547,6 +562,7 @@ export async function upsertSkillInConfig(org, site, skillId, content, options =
 export async function deleteSkillFromConfig(org, site, skillId) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
   if (!id) return { ok: false, error: 'Skill id required' };
+  markSkillDeleted(id);
   return deleteSheetRow(org, site, SKILLS_SHEET, skillKeyMatch(id), 'Skill');
 }
 
@@ -790,6 +806,19 @@ export async function saveAgentPresetFile(org, site, agentId, preset) {
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source${path}`, { method: 'POST', body });
     return resp.ok ? { ok: true, status: resp.status } : { ok: false, error: `Save failed (${resp.status})` };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+export async function deleteAgentPresetFile(org, site, agentId) {
+  const id = String(agentId || '').trim().replace(/\.json$/i, '');
+  if (!id) return { ok: false, error: 'Agent id required' };
+  const path = `/${org}/${site}/${AGENTS_PATH}/${id}.json`;
+  try {
+    const resp = await daFetch(`${DA_ORIGIN}/source${path}`, { method: 'DELETE' });
+    const ok = resp.ok || resp.status === 404;
+    return ok ? { ok: true } : { ok: false, error: `Delete failed (${resp.status})` };
   } catch (err) {
     return { ok: false, error: String(err?.message ?? err) };
   }

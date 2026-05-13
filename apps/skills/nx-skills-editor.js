@@ -16,6 +16,7 @@ import {
   deletePromptFromConfig,
   loadAgentPresets,
   saveAgentPresetFile,
+  deleteAgentPresetFile,
   fetchMcpToolsFromAgent,
   extractToolRefs,
   consumeSuggestionHandoff,
@@ -110,6 +111,7 @@ class NxSkillsEditor extends LitElement {
     _promptSearch: { state: true },
     _toolsSearch: { state: true },
     _toolsGroupCollapsed: { state: true },
+    _showDepTree: { state: true },
     _formPromptTools: { state: true },
     _newAgentId: { state: true },
     _newAgentName: { state: true },
@@ -180,6 +182,7 @@ class NxSkillsEditor extends LitElement {
     this._promptSearch = '';
     this._toolsSearch = '';
     this._toolsGroupCollapsed = { DA: false, MCP: false };
+    this._showDepTree = false;
     this._formPromptTools = [];
     this._isChatOpen = false;
   }
@@ -1267,6 +1270,24 @@ class NxSkillsEditor extends LitElement {
     await this._reload();
   }
 
+  async _onDeleteAgent(agent) {
+    const id = agent?.id || agent?.preset?.id;
+    if (!id) return;
+    if (!await this._confirm('agent', id)) return;
+    this._isSaveBusy = true;
+    const result = await deleteAgentPresetFile(this._org, this._site, id);
+    this._isSaveBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to delete agent', STATUS_TYPE.ERR);
+      return;
+    }
+    this._closeEditor();
+    this._setStatus('Agent deleted');
+    this._agentsLoadInFlight = false;
+    this._agents = [];
+    await this._reload();
+  }
+
   // ─── tool references ──────────────────────────────────────────────────────
 
   get _toolRefs() {
@@ -1329,6 +1350,7 @@ class NxSkillsEditor extends LitElement {
       toolOverrides: this._toolOverrides,
       toolsSearch: this._toolsSearch,
       toolsGroupCollapsed: this._toolsGroupCollapsed,
+      showDepTree: this._showDepTree,
       formSkillId: this._formSkillId,
       formSkillBody: this._formSkillBody,
       newAgentId: this._newAgentId,
@@ -1364,6 +1386,7 @@ class NxSkillsEditor extends LitElement {
       setToolsGroupCollapsed: (key, isCollapsed) => {
         this._toolsGroupCollapsed = { ...this._toolsGroupCollapsed, [key]: isCollapsed };
       },
+      setShowDepTree: (v) => { this._showDepTree = v; },
       setCatalogFilter: (v) => { this._catalogFilter = v; },
       // ── actions / event handlers ───────────────────────────────────────────
       onTabChange: (id) => this._onTabChange(id),
@@ -1383,6 +1406,7 @@ class NxSkillsEditor extends LitElement {
       onDeleteSkill: this._onDeleteSkill.bind(this),
       onSelectAgent: (agent) => this._onSelectAgent(agent),
       onSaveAgent: this._onSaveAgent.bind(this),
+      onDeleteAgent: (agent) => this._onDeleteAgent(agent),
       onOpenEditor: (row) => this._openEditor(row),
       onSavePrompt: (status) => this._onSavePrompt(status),
       onDeletePrompt: this._onDeletePrompt.bind(this),

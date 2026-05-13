@@ -1,3 +1,187 @@
+/* ─── entity color coding ─────────────────────────────────────────────────────── */
+/* Skills = purple, Tools = blue, MCPs = green, Agents = orange                   */
+
+:host {
+  --entity-skill-bg: var(--local-purple-bg, color-mix(in srgb, #8b5cf6 15%, transparent));
+  --entity-skill-fg: var(--local-purple-fg, #7c3aed);
+  --entity-skill-border: color-mix(in srgb, #8b5cf6 30%, transparent);
+  --entity-tool-bg: var(--s2-blue-100);
+  --entity-tool-fg: var(--s2-blue-900);
+  --entity-tool-border: color-mix(in srgb, var(--s2-blue-900) 30%, transparent);
+  --entity-mcp-bg: var(--s2-green-100);
+  --entity-mcp-fg: var(--s2-green-900);
+  --entity-mcp-border: color-mix(in srgb, var(--s2-green-900) 30%, transparent);
+  --entity-agent-bg: var(--local-orange-bg, color-mix(in srgb, #f59e0b 15%, transparent));
+  --entity-agent-fg: var(--local-orange-fg, #d97706);
+  --entity-agent-border: color-mix(in srgb, #f59e0b 30%, transparent);
+}
+
+.entity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--s2-spacing-75);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.entity-badge-skill   { background: var(--entity-skill-bg); color: var(--entity-skill-fg); }
+.entity-badge-tool    { background: var(--entity-tool-bg);  color: var(--entity-tool-fg); }
+.entity-badge-mcp     { background: var(--entity-mcp-bg);   color: var(--entity-mcp-fg); }
+.entity-badge-agent   { background: var(--entity-agent-bg);  color: var(--entity-agent-fg); }
+
+/* ─── entity accent borders on cards (left accent stripe) ─────────────────────── */
+
+.card-accent-skill  { border-left: 3px solid var(--entity-skill-border); }
+.card-accent-tool   { border-left: 3px solid var(--entity-tool-border); }
+.card-accent-mcp    { border-left: 3px solid var(--entity-mcp-border); }
+.card-accent-agent  { border-left: 3px solid var(--entity-agent-border); }
+
+/* ─── entity chip (inline references to related entities) ─────────────────────── */
+
+.entity-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--s2-spacing-75);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.entity-chip-skill  { background: var(--entity-skill-bg); color: var(--entity-skill-fg); }
+.entity-chip-tool   { background: var(--entity-tool-bg);  color: var(--entity-tool-fg); }
+.entity-chip-mcp    { background: var(--entity-mcp-bg);   color: var(--entity-mcp-fg); }
+.entity-chip-agent  { background: var(--entity-agent-bg);  color: var(--entity-agent-fg); }
+
+/* ─── card relationship sections ──────────────────────────────────────────────── */
+
+.card-relations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-50);
+  padding-top: var(--s2-spacing-50);
+  border-top: 1px solid var(--s2-gray-200);
+}
+
+.card-relations-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-gray-500);
+}
+
+.card-relations-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2-spacing-50);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ─── capability summary (plain-English for agents) ───────────────────────────── */
+
+.capability-summary {
+  margin: 0;
+  padding: var(--s2-spacing-50) var(--s2-spacing-75);
+  border-radius: var(--s2-corner-radius-200);
+  background: light-dark(var(--s2-gray-50), var(--s2-gray-75));
+  font-size: var(--s2-body-size-xs);
+  color: var(--s2-gray-700);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* ─── MCP tool groups inside cards ────────────────────────────────────────────── */
+
+.mcp-card-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-50);
+  padding-top: var(--s2-spacing-50);
+  border-top: 1px solid var(--s2-gray-200);
+}
+
+.mcp-tool-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-gray-500);
+  margin-top: var(--s2-spacing-50);
+}
+
+.mcp-tool-inline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2-spacing-75);
+  padding: 2px 0;
+}
+
+.mcp-tool-inline-name {
+  font-size: var(--s2-body-size-xs);
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--entity-tool-fg);
+}
+
+.mcp-tool-inline-desc {
+  font-size: 10px;
+  color: var(--s2-gray-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ─── dependency tree view ────────────────────────────────────────────────────── */
+
+.dep-tree-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2-spacing-75);
+  padding: var(--s2-spacing-50) 0;
+}
+
+.dep-tree-toggle-label {
+  font-size: var(--s2-body-size-xs);
+  color: var(--s2-gray-600);
+}
+
+.dep-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--s2-spacing-75) var(--s2-spacing-100);
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-corner-radius-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+  font-size: var(--s2-body-size-xs);
+}
+
+.dep-tree-node {
+  display: flex;
+  align-items: center;
+  gap: var(--s2-spacing-50);
+  padding: 2px 0;
+}
+
+.dep-tree-indent { padding-left: 1rem; }
+.dep-tree-indent-2 { padding-left: 2rem; }
+.dep-tree-indent-3 { padding-left: 3rem; }
+
+.dep-tree-connector {
+  color: var(--s2-gray-400);
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
 /* ─── list header (sticky so tabs stay visible while list scrolls) ──────────── */
 
 .list-header {
@@ -106,16 +290,22 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s2-spacing-100);
-  padding: var(--s2-spacing-100);
+  padding: var(--s2-spacing-75) var(--s2-spacing-100);
+  border: 1px solid var(--s2-gray-200);
   border-radius: var(--s2-corner-radius-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
   cursor: pointer;
-  transition: background 0.1s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.prompt-row:hover { background: var(--s2-gray-100); }
+.prompt-row:hover {
+  border-color: var(--s2-gray-400);
+  background: light-dark(var(--s2-gray-50), var(--s2-gray-75));
+}
 
 .prompt-row.is-selected {
-  background: light-dark(var(--s2-blue-100), color-mix(in srgb, var(--s2-blue-900) 20%, transparent));
+  border-color: var(--s2-blue-900);
+  background: light-dark(var(--s2-blue-100), var(--s2-blue-200));
 }
 
 .prompt-row-body {
@@ -278,6 +468,13 @@
   font-size: 10px;
   font-weight: 600;
   font-family: monospace;
+}
+
+.agent-mcp-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-50);
+  padding: var(--s2-spacing-50) 0;
 }
 
 /* ─── card more button ────────────────────────────────────────────────────────── */
