@@ -195,6 +195,12 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
         <span class="status-dot status-dot-approved" aria-label="Active"></span>
         <span class="agent-card-title">${title}</span>
         <span class="entity-badge entity-badge-agent">${isBuiltin ? 'built-in' : 'custom'}</span>
+        ${!isBuiltin ? html`
+          <button type="button" class="btn-icon more-btn"
+            aria-label="Delete agent ${title}"
+            @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
+          >✕</button>
+        ` : nothing}
       </header>
       ${description ? html`<p class="agent-card-desc">${description}</p>` : nothing}
       ${capability ? html`<p class="capability-summary">${capability}</p>` : nothing}
