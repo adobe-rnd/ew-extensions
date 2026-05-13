@@ -1,0 +1,37 @@
+{
+  "name": "da-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Skills editor DA app — manage skills, agents, prompts, MCPs, and memory",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/exp-workspace/da-skills.git"
+  },
+  "scripts": {
+    "lint": "npm run lint:js && npm run lint:css",
+    "lint:js": "eslint apps/",
+    "lint:css": "stylelint 'apps/**/*.css'",
+    "test": "echo 'No unit tests yet' && exit 0",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:all": "playwright test --project=chromium --project=firefox --project=webkit",
+    "test:e2e:ui": "playwright test --project=chromium --ui",
+    "test:e2e:report": "playwright show-report",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@adobe/eslint-config-helix": "^2.0.8",
+    "@playwright/test": "^1.57.0",
+    "dotenv": "^17.4.2",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
+    "stylelint": "^16.20.0",
+    "stylelint-config-standard": "^38.0.0"
+  },
+  "lint-staged": {
+    "*.js": "eslint --fix",
+    "*.css": "stylelint --fix"
+  }
+}
