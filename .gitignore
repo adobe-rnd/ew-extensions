@@ -5,3 +5,6 @@ private-docs/
 *env*
 .env*
 .dev.vars*
+playwright-report/
+test-results/
+.playwright/
