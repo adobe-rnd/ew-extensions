@@ -1,0 +1,22 @@
+name: Update Vibe Coded Badge
+
+on:
+  workflow_run:
+    workflows: [ Build ]
+    types: [ completed ]
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  update-badge:
+    runs-on: ubuntu-latest
+    if: "github.event.workflow_run.conclusion == 'success'"
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: trieloff/vibe-coded-badge-action@main
