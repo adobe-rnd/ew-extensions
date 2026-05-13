@@ -110,6 +110,7 @@ class NxSkillsEditor extends LitElement {
     _promptSearch: { state: true },
     _toolsSearch: { state: true },
     _toolsGroupCollapsed: { state: true },
+    _showDepTree: { state: true },
     _formPromptTools: { state: true },
     _newAgentId: { state: true },
     _newAgentName: { state: true },
@@ -180,6 +181,7 @@ class NxSkillsEditor extends LitElement {
     this._promptSearch = '';
     this._toolsSearch = '';
     this._toolsGroupCollapsed = { DA: false, MCP: false };
+    this._showDepTree = false;
     this._formPromptTools = [];
     this._isChatOpen = false;
   }
@@ -1329,6 +1331,7 @@ class NxSkillsEditor extends LitElement {
       toolOverrides: this._toolOverrides,
       toolsSearch: this._toolsSearch,
       toolsGroupCollapsed: this._toolsGroupCollapsed,
+      showDepTree: this._showDepTree,
       formSkillId: this._formSkillId,
       formSkillBody: this._formSkillBody,
       newAgentId: this._newAgentId,
@@ -1364,6 +1367,7 @@ class NxSkillsEditor extends LitElement {
       setToolsGroupCollapsed: (key, isCollapsed) => {
         this._toolsGroupCollapsed = { ...this._toolsGroupCollapsed, [key]: isCollapsed };
       },
+      setShowDepTree: (v) => { this._showDepTree = v; },
       setCatalogFilter: (v) => { this._catalogFilter = v; },
       // ── actions / event handlers ───────────────────────────────────────────
       onTabChange: (id) => this._onTabChange(id),
