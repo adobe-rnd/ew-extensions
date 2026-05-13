@@ -1,4 +1,19 @@
+<!-- prettier-ignore -->
+<div align="center">
+
 # DA Skills Editor
+
+[![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/da-skills/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/da-skills/actions)
+![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
+[![JavaScript](https://img.shields.io/badge/JavaScript-yellow?style=flat-square&logo=javascript&logoColor=white)](https://www.openjs.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-white?style=flat-square)](LICENSE)
+[![0% Vibe_Coded](https://img.shields.io/badge/0%25-Vibe_Coded-ff69b4?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/ai-ecoverse/vibe-coded-badge-action)
+
+[Overview](#overview) | [How it works](#how-it-works) | [Local development](#local-development) | [File structure](#file-structure)
+
+</div>
+
+## Overview
 
 Standalone DA app for managing skills, agents, MCP servers, tool overrides, and prompts.
 
