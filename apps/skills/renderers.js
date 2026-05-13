@@ -36,7 +36,7 @@ function msgClass(statusType) {
 
 function editorTitle(vm, tab) {
   if (tab === TAB_AGENTS && vm.isAgentViewTools) return 'Associated Tools';
-  if (tab === TAB_AGENTS) return vm.isFormEdit ? 'Edit Plugin' : 'New Plugin';
+  if (tab === TAB_AGENTS) return vm.isFormEdit ? 'Edit Agent' : 'New Agent';
   if (tab === TAB_SKILLS) return vm.isFormEdit ? 'Edit Skill' : 'New Skill';
   if (tab === TAB_PROMPTS) return vm.isFormPromptEdit ? 'Edit Prompt' : 'New Prompt';
   if (tab === TAB_MCPS) {
@@ -119,7 +119,7 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
   const tools = vm.getAgentToolIds(agent, isBuiltin);
   return html`
     <article class="agent-card" role="button" tabindex="0"
-      aria-label="Open plugin ${title}"
+      aria-label="Open agent ${title}"
       data-testid=${isBuiltin ? 'agent-builtin-card' : 'agent-card'}
       @click=${(e) => vm.onCardClick(e, () => vm.onSelectAgent(agent))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onSelectAgent(agent))}
@@ -295,15 +295,15 @@ export function renderAgentForm(vm) {
       <p class="form-hint">Creates <code>/.da/agents/&lt;id&gt;.json</code></p>
       <input
         type="text"
-        placeholder="plugin-id"
-        aria-label="Plugin ID"
+        placeholder="agent-id"
+        aria-label="Agent ID"
         .value=${vm.newAgentId}
         @input=${(e) => vm.setNewAgentId(e.target.value)}
       >
       <input
         type="text"
         placeholder="Display name"
-        aria-label="Plugin display name"
+        aria-label="Agent display name"
         .value=${vm.newAgentName}
         @input=${(e) => vm.setNewAgentName(e.target.value)}
       >
@@ -602,11 +602,11 @@ export function renderEditorFooter(vm, tab) {
 
   if (isAgent) {
     return html`
-      <div class="editor-actions" role="toolbar" aria-label="Plugin actions">
+      <div class="editor-actions" role="toolbar" aria-label="Agent actions">
         <button type="button" data-variant="accent"
           ?disabled=${vm.isSaveBusy || !vm.newAgentId.trim()}
           @click=${vm.onSaveAgent}
-        >Save Plugin</button>
+        >Save Agent File</button>
       </div>
       ${statusTpl}
     `;
@@ -704,7 +704,7 @@ export function renderAgentsCatalog(vm) {
       ${vm.agents.map((agent) => renderAgentCard(vm, agent, false))}
     ` : nothing}
     ${vm.agentRows.length ? html`
-      <h3 class="section-h">Config Plugins (${vm.agentRows.length})</h3>
+      <h3 class="section-h">Config Agents (${vm.agentRows.length})</h3>
       ${vm.agentRows.map((row) => html`
         <article class="agent-card" role="listitem" data-testid="agent-config-card">
           <header class="agent-card-header">
