@@ -3,6 +3,8 @@
 
 # DA Skills Editor
 
+<img src="./assets/ew-mascot-skills.png" alt="ew skills" align="center" height="120" style="margin-bottom: 20px;" />
+
 [![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/da-skills/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/da-skills/actions)
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 [![JavaScript](https://img.shields.io/badge/JavaScript-yellow?style=flat-square&logo=javascript&logoColor=white)](https://www.openjs.org)
@@ -21,14 +23,13 @@ Users access it at `https://da.live/app/{org}/{site}/tools/skills`.
 
 ## Architecture
 
-The Skills Editor is a self-contained DA app, not a da-nx block. It follows the standard DA App SDK pattern:
+The Skills Editor is a self-contained DA app that follows the standard DA App SDK pattern:
 
 1. **`tools/skills.html`** is the app entry point — a standalone HTML page that imports the DA App SDK and bootstraps the editor.
 2. **DA hosts the app** via iframe at `da.live/app/{org}/{site}/tools/skills`. The SDK handles authentication by passing the user's IMS token into the app.
 3. **The editor component** (`nx-skills-editor`) manages all UI and data operations against the DA Admin API.
 4. **Chat** is shimmed into the app via a dynamic import URL, allowing the chat component to live alongside the editor in the same view.
 
-The app is deployed to its own EDS site (`main--da-skills--exp-workspace.aem.live`). The [AEM Code Sync Bot](https://github.com/apps/aem-code-sync) keeps the CDN in sync with the `main` branch.
 
 ## Local development
 
