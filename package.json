@@ -26,6 +26,7 @@
     "@playwright/test": "^1.57.0",
     "@web/dev-server-import-maps": "^0.2.1",
     "@web/test-runner": "^0.20.2",
+    "@web/test-runner-puppeteer": "^0.18.0",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.1",
     "husky": "^9.1.7",
