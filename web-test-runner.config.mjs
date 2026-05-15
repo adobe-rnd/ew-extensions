@@ -1,4 +1,5 @@
 import { importMapsPlugin } from '@web/dev-server-import-maps';
+import { puppeteerLauncher } from '@web/test-runner-puppeteer';
 import { defaultReporter, summaryReporter } from '@web/test-runner';
 
 const GITHUB_ACTIONS = process.env.GITHUB_ACTIONS === 'true';
@@ -9,6 +10,15 @@ export default {
     exclude: ['**/node_modules/**', '**/test/**'],
   },
   testFramework: { config: { retries: GITHUB_ACTIONS ? 1 : 0 } },
+  browsers: [
+    puppeteerLauncher({
+      launchOptions: {
+        args: GITHUB_ACTIONS
+          ? ['--no-sandbox', '--disable-setuid-sandbox']
+          : [],
+      },
+    }),
+  ],
   plugins: [importMapsPlugin({})],
   reporters: [
     defaultReporter({ reportTestResults: true, reportTestProgress: true }),

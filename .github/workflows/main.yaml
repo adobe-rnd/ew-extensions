@@ -5,6 +5,8 @@ on:
     paths:
       - 'apps/**'
       - 'test/unit/**'
+      - 'web-test-runner.config.mjs'
+      - '.github/workflows/main.yaml'
 
 jobs:
   lint:
@@ -29,5 +31,4 @@ jobs:
         with:
           node-version: '22.x'
       - run: npm install
-      - run: npx playwright install --with-deps chromium
-      - run: npm test -- --puppeteer
+      - run: npm test
