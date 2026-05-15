@@ -3,14 +3,14 @@
 
 # DA Skills Editor
 
+[![99% Vibe_Coded](https://img.shields.io/badge/99%25-Vibe_Coded-ff69b4?style=for-the-badge&logo=githubcopilot&logoColor=white)](https://github.com/ai-ecoverse/vibe-coded-badge-action)
+
 <img src="./assets/ew-mascot-skills.png" alt="ew skills" align="center" height="120" style="margin-bottom: 20px;" />
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/da-skills/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/da-skills/actions)
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 [![JavaScript](https://img.shields.io/badge/JavaScript-yellow?style=flat-square&logo=javascript&logoColor=white)](https://www.openjs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-white?style=flat-square)](LICENSE)
-[![95% Vibe_Coded](https://img.shields.io/badge/95%25-Vibe_Coded-ff69b4?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/ai-ecoverse/vibe-coded-badge-action)
-
 [Overview](#overview) | [Architecture](#architecture) | [Local development](#local-development) | [File structure](#file-structure) | [Authentication](#authentication) | [Chat](#chat)
 
 </div>
@@ -29,7 +29,6 @@ The Skills Editor is a self-contained DA app that follows the standard DA App SD
 2. **DA hosts the app** via iframe at `da.live/app/{org}/{site}/tools/skills`. The SDK handles authentication by passing the user's IMS token into the app.
 3. **The editor component** (`nx-skills-editor`) manages all UI and data operations against the DA Admin API.
 4. **Chat** is shimmed into the app via a dynamic import URL, allowing the chat component to live alongside the editor in the same view.
-
 
 ## Local development
 
