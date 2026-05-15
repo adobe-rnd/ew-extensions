@@ -357,8 +357,22 @@ async function deleteSheetRow(org, site, sheetName, matchFn, label = 'row') {
 
 const SKILLS_SHEET = 'skills';
 
+/**
+ * Prevents syncOrphanSkillsToConfig from resurrecting a skill that was just
+ * deleted. The guard window must outlast the delete → reload cycle:
+ *
+ *   1. Component calls deleteSkillMdFile, then deleteSkillFromConfig.
+ *   2. markSkillDeleted fires eagerly (before the config write) so the guard
+ *      is active even if the config delete fails and triggers a rollback.
+ *   3. If the .md delete succeeds but config delete fails, the component
+ *      re-writes the .md (rollback). During those seconds the guard prevents
+ *      orphan sync from racing with the rollback.
+ *   4. After the guard expires, orphan sync is intentionally self-healing:
+ *      a config-only row gets a new .md written, and a file-only .md gets
+ *      a config row backfilled.
+ */
 const recentlyDeletedSkills = new Set();
-const DELETED_GUARD_MS = 15_000;
+const DELETED_GUARD_MS = 30_000;
 
 export function markSkillDeleted(skillId) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
@@ -748,6 +762,12 @@ export async function deleteMcpServer(org, site, key) {
   return deleteSheetRow(org, site, MCP_SHEET, mcpKeyMatch(serverKey), 'MCP server');
 }
 
+/**
+ * Fetches tool listings from MCP servers via da-agent as a proxy.
+ * Uses bare fetch (not daFetch) because da-agent doesn't require IMS auth.
+ * MCP server credentials (authHeaderName/Value from config) are passed in the
+ * body so the agent can forward them when connecting to third-party servers.
+ */
 export async function fetchMcpToolsFromAgent(servers, serverHeaders = {}) {
   if (!Object.keys(servers || {}).length) return { servers: [] };
   try {

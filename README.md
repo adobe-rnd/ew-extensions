@@ -19,7 +19,9 @@
 
 Standalone DA app for managing skills, agents, MCP servers, prompts, and memory. Built as a [DA App SDK](https://docs.da.live/developers/guides/developing-apps-and-plugins) application and deployed on its own AEM Edge Delivery Services site.
 
-Users access it at `https://da.live/app/{org}/{site}/tools/skills`.
+**For end users**, the editor lives inside DA at `https://da.live/app/{org}/{site}/tools/skills` — this is the canonical deployment surface.
+
+**For developers**, the app can also run standalone (e.g. via `aem up` or a local HTTP server) for rapid iteration and E2E testing without the DA host frame. See [Local development](#local-development) for details.
 
 ## Architecture
 
