@@ -7,7 +7,7 @@
  */
 
 import { DA_ORIGIN, daFetch } from './utils/da-fetch.js';
-import { parseSheetBoolean, normaliseRowKey } from './utils/sheet-utils.js';
+import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -542,6 +542,7 @@ export async function syncOrphanSkillsToConfig(org, site) {
 export async function upsertSkillInConfig(org, site, skillId, content, options = {}) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
   if (!id) return { ok: false, error: 'Skill id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid skill id' };
   const nextStatus = options.status === 'draft' || options.status === 'approved'
     ? options.status : undefined;
   return upsertSheetRow(
@@ -562,6 +563,7 @@ export async function upsertSkillInConfig(org, site, skillId, content, options =
 export async function deleteSkillFromConfig(org, site, skillId) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
   if (!id) return { ok: false, error: 'Skill id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid skill id' };
   markSkillDeleted(id);
   return deleteSheetRow(org, site, SKILLS_SHEET, skillKeyMatch(id), 'Skill');
 }
@@ -570,6 +572,7 @@ export async function deleteSkillFromConfig(org, site, skillId) {
 export async function writeSkillMdFile(org, site, skillId, markdown) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
   if (!id) return { ok: false, error: 'Skill id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid skill id' };
   const path = `/${org}/${site}/.da/skills/${id}.md`;
   const blob = new Blob([markdown], { type: 'text/markdown' });
   const body = new FormData();
@@ -586,7 +589,7 @@ export async function writeSkillMdFile(org, site, skillId, markdown) {
 /** Read skill markdown from .da/skills/{id}.md. */
 export async function readSkillMdFile(org, site, skillId) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
-  if (!id) return { text: '' };
+  if (!id || !isSafeId(id)) return { text: '' };
   const path = `/${org}/${site}/.da/skills/${id}.md`;
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source${path}`);
@@ -599,6 +602,7 @@ export async function readSkillMdFile(org, site, skillId) {
 export async function deleteSkillMdFile(org, site, skillId) {
   const id = String(skillId || '').trim().replace(/\.md$/i, '');
   if (!id) return { ok: false, error: 'Skill id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid skill id' };
   const path = `/${org}/${site}/.da/skills/${id}.md`;
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source${path}`, { method: 'DELETE' });
@@ -796,6 +800,7 @@ export async function loadAgentPresets(org, site) {
 export async function saveAgentPresetFile(org, site, agentId, preset) {
   const id = String(agentId || '').trim().replace(/\.json$/i, '');
   if (!id) return { ok: false, error: 'Agent id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid agent id' };
   const path = `/${org}/${site}/${AGENTS_PATH}/${id}.json`;
   const body = new FormData();
   body.append(
@@ -814,6 +819,7 @@ export async function saveAgentPresetFile(org, site, agentId, preset) {
 export async function deleteAgentPresetFile(org, site, agentId) {
   const id = String(agentId || '').trim().replace(/\.json$/i, '');
   if (!id) return { ok: false, error: 'Agent id required' };
+  if (!isSafeId(id)) return { ok: false, error: 'Invalid agent id' };
   const path = `/${org}/${site}/${AGENTS_PATH}/${id}.json`;
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source${path}`, { method: 'DELETE' });
@@ -835,6 +841,7 @@ export { extractToolRefs } from './utils/markdown.js';
 export async function fetchSiteSourceText(org, site, pathUnderSite) {
   const p = String(pathUnderSite || '').replace(/^\//, '');
   if (!p) return { error: 'Path required' };
+  if (!isSafeSubPath(p)) return { error: 'Invalid path' };
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source/${org}/${site}/${p}`);
     if (!resp.ok) return { error: `HTTP ${resp.status}` };
