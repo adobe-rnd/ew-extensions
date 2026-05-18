@@ -8,9 +8,10 @@
 <img src="./assets/ew-mascot-skills.png" alt="ew skills" align="center" height="120" style="margin-bottom: 20px;" />
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/da-skills/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/da-skills/actions)
-![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
+[![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)](https://nodejs.org)
 [![JavaScript](https://img.shields.io/badge/JavaScript-yellow?style=flat-square&logo=javascript&logoColor=white)](https://www.openjs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-white?style=flat-square)](LICENSE)
+
 [Overview](#overview) | [Architecture](#architecture) | [Local development](#local-development) | [File structure](#file-structure) | [Authentication](#authentication) | [Chat](#chat)
 
 </div>
