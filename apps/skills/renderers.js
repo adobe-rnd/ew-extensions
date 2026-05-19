@@ -261,6 +261,57 @@ export function renderChatDrawer(vm) {
   `;
 }
 
+const INFO_SVG = html`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>`;
+
+const GUIDE_BASE = '/docs/skills-editor-user-guide';
+
+const TAB_INSIGHTS = {
+  [TAB_SKILLS]: {
+    text: html`A skill is instructions, not code \u2014 it\u2019s a wrapper that tells the agent what to do and how. Without tools (from MCP servers or built-ins), the agent can read the skill but can\u2019t act on it. Think of skills as the playbook and tools as the hands.
+      <em>LLMs can handle text tasks out of the box \u2014 writing, summarizing, rewriting. Anything beyond that (publishing, file management, API calls) requires additional tools.</em>`,
+    label: 'Skills',
+    anchor: 'skills',
+  },
+  [TAB_AGENTS]: {
+    text: html`An agent is a preset that assembles skills and MCP servers into a toolkit. It doesn\u2019t run on its own \u2014 it configures what the DA assistant can use.
+      <em>Custom agents are sometimes called \u201Cplugins,\u201D but they don\u2019t add new code. They\u2019re a configuration preset \u2014 a recipe that tells the assistant which skills to read and which tools to use.</em>`,
+    label: 'Agents',
+    anchor: 'agents',
+  },
+  [TAB_PROMPTS]: {
+    text: html`A prompt is a reusable message template, not a skill. Prompts are sent as user messages \u2014 skills are loaded into the agent\u2019s context.
+      <em>Prompts are different from skills in that a skill is always-on background knowledge the agent carries, while a prompt is something you choose to send \u2014 like a shortcut for a common request. Skills shape how the agent thinks; prompts shape what you ask it.</em>`,
+    label: 'Prompts',
+    anchor: 'prompts',
+  },
+  [TAB_MCPS]: {
+    text: 'An MCP server exposes tools the agent can call. Register the server here first, then reference it by ID in an agent preset.',
+    label: 'MCP Servers',
+    anchor: 'mcp-servers',
+  },
+  [TAB_MEMORY]: {
+    text: 'Project memory is written by the agent as it learns about your site. You can\u2019t edit it here \u2014 it grows organically over conversations.',
+    label: 'Memory',
+    anchor: 'memory',
+  },
+};
+
+function renderInsightCard(tab) {
+  const insight = TAB_INSIGHTS[tab];
+  if (!insight) return nothing;
+  const { text, label, anchor } = insight;
+  return html`
+    <div class="insight-card" role="note">
+      <span class="insight-icon" aria-hidden="true">${INFO_SVG}</span>
+      <div class="insight-body">
+        <p class="insight-text">${text}</p>
+        <a class="insight-link" href="${GUIDE_BASE}#${anchor}"
+          target="_blank" rel="noopener noreferrer">Learn more about ${label}</a>
+      </div>
+    </div>
+  `;
+}
+
 export function renderListCol(vm) {
   const { catalogTab: tab } = vm;
   const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
@@ -308,6 +359,7 @@ export function renderListCol(vm) {
         ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
         ${tab === TAB_MEMORY ? html`<div class="empty">Memory is shown in the panel →</div>` : nothing}
       </div>
+      ${renderInsightCard(tab)}
     </div>
   `;
 }

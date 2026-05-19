@@ -168,9 +168,11 @@
 /* ─── list column: fills 100% until the drawer opens ───────────────────────── */
 
 .col-list {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
+  overflow: hidden;
   border-right: 1px solid var(--s2-gray-200);
 }
 
