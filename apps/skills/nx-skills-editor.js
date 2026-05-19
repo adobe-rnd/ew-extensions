@@ -389,6 +389,13 @@ class NxSkillsEditor extends LitElement {
 
   async _restoreNavState() {
     if (!this._org || !this._site) return;
+
+    const urlTab = new URL(window.location.href).searchParams.get('tab');
+    if (urlTab) {
+      this._catalogTab = urlTab;
+      return;
+    }
+
     let payload;
     try {
       const raw = sessionStorage.getItem(this._navStorageKey());
