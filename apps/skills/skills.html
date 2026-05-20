@@ -13,13 +13,16 @@
     </script>
     <link rel="stylesheet" href="https://da.live/nx2/styles/styles.css" />
     <link rel="stylesheet" href="https://use.typekit.net/pfo1jpc.css" />
-    <script src="/apps/skills/skills.js" type="module"></script>
     <style>
       body { margin: 0; font-family: adobe-clean, 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif; }
       nx-skills-editor { display: block; min-height: 100vh; }
     </style>
   </head>
   <body>
-    <nx-skills-editor></nx-skills-editor>
+    <div id="ew-skills"></div>
+    <script type="module">
+      import decorate from '/blocks/skills/skills.js';
+      await decorate(document.getElementById('ew-skills'));
+    </script>
   </body>
 </html>
