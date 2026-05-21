@@ -40,8 +40,6 @@ Every extension follows the same pattern:
 
 ## Local development
 
-Extensions are loaded as blocks by da-nx's `loadBlock`. The `ew-` class prefix triggers `providers.ew` routing, which resolves to this repo.
-
 To develop locally, run three servers:
 
 ```bash
