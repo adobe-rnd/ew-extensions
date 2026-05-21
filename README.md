@@ -48,11 +48,6 @@ The `?ref=local` parameter tells DA to load the app from `http://localhost:3000`
 ## File structure
 
 ```
-tools/
-├── skills.html              # DA App entry point (DA App SDK + import map)
-└── skills/
-    └── skills.js             # Re-exports blocks/skills/skills.js
-
 blocks/skills/
 ├── skills.js                 # Block contract entry (decorate) + SDK bootstrap
 ├── nx-skills-editor.js       # Main LitElement component
