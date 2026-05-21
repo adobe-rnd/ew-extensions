@@ -34,8 +34,8 @@ Extensions add capabilities to EW — editors, panels, tools, and integrations �
 
 Every extension follows the same pattern:
 
-1. **Entry point** — an HTML page under `tools/` that imports the DA App SDK and bootstraps the extension.
-2. **EW hosts the extension** via iframe at `da.live/app/{org}/{site}/tools/{name}`. The SDK handles authentication by passing the user's IMS token into the app.
+1. **Block contract** — each extension exports a `decorate(block)` function, loaded by da-nx's `loadBlock` via `providers.ew` routing (triggered by the `ew-` class prefix).
+2. **EW hosts the extension** at `da.live/apps/{extension}#/{org}/{site}`. The page contains a `<div class="ew-{extension}">` that `loadBlock` resolves to this repo.
 3. **Extension component** — a LitElement (or vanilla JS module) that owns its own UI, state, and data operations against the DA Admin API.
 
 ## Local development
