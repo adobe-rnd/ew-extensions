@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { isSafeId, isSafeSubPath } from '../../../apps/skills/utils/sheet-utils.js';
+import { isSafeId, isSafeSubPath } from '../../../blocks/skills/utils/sheet-utils.js';
 
 describe('isSafeId', () => {
   it('accepts valid slugs', () => {

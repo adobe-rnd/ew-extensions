@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { normaliseRowKey, parseSheetBoolean } from '../../../apps/skills/utils/sheet-utils.js';
+import { normaliseRowKey, parseSheetBoolean } from '../../../blocks/skills/utils/sheet-utils.js';
 
 describe('normaliseRowKey', () => {
   it('returns trimmed key from row.key', () => {
