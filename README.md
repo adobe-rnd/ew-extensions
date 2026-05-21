@@ -40,16 +40,34 @@ Every extension follows the same pattern:
 
 ## Local development
 
-```bash
-# Serve locally
-cd ~/Projects/DA/da-skills
-aem up
+Extensions are loaded as blocks by da-nx's `loadBlock`. The `ew-` class prefix triggers `providers.ew` routing, which resolves to this repo.
 
-# Open any extension with local override
-# https://da.live/app/{org}/{site}/tools/{extension}?ref=local
+To develop locally, run three servers:
+
+```bash
+# 1. da-live (port 3000)
+cd ~/Projects/DA/da-live && aem up
+
+# 2. da-nx (port 6456)
+cd ~/Projects/DA/da-nx && npm start
+
+# 3. ew-extensions (port 3001)
+cd ~/Projects/DA/da-skills && aem up
 ```
 
-The `?ref=local` parameter tells EW to load from `http://localhost:3000` instead of the CDN.
+Then navigate to:
+
+```
+http://localhost:3000/apps/skills?nx=local&nxver=2#/{org}/{site}
+```
+
+The `?nx=local&nxver=2` params tell da-live to load da-nx from localhost, which in turn resolves `ew-*` blocks to `:3001`.
+
+For isolated extension development (no auth, no da-nx routing):
+
+```
+http://localhost:3001/apps/skills/skills.html
+```
 
 ## Adding an extension
 
