@@ -3,7 +3,7 @@ import {
   parseFrontmatter,
   validateSkillFrontmatter,
   ensureSkillFrontmatter,
-} from '../../../apps/skills/utils/skill-frontmatter.js';
+} from '../../../blocks/skills/utils/skill-frontmatter.js';
 
 describe('parseFrontmatter', () => {
   it('returns null when no frontmatter block present', () => {

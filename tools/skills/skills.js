@@ -1,1 +1,1 @@
-import '../../../../../../../apps/skills/skills.js';
+import '../../blocks/skills/skills.js';

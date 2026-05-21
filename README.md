@@ -51,10 +51,10 @@ The `?ref=local` parameter tells DA to load the app from `http://localhost:3000`
 tools/
 ├── skills.html              # DA App entry point (DA App SDK + import map)
 └── skills/
-    └── skills.js             # Re-exports apps/skills/skills.js
+    └── skills.js             # Re-exports blocks/skills/skills.js
 
-apps/skills/
-├── skills.js                 # SDK bootstrap — awaits DA_SDK, calls initAuth(token)
+blocks/skills/
+├── skills.js                 # Block contract entry (decorate) + SDK bootstrap
 ├── nx-skills-editor.js       # Main LitElement component
 ├── skills-editor-api.js      # Data layer (config CRUD, .md I/O, MCP tools)
 ├── renderers.js              # Pure render helpers (skills, agents, MCPs, prompts, memory)

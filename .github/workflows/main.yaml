@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     paths:
-      - 'apps/**'
+      - 'blocks/**'
       - 'test/unit/**'
       - 'web-test-runner.config.mjs'
       - '.github/workflows/main.yaml'

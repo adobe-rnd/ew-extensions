@@ -1,22 +1,22 @@
 # DA-NX Migration Guide
 
-When da-skills is deployed to AEM CDN, the following changes are needed in da-nx.
+When ew-extensions is deployed to AEM CDN, the following changes are needed in da-nx and da-live.
 
-## 1. Chat navigation target
+## 1. Provider support in loadBlock (done)
 
-In `nx2/blocks/chat/chat.js`, update `_navigateToSkillsEditor`:
+da-nx PR #446 added `providers` config to `loadBlock`. A block class like `ew-skills` splits on the first `-`, looks up `providers['ew']`, and loads `${provider}/blocks/skills/skills.js`.
 
-```js
-// Before:
-window.open(`/apps/skills${search}#/${org}/${site}`, '_blank');
+## 2. DA-Live config
 
-// After (replace {da-skills-org} with the org hosting da-skills):
-window.open(`/app/{da-skills-org}/da-skills/tools/skills${search}#/${org}/${site}`, '_blank');
-```
+da-live's `scripts/scripts.js` must register `providers.ew` pointing to the ew-extensions AEM origin so `loadBlock` can resolve `ew-*` blocks.
 
-## 2. DA-Live apps page
+## 3. DA-Live apps page
 
-In `da-live/apps/skills.md`, redirect to the new app URL or keep as a fallback that loads the iframe shell.
+`da-live/apps/skills.md` contains `<div class="ew-skills"></div>` — the page shell that triggers provider block loading.
+
+## 4. Chat navigation target
+
+In `nx2/blocks/chat/chat.js`, the + menu opens `/apps/skills?tab={skills|prompts}#/${org}/${site}`.
 
 ## 3. Session storage keys (no change needed for v1)
 
