@@ -1,5 +1,6 @@
 import { LitElement, html, nothing } from 'da-lit';
 import { loadStyle, HashController } from './utils/utils.js';
+import { toSafeId } from './utils/sheet-utils.js';
 import './shared/tabs/tabs.js';
 import './shared/card/card.js';
 import './shared/popover/popover.js';
@@ -756,12 +757,20 @@ class NxSkillsEditor extends LitElement {
   // ─── skill CRUD ───────────────────────────────────────────────────────────
 
   async _onSaveSkill(status = STATUS.APPROVED) {
-    const id = this._formSkillId.trim();
-    let body = this._formSkillBody;
-    if (!id) {
+    const rawId = this._formSkillId.trim();
+    if (!rawId) {
       this._setStatus('Skill ID is required', STATUS_TYPE.ERR);
       return;
     }
+    const id = this._isFormEdit ? rawId : toSafeId(rawId);
+    if (!id) {
+      this._setStatus('Skill ID must contain at least one alphanumeric character', STATUS_TYPE.ERR);
+      return;
+    }
+    if (!this._isFormEdit && id !== rawId) {
+      this._formSkillId = id;
+    }
+    let body = this._formSkillBody;
     if (!body.trim()) {
       this._setStatus('Skill body is required', STATUS_TYPE.ERR);
       return;
@@ -1244,12 +1253,18 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onSaveAgent() {
-    const id = this._newAgentId.trim().replace(/\.json$/i, '');
-    const name = this._newAgentName.trim() || id;
-    if (!id) {
+    const rawId = this._newAgentId.trim().replace(/\.json$/i, '');
+    if (!rawId) {
       this._setStatus('Agent id required', STATUS_TYPE.ERR);
       return;
     }
+    const id = toSafeId(rawId);
+    if (!id) {
+      this._setStatus('Agent ID must contain at least one alphanumeric character', STATUS_TYPE.ERR);
+      return;
+    }
+    if (id !== rawId) this._newAgentId = id;
+    const name = this._newAgentName.trim() || id;
     this._isSaveBusy = true;
     const preset = {
       name,
