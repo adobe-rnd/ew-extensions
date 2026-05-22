@@ -120,6 +120,7 @@ class NxSkillsEditor extends LitElement {
     _gateSite: { state: true },
     _confirmDialog: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
+    chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
 
   // ─── non-reactive instance fields (simple inits, not LitElement state) ────
@@ -1326,6 +1327,7 @@ class NxSkillsEditor extends LitElement {
       catalogTab: this._catalogTab,
       catalogFilter: this._catalogFilter,
       isChatOpen: this._isChatOpen,
+      chatAgentId: this.chatAgentId,
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,
       isFormEdit: this._isFormEdit,
