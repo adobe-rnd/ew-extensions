@@ -4,11 +4,11 @@ import './nx-skills-editor.js';
 const SAFE_NX_PARAM = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function resolveChatUrl() {
-  const { origin, search } = window.location;
+  const { search } = window.location;
   const nxParam = new URLSearchParams(search).get('nx');
-  if (!nxParam) return `${origin}/nx2/blocks/chat/chat.js`;
+  if (!nxParam) return 'https://da.live/nx2/blocks/chat/chat.js';
   if (nxParam === 'local') return 'http://localhost:6456/nx2/blocks/chat/chat.js';
-  if (!SAFE_NX_PARAM.test(nxParam)) return `${origin}/nx2/blocks/chat/chat.js`;
+  if (!SAFE_NX_PARAM.test(nxParam)) return 'https://da.live/nx2/blocks/chat/chat.js';
   return `https://${nxParam}--da-nx--adobe.aem.live/nx2/blocks/chat/chat.js`;
 }
 
