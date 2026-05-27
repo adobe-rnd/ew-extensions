@@ -118,8 +118,128 @@ class EwSetupApp extends LitElement {
     }
   }
 
+  _onContinue() {
+    const parsed = parseOrgSite(this._orgSiteInput);
+    if (!parsed) return;
+    this._org = parsed.org;
+    this._site = parsed.site;
+    this._step = 1;
+    this._checkA = 'pending';
+    this._checkB = 'pending';
+    this._configStatus = 'idle';
+    this._existingValue = null;
+    this._errorMsg = null;
+    this._configJson = null;
+    this._runChecks();
+  }
+
+  async _runChecks() {
+    const base = `https://main--${this._site}--${this._org}.aem.live`;
+
+    fetch(`${base}/tools/quick-edit/quick-edit.js`)
+      .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
+      .catch(() => { this._checkA = 'fail'; });
+
+    fetch(`${base}/scripts/scripts.js`)
+      .then(async (r) => {
+        if (!r.ok) { this._checkB = 'fail'; return; }
+        const text = await r.text();
+        this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
+      })
+      .catch(() => { this._checkB = 'fail'; });
+  }
+
+  _renderIcon(status) {
+    if (status === 'pending') return html`<div class="spinner"></div>`;
+    return html`<span class="check-icon">${status === 'pass' ? '✅' : '❌'}</span>`;
+  }
+
+  _renderStep1() {
+    const bothPass = this._checkA === 'pass' && this._checkB === 'pass';
+    const anyFail = this._checkA === 'fail' || this._checkB === 'fail';
+    const pending = this._checkA === 'pending' || this._checkB === 'pending';
+
+    return html`
+      <div class="card">
+        <p class="card-title">Step 1 — Check Code Requirements</p>
+
+        <div class="check-row">
+          ${this._renderIcon(this._checkA)}
+          <div>
+            <div class="check-label">Quick Edit module</div>
+            ${this._checkA === 'fail' ? html`
+              <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
+              <a class="remediation-link" href="https://docs.da.live/about/early-access/quick-edit" target="_blank">
+                View setup instructions →
+              </a>` : nothing}
+          </div>
+        </div>
+
+        <div class="check-row">
+          ${this._renderIcon(this._checkB)}
+          <div>
+            <div class="check-label">loadPage export in scripts/scripts.js</div>
+            ${this._checkB === 'fail' ? html`
+              <div class="check-error">export function loadPage not found in scripts/scripts.js</div>
+              <a class="remediation-link" href="https://docs.da.live/about/early-access/quick-edit" target="_blank">
+                View setup instructions →
+              </a>` : nothing}
+          </div>
+        </div>
+
+        <div class="cta-bar">
+          ${bothPass ? html`
+            <button class="btn-primary" @click=${() => this._onNext()}>
+              Next: Enable Experience Workspace
+            </button>` : nothing}
+          ${anyFail ? html`
+            <button class="btn-secondary" @click=${() => this._runChecks()}>Re-check</button>
+          ` : nothing}
+          ${pending && !anyFail ? html`
+            <button class="btn-primary" disabled>Checking…</button>` : nothing}
+        </div>
+      </div>`;
+  }
+
+  _renderStepIndicator() {
+    const s1Class = this._step === 1 ? 'active' : 'done';
+    const s2Class = this._step === 2 ? 'active' : '';
+    return html`
+      <div class="steps">
+        <div class="step-badge ${s1Class}">1</div>
+        <span class="step-label ${this._step === 1 ? 'active' : ''}">Check Requirements</span>
+        <div class="step-divider"></div>
+        <div class="step-badge ${s2Class}">2</div>
+        <span class="step-label ${this._step === 2 ? 'active' : ''}">Enable Experience Workspace</span>
+      </div>`;
+  }
+
+  _renderStep2() { return nothing; }
+
+  _onNext() {}
+
   render() {
-    return html`<p class="app-title">Enable Experience Workspace</p><p>Loading…</p>`;
+    const canContinue = !!parseOrgSite(this._orgSiteInput);
+    return html`
+      <p class="app-title">Enable Experience Workspace</p>
+
+      <div class="org-site-row">
+        <input
+          class="org-site-input"
+          type="text"
+          placeholder="/org/site"
+          .value=${this._orgSiteInput}
+          @input=${(e) => { this._orgSiteInput = e.target.value; }}
+        />
+        <button class="btn-primary" ?disabled=${!canContinue} @click=${() => this._onContinue()}>
+          Check Requirements
+        </button>
+      </div>
+
+      ${this._step !== 'input' ? this._renderStepIndicator() : nothing}
+      ${this._step === 1 ? this._renderStep1() : nothing}
+      ${this._step === 2 ? this._renderStep2() : nothing}
+    `;
   }
 }
 
