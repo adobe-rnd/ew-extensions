@@ -16,6 +16,7 @@ export function findEditorPathRows(json) {
 }
 
 export function hasEditorPathForSite(rows, org, site) {
+  if (!rows?.length) return false;
   const needle = `/${org}/${site}=`;
   return rows.some((r) => typeof r.value === 'string' && r.value.includes(needle));
 }

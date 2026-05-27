@@ -46,6 +46,12 @@ describe('findEditorPathRows', () => {
     expect(sheetKey).to.be.null;
     expect(rows).to.have.length(0);
   });
+  it('returns empty rows when all keys are colon-prefixed', () => {
+    const json = { ':type': 'multi-sheet', ':names': ['settings'] };
+    const { sheetKey, rows } = findEditorPathRows(json);
+    expect(sheetKey).to.be.null;
+    expect(rows).to.have.length(0);
+  });
 });
 
 describe('hasEditorPathForSite', () => {
@@ -59,6 +65,10 @@ describe('hasEditorPathForSite', () => {
   });
   it('returns false for empty rows', () => {
     expect(hasEditorPathForSite([], 'myorg', 'mysite')).to.be.false;
+  });
+  it('returns false for rows without a value property', () => {
+    const rows = [{ key: 'editor.path' }, { key: 'other' }];
+    expect(hasEditorPathForSite(rows, 'myorg', 'mysite')).to.be.false;
   });
 });
 
