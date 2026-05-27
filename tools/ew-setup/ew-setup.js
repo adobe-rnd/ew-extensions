@@ -99,6 +99,7 @@ class EwSetupApp extends LitElement {
     this._existingValue = null;
     this._errorMsg = null;
     this._configJson = null;
+    this._configInFlight = false;
   }
 
   connectedCallback() {
@@ -221,6 +222,9 @@ class EwSetupApp extends LitElement {
   }
 
   async _readConfig() {
+    if (this._configInFlight) return;
+    this._configInFlight = true;
+    this._configStatus = 'loading';
     try {
       const resp = await fetch(`https://admin.da.live/config/${this._org}`, {
         headers: { Authorization: `Bearer ${this._token}` },
@@ -231,8 +235,13 @@ class EwSetupApp extends LitElement {
         return;
       }
       if (!resp.ok) {
-        this._configJson = null;
-        await this._writeConfig();
+        if (resp.status === 404) {
+          this._configJson = null;
+          await this._writeConfig();
+        } else {
+          this._configStatus = 'error';
+          this._errorMsg = `Unexpected server error (HTTP ${resp.status})`;
+        }
         return;
       }
       const json = await resp.json();
@@ -248,6 +257,8 @@ class EwSetupApp extends LitElement {
     } catch {
       this._configStatus = 'error';
       this._errorMsg = 'network';
+    } finally {
+      this._configInFlight = false;
     }
   }
 
