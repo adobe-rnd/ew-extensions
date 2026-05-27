@@ -131,6 +131,7 @@ class EwSetupApp extends LitElement {
     this._existingValue = null;
     this._errorMsg = null;
     this._configJson = null;
+    this._configInFlight = false;
     this._runChecks();
   }
 

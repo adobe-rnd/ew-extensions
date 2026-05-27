@@ -102,4 +102,10 @@ describe('buildUpdatedConfig', () => {
     buildUpdatedConfig(json, 'org2', 'site2');
     expect(json.data).to.have.length(1);
   });
+  it('returns existingJson unchanged when site is already configured', () => {
+    const json = { data: [{ key: 'editor.path', value: '/myorg/mysite=https://da.live/canvas#' }] };
+    const result = buildUpdatedConfig(json, 'myorg', 'mysite');
+    expect(result).to.equal(json); // same reference — not a copy
+    expect(result.data).to.have.length(1);
+  });
 });

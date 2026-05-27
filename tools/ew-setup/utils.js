@@ -25,6 +25,7 @@ export function buildUpdatedConfig(existingJson, org, site) {
   const newRow = { key: 'editor.path', value: `/${org}/${site}=https://da.live/canvas#` };
   if (!existingJson) return { data: [newRow] };
   const { sheetKey, rows } = findEditorPathRows(existingJson);
+  if (hasEditorPathForSite(rows, org, site)) return existingJson;
   const updatedRows = [...rows, newRow];
   if (sheetKey) {
     return { ...existingJson, [sheetKey]: { ...existingJson[sheetKey], data: updatedRows } };
