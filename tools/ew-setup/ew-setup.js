@@ -214,9 +214,133 @@ class EwSetupApp extends LitElement {
       </div>`;
   }
 
-  _renderStep2() { return nothing; }
+  async _onNext() {
+    this._step = 2;
+    this._configStatus = 'loading';
+    await this._readConfig();
+  }
 
-  _onNext() {}
+  async _readConfig() {
+    try {
+      const resp = await fetch(`https://admin.da.live/config/${this._org}`, {
+        headers: { Authorization: `Bearer ${this._token}` },
+      });
+      if (resp.status === 401 || resp.status === 403) {
+        this._configStatus = 'error';
+        this._errorMsg = 'permission';
+        return;
+      }
+      if (!resp.ok) {
+        this._configJson = null;
+        await this._writeConfig();
+        return;
+      }
+      const json = await resp.json();
+      this._configJson = json;
+      const { rows } = findEditorPathRows(json);
+      if (hasEditorPathForSite(rows, this._org, this._site)) {
+        const match = rows.find((r) => typeof r.value === 'string' && r.value.includes(`/${this._org}/${this._site}=`));
+        this._existingValue = match?.value || '';
+        this._configStatus = 'exists';
+      } else {
+        await this._writeConfig();
+      }
+    } catch {
+      this._configStatus = 'error';
+      this._errorMsg = 'network';
+    }
+  }
+
+  async _writeConfig() {
+    try {
+      const updated = buildUpdatedConfig(this._configJson, this._org, this._site);
+      const body = new FormData();
+      body.append('config', JSON.stringify(updated));
+      const resp = await fetch(`https://admin.da.live/config/${this._org}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this._token}` },
+        body,
+      });
+      if (resp.ok) {
+        this._configStatus = 'written';
+      } else if (resp.status === 401 || resp.status === 403) {
+        this._configStatus = 'error';
+        this._errorMsg = 'permission';
+      } else {
+        this._configStatus = 'error';
+        this._errorMsg = `Unexpected server error (HTTP ${resp.status})`;
+      }
+    } catch {
+      this._configStatus = 'error';
+      this._errorMsg = 'network';
+    }
+  }
+
+  _renderStep2() {
+    const configValue = `/${this._org}/${this._site}=https://da.live/canvas#`;
+    const manualSnippet = `Key:   editor.path\nValue: ${configValue}`;
+
+    if (this._configStatus === 'loading') {
+      return html`
+        <div class="card">
+          <p class="card-title">Step 2 — Enable Experience Workspace</p>
+          <div style="display:flex;gap:12px;align-items:center;padding:16px 0">
+            <div class="spinner"></div><span>Reading org config…</span>
+          </div>
+        </div>`;
+    }
+
+    if (this._configStatus === 'exists') {
+      return html`
+        <div class="card">
+          <p class="card-title">Step 2 — Enable Experience Workspace</p>
+          <p class="success-msg">✅ Already configured</p>
+          <p style="font-size:13px;color:#aaa;margin:0">Existing value:</p>
+          <div class="config-snippet">${this._existingValue}</div>
+        </div>`;
+    }
+
+    if (this._configStatus === 'written') {
+      return html`
+        <div class="card">
+          <p class="card-title">Step 2 — Enable Experience Workspace</p>
+          <p class="success-msg">✅ Experience Workspace is now enabled for ${this._org}/${this._site}</p>
+          <div class="config-snippet">${configValue}</div>
+        </div>`;
+    }
+
+    if (this._configStatus === 'error' && this._errorMsg === 'permission') {
+      return html`
+        <div class="card">
+          <p class="card-title">Step 2 — Enable Experience Workspace</p>
+          <p class="error-msg">
+            ❌ You don't have permission to update the org config for '${this._org}'.<br>
+            Org config changes require org admin access in DA. Please ask your DA org admin
+            to add the following entry at
+            <a href="https://da.live/config#/${this._org}/" target="_blank" style="color:#eb1000">
+              da.live/config#/${this._org}/
+            </a> manually:
+          </p>
+          <div class="config-snippet">${manualSnippet}</div>
+          <button class="btn-secondary" @click=${() => navigator.clipboard?.writeText(manualSnippet)}>
+            Copy
+          </button>
+        </div>`;
+    }
+
+    if (this._configStatus === 'error') {
+      return html`
+        <div class="card">
+          <p class="card-title">Step 2 — Enable Experience Workspace</p>
+          <p class="error-msg">❌ ${this._errorMsg === 'network' ? 'Network error — check your connection and try again.' : this._errorMsg}</p>
+          <div class="cta-bar">
+            <button class="btn-secondary" @click=${() => this._readConfig()}>Retry</button>
+          </div>
+        </div>`;
+    }
+
+    return nothing;
+  }
 
   render() {
     const canContinue = !!parseOrgSite(this._orgSiteInput);
