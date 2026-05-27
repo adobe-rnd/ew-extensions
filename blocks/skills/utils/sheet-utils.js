@@ -17,6 +17,23 @@ export function isSafeId(value) {
 }
 
 /**
+ * Converts a human-readable name into a safe kebab-case ID.
+ * "My Cool Skill" → "my-cool-skill"
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function toSafeId(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
  * Validates that a sub-path does not contain traversal sequences.
  * Allows slashes (for nested paths) but rejects `..` segments.
  *
