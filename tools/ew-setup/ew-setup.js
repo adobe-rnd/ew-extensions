@@ -195,13 +195,24 @@ class EwSetupApp extends LitElement {
       .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
       .catch(() => { this._checkA = 'fail'; });
 
-    fetch(`${base}/scripts/scripts.js`)
-      .then(async (r) => {
-        if (!r.ok) { this._checkB = 'fail'; return; }
-        const text = await r.text();
+    (async () => {
+      try {
+        const headResp = await fetch(`${base}/head.html`);
+        if (!headResp.ok) { this._checkB = 'fail'; return; }
+        const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
+        const scriptTag = [...doc.querySelectorAll('script[src]')]
+          .find((s) => s.getAttribute('src').endsWith('scripts.js'));
+        if (!scriptTag) { this._checkB = 'fail'; return; }
+        const src = scriptTag.getAttribute('src');
+        const scriptUrl = src.startsWith('http') ? src : `${base}${src}`;
+        const scriptResp = await fetch(scriptUrl);
+        if (!scriptResp.ok) { this._checkB = 'fail'; return; }
+        const text = await scriptResp.text();
         this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
-      })
-      .catch(() => { this._checkB = 'fail'; });
+      } catch {
+        this._checkB = 'fail';
+      }
+    })();
   }
 
   _renderIcon(status) {
