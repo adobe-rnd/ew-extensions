@@ -5,9 +5,6 @@ import { parseOrgSite, findEditorPathRows, hasEditorPathForSite, buildUpdatedCon
 const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
 const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
 
-const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
-const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
-
 class EwSetupApp extends LitElement {
   static properties = {
     _orgSiteInput: { state: true },
