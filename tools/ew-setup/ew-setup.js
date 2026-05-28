@@ -20,6 +20,7 @@ class EwSetupApp extends LitElement {
     _showContinueWarning: { state: true },
     _sidekickStatus: { state: true }, // 'idle'|'loading'|'exists'|'written'|'error'
     _sidekickErrorMsg: { state: true },
+    _sidekickErrorSource: { state: true }, // 'read'|'write'
   };
 
   constructor() {
@@ -39,6 +40,7 @@ class EwSetupApp extends LitElement {
     this._showContinueWarning = false;
     this._sidekickStatus = 'idle';
     this._sidekickErrorMsg = null;
+    this._sidekickErrorSource = null;
     this._sidekickJson = null;
   }
 
@@ -79,6 +81,7 @@ class EwSetupApp extends LitElement {
     this._configInFlight = false;
     this._sidekickStatus = 'idle';
     this._sidekickErrorMsg = null;
+    this._sidekickErrorSource = null;
     this._sidekickJson = null;
     this._runChecks();
   }
@@ -293,6 +296,7 @@ class EwSetupApp extends LitElement {
       if (resp.status === 401 || resp.status === 403) {
         this._sidekickStatus = 'error';
         this._sidekickErrorMsg = 'permission';
+        this._sidekickErrorSource = 'read';
         return;
       }
       if (!resp.ok) {
@@ -302,6 +306,7 @@ class EwSetupApp extends LitElement {
         } else {
           this._sidekickStatus = 'error';
           this._sidekickErrorMsg = `Unexpected server error (HTTP ${resp.status})`;
+          this._sidekickErrorSource = 'read';
         }
         return;
       }
@@ -315,6 +320,7 @@ class EwSetupApp extends LitElement {
     } catch {
       this._sidekickStatus = 'error';
       this._sidekickErrorMsg = 'network';
+      this._sidekickErrorSource = 'read';
     }
   }
 
@@ -334,13 +340,16 @@ class EwSetupApp extends LitElement {
       } else if (resp.status === 401 || resp.status === 403) {
         this._sidekickStatus = 'error';
         this._sidekickErrorMsg = 'permission';
+        this._sidekickErrorSource = 'write';
       } else {
         this._sidekickStatus = 'error';
         this._sidekickErrorMsg = `Unexpected server error (HTTP ${resp.status})`;
+        this._sidekickErrorSource = 'write';
       }
     } catch {
       this._sidekickStatus = 'error';
       this._sidekickErrorMsg = 'network';
+      this._sidekickErrorSource = 'write';
     }
   }
 
@@ -468,13 +477,18 @@ class EwSetupApp extends LitElement {
     }
 
     if (this._sidekickStatus === 'error') {
+      const msg = this._sidekickErrorMsg === 'network' ? 'Network error — check your connection and try again.' : this._sidekickErrorMsg;
       return html`
         <div class="card">
           <p class="card-title">Step 3 — Configure Sidekick</p>
-          <p class="error-msg">❌ ${this._sidekickErrorMsg === 'network' ? 'Network error — check your connection and try again.' : this._sidekickErrorMsg}</p>
-          <div class="cta-bar">
-            <sl-button class="ew-quiet-secondary" @click=${() => this._readSidekickConfig()}>Retry</sl-button>
-          </div>
+          <p class="error-msg">❌ ${msg}</p>
+          ${this._sidekickErrorSource === 'write' ? html`
+            <a class="remediation-link" href="https://www.aem.live/developer/sidekick-development#custom-edit-urls" target="_blank">
+              View sidekick configuration docs →
+            </a>` : html`
+            <div class="cta-bar">
+              <sl-button class="ew-quiet-secondary" @click=${() => this._readSidekickConfig()}>Retry</sl-button>
+            </div>`}
         </div>`;
     }
 
