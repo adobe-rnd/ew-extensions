@@ -81,7 +81,7 @@ class EwSetupApp extends LitElement {
 
     (async () => {
       try {
-        const headResp = await fetch(`${base}/head.html`);
+        const headResp = await fetch(`${base}/`);
         if (!headResp.ok) { this._checkB = 'fail'; return; }
         const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
         const scriptTag = [...doc.querySelectorAll('script[src]')]
@@ -149,7 +149,7 @@ class EwSetupApp extends LitElement {
           ${this._renderIcon(this._checkB)}
           <div>
             <div class="check-label">loadPage export in scripts.js</div>
-            <div class="check-info">Script path resolved from <code>head.html</code></div>
+            <div class="check-info">Script path resolved from the project index page</div>
             ${this._checkB === 'fail' ? html`
               <div class="check-error">export function loadPage not found in scripts.js</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
