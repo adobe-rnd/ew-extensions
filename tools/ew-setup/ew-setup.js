@@ -113,6 +113,8 @@ class EwSetupApp extends LitElement {
       ew-setup-app .check-row:last-of-type { border-bottom: none; padding-bottom: 0; }
       ew-setup-app .check-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
       ew-setup-app .check-label { font-size: var(--s2-body-m-size, 14px); font-weight: 600; color: var(--s2-gray-900, #1a1a1a); }
+      ew-setup-app .check-info { font-size: 11px; color: var(--s2-gray-500, #999); margin-top: 2px; }
+      ew-setup-app .check-info code { font-family: var(--fixed-font-family, monospace); }
       ew-setup-app .check-error { font-size: var(--s2-body-s-size, 13px); color: var(--s2-red-900, #c9271a); margin-top: var(--spacing-75, 4px); }
       ew-setup-app .remediation-link { display: inline-block; margin-top: var(--spacing-75, 6px); font-size: var(--s2-body-s-size, 13px); color: var(--ew-accent); }
 
@@ -244,9 +246,10 @@ class EwSetupApp extends LitElement {
         <div class="check-row">
           ${this._renderIcon(this._checkB)}
           <div>
-            <div class="check-label">loadPage export in scripts/scripts.js</div>
+            <div class="check-label">loadPage export in scripts.js</div>
+            <div class="check-info">Script path resolved from <code>head.html</code></div>
             ${this._checkB === 'fail' ? html`
-              <div class="check-error">export function loadPage not found in scripts/scripts.js</div>
+              <div class="check-error">export function loadPage not found in scripts.js</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/quick-edit" target="_blank">
                 View setup instructions →
               </a>` : nothing}
