@@ -2,6 +2,9 @@ import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 import { parseOrgSite, findEditorPathRows, hasEditorPathForSite, buildUpdatedConfig } from './utils.js';
 
+const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
+const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
+
 class EwSetupApp extends LitElement {
   static properties = {
     _orgSiteInput: { state: true },
@@ -75,28 +78,32 @@ class EwSetupApp extends LitElement {
   async _runChecks() {
     const base = `https://main--${this._site}--${this._org}.aem.live`;
 
-    fetch(`${base}/tools/quick-edit/quick-edit.js`)
-      .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
-      .catch(() => { this._checkA = 'fail'; });
-
-    (async () => {
-      try {
-        const headResp = await fetch(`${base}/head.html`);
-        if (!headResp.ok) { this._checkB = 'fail'; return; }
-        const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
-        const scriptTag = [...doc.querySelectorAll('script[src]')]
-          .find((s) => s.getAttribute('src').endsWith('scripts.js'));
-        if (!scriptTag) { this._checkB = 'fail'; return; }
+    // Check B first: resolve scripts.js from head.html
+    try {
+      const headResp = await proxyFetch(`${base}/head.html`);
+      if (!headResp.ok) { this._checkB = 'fail'; this._checkA = 'fail'; return; }
+      const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
+      const scriptTag = [...doc.querySelectorAll('script[src]')]
+        .find((s) => s.getAttribute('src').endsWith('scripts.js'));
+      if (!scriptTag) { this._checkB = 'fail'; } else {
         const src = scriptTag.getAttribute('src');
         const scriptUrl = src.startsWith('http') ? src : `${base}${src}`;
-        const scriptResp = await fetch(scriptUrl);
-        if (!scriptResp.ok) { this._checkB = 'fail'; return; }
-        const text = await scriptResp.text();
-        this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
-      } catch {
-        this._checkB = 'fail';
+        const scriptResp = await proxyFetch(scriptUrl);
+        if (!scriptResp.ok) { this._checkB = 'fail'; } else {
+          const text = await scriptResp.text();
+          this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
+        }
       }
-    })();
+    } catch {
+      this._checkB = 'fail';
+      this._checkA = 'fail';
+      return;
+    }
+
+    // Check A only once the site is confirmed reachable via head.html
+    proxyFetch(`${base}/tools/quick-edit/quick-edit.js`)
+      .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
+      .catch(() => { this._checkA = 'fail'; });
   }
 
   _renderWarningDialog() {
@@ -134,11 +141,12 @@ class EwSetupApp extends LitElement {
         <p class="card-title">Step 1 — Check Code Requirements</p>
 
         <div class="check-row">
-          ${this._renderIcon(this._checkA)}
+          ${this._renderIcon(this._checkB)}
           <div>
-            <div class="check-label">Quick Edit module</div>
-            ${this._checkA === 'fail' ? html`
-              <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
+            <div class="check-label">loadPage export in scripts.js</div>
+            <div class="check-info">Script path resolved from <code>head.html</code></div>
+            ${this._checkB === 'fail' ? html`
+              <div class="check-error">export function loadPage not found in scripts.js</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
@@ -146,12 +154,11 @@ class EwSetupApp extends LitElement {
         </div>
 
         <div class="check-row">
-          ${this._renderIcon(this._checkB)}
+          ${this._renderIcon(this._checkA)}
           <div>
-            <div class="check-label">loadPage export in scripts.js</div>
-            <div class="check-info">Script path resolved from <code>head.html</code></div>
-            ${this._checkB === 'fail' ? html`
-              <div class="check-error">export function loadPage not found in scripts.js</div>
+            <div class="check-label">Quick Edit module</div>
+            ${this._checkA === 'fail' ? html`
+              <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
@@ -331,7 +338,8 @@ class EwSetupApp extends LitElement {
       <p class="app-intro">
         This app helps you enable your current project for Experience Workspace in two simple steps.
         It is meant to be run once per project, but can also be used as a checker to verify that
-        your project is ready for Experience Workspace.
+        your project is ready for Experience Workspace.<br>
+        Note: enabling a project requires the current user to have permissions to modify the DA org-level config.
       </p>
 
       <div class="org-site-row">
