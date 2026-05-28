@@ -2,6 +2,9 @@ import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 import { parseOrgSite, findEditorPathRows, hasEditorPathForSite, buildUpdatedConfig } from './utils.js';
 
+const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
+const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
+
 class EwSetupApp extends LitElement {
   static properties = {
     _orgSiteInput: { state: true },
@@ -75,13 +78,13 @@ class EwSetupApp extends LitElement {
   async _runChecks() {
     const base = `https://main--${this._site}--${this._org}.aem.live`;
 
-    fetch(`${base}/tools/quick-edit/quick-edit.js`)
+    proxyFetch(`${base}/tools/quick-edit/quick-edit.js`)
       .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
       .catch(() => { this._checkA = 'fail'; });
 
     (async () => {
       try {
-        const headResp = await fetch(`${base}/`);
+        const headResp = await proxyFetch(`${base}/head.html`);
         if (!headResp.ok) { this._checkB = 'fail'; return; }
         const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
         const scriptTag = [...doc.querySelectorAll('script[src]')]
@@ -89,7 +92,7 @@ class EwSetupApp extends LitElement {
         if (!scriptTag) { this._checkB = 'fail'; return; }
         const src = scriptTag.getAttribute('src');
         const scriptUrl = src.startsWith('http') ? src : `${base}${src}`;
-        const scriptResp = await fetch(scriptUrl);
+        const scriptResp = await proxyFetch(scriptUrl);
         if (!scriptResp.ok) { this._checkB = 'fail'; return; }
         const text = await scriptResp.text();
         this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
@@ -149,7 +152,7 @@ class EwSetupApp extends LitElement {
           ${this._renderIcon(this._checkB)}
           <div>
             <div class="check-label">loadPage export in scripts.js</div>
-            <div class="check-info">Script path resolved from the project index page</div>
+            <div class="check-info">Script path resolved from <code>head.html</code></div>
             ${this._checkB === 'fail' ? html`
               <div class="check-error">export function loadPage not found in scripts.js</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
