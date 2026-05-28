@@ -27,6 +27,13 @@
  *     - one of: "approved" | "draft"
  *     - skills with "draft" status are excluded from the agent manifest
  *
+ *   license:
+ *     - optional, pass-through field
+ *     - recommended for Adobe-authored default skills (e.g. "Apache-2.0")
+ *     - not validated or interpreted by the DA parser; preserved on round-trip
+ *     - aligns with the AEM skills repo convention
+ *       (https://github.com/adobe/skills/blob/main/plugins/aem/edge-delivery-services/skills/preview-import/SKILL.md)
+ *
  *   Extra keys are preserved on round-trip but ignored by the index.
  *
  * Parser scope: this is a flat key:value YAML subset, NOT a full YAML parser.
