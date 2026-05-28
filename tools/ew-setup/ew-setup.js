@@ -38,149 +38,7 @@ class EwSetupApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._injectStyles();
     this._init();
-  }
-
-  _injectStyles() {
-    if (document.getElementById('ew-setup-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'ew-setup-styles';
-    style.textContent = `
-      ew-setup-app {
-        --ew-accent: #eb1000;
-        display: block;
-        max-width: var(--grid-container-width, 900px);
-        margin: var(--spacing-800, 48px) auto;
-        padding: 0 var(--spacing-400, 24px);
-        box-sizing: border-box;
-        -webkit-font-smoothing: antialiased;
-        font-family: var(--body-font-family, adobe-clean, 'Source Sans Pro', -apple-system, sans-serif);
-        color: var(--s2-gray-800, #222);
-      }
-      ew-setup-app .app-title {
-        font-size: var(--s2-heading-xl-size, 28px);
-        font-weight: 700;
-        margin: 0 0 var(--spacing-400, 24px);
-        color: var(--s2-gray-900, #1a1a1a);
-        letter-spacing: -0.02em;
-      }
-      ew-setup-app .org-site-row {
-        display: flex; flex-wrap: wrap; gap: var(--spacing-300, 16px);
-        align-items: flex-end; margin-bottom: var(--spacing-600, 40px);
-      }
-      ew-setup-app .org-site-field { flex: 1 1 18rem; min-width: 12rem; display: flex; flex-direction: column; gap: var(--spacing-75, 6px); }
-      ew-setup-app .org-site-label { font-size: var(--s2-body-s-size, 13px); font-weight: 600; color: var(--s2-gray-800, #222); }
-      ew-setup-app .org-site-input {
-        width: 100%; background: var(--s2-gray-25, #fff);
-        border: 1px solid var(--s2-gray-300, #ccc); border-radius: var(--s2-radius-100, 6px);
-        color: var(--s2-gray-900, #1a1a1a); font-size: var(--s2-body-s-size, 13px);
-        padding: var(--spacing-100, 8px) var(--spacing-200, 12px); outline: none;
-        box-sizing: border-box; font-family: inherit;
-      }
-      ew-setup-app .org-site-input:focus { border-color: var(--s2-gray-600, #666); box-shadow: 0 0 0 2px var(--s2-gray-200, #eee); }
-      ew-setup-app .org-site-submit { flex: 0 0 auto; align-self: flex-end; }
-
-      ew-setup-app .steps {
-        display: flex; gap: var(--spacing-100, 8px); align-items: center;
-        margin-bottom: var(--spacing-400, 24px);
-      }
-      ew-setup-app .step-badge {
-        width: 26px; height: 26px; border-radius: 50%; display: flex;
-        align-items: center; justify-content: center;
-        font-size: var(--s2-body-s-size, 13px); font-weight: 700;
-        border: 2px solid var(--s2-gray-300, #ccc); color: var(--s2-gray-400, #aaa); flex-shrink: 0;
-      }
-      ew-setup-app .step-badge.active { background: var(--ew-accent); border-color: var(--ew-accent); color: #fff; }
-      ew-setup-app .step-badge.done { border-color: var(--s2-green-700, #2d9e4f); color: var(--s2-green-700, #2d9e4f); }
-      ew-setup-app .step-label { font-size: var(--s2-body-s-size, 13px); color: var(--s2-gray-600, #767676); }
-      ew-setup-app .step-label.active { color: var(--s2-gray-900, #1a1a1a); font-weight: 600; }
-      ew-setup-app .step-divider { flex: 0 0 28px; height: 1px; background: var(--s2-gray-200, #e0e0e0); }
-
-      ew-setup-app .card {
-        background: var(--s2-gray-50, #f9f9f9);
-        border: 1px solid var(--s2-gray-200, #e0e0e0);
-        border-radius: var(--s2-radius-200, 10px);
-        padding: var(--spacing-400, 24px) var(--spacing-500, 32px);
-      }
-      ew-setup-app .card-title {
-        font-size: var(--s2-heading-s-size, 18px); font-weight: 700;
-        margin: 0 0 var(--spacing-300, 16px); color: var(--s2-gray-900, #1a1a1a);
-      }
-
-      ew-setup-app .check-row {
-        display: flex; align-items: flex-start; gap: var(--spacing-200, 12px);
-        padding: var(--spacing-200, 12px) 0; border-bottom: 1px solid var(--s2-gray-200, #e0e0e0);
-      }
-      ew-setup-app .check-row:last-of-type { border-bottom: none; padding-bottom: 0; }
-      ew-setup-app .check-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-      ew-setup-app .check-label { font-size: var(--s2-body-m-size, 14px); font-weight: 600; color: var(--s2-gray-900, #1a1a1a); }
-      ew-setup-app .check-info { font-size: 11px; color: var(--s2-gray-500, #999); margin-top: 2px; }
-      ew-setup-app .check-info code { font-family: var(--fixed-font-family, monospace); }
-      ew-setup-app .check-error { font-size: var(--s2-body-s-size, 13px); color: var(--s2-red-900, #c9271a); margin-top: var(--spacing-75, 4px); }
-      ew-setup-app .remediation-link { display: inline-block; margin-top: var(--spacing-75, 6px); font-size: var(--s2-body-s-size, 13px); color: var(--ew-accent); }
-
-      ew-setup-app .cta-bar { margin-top: var(--spacing-400, 24px); display: flex; gap: var(--spacing-200, 12px); align-items: center; }
-      ew-setup-app .btn-primary {
-        background: var(--ew-accent); color: #fff; border: none;
-        border-radius: var(--s2-radius-300, 20px);
-        padding: var(--spacing-150, 10px) var(--spacing-400, 24px);
-        font-size: var(--s2-body-s-size, 13px); font-weight: 700; cursor: pointer;
-        font-family: inherit;
-      }
-      ew-setup-app .btn-primary:hover:not(:disabled) { filter: brightness(0.92); }
-      ew-setup-app .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-      ew-setup-app .btn-secondary {
-        background: var(--s2-gray-75, #f0f0f0); color: var(--s2-gray-800, #222);
-        border: 1px solid var(--s2-gray-300, #ccc); border-radius: var(--s2-radius-300, 20px);
-        padding: var(--spacing-150, 10px) var(--spacing-400, 24px);
-        font-size: var(--s2-body-s-size, 13px); cursor: pointer; font-family: inherit;
-      }
-      ew-setup-app .btn-secondary:hover { background: var(--s2-gray-100, #e8e8e8); }
-
-      ew-setup-app .config-snippet {
-        background: var(--s2-gray-100, #f0f0f0); border: 1px solid var(--s2-gray-200, #e0e0e0);
-        border-radius: var(--s2-radius-100, 6px); padding: var(--spacing-200, 12px);
-        font-family: var(--fixed-font-family, monospace); font-size: var(--s2-body-s-size, 13px);
-        color: var(--s2-gray-900, #1a1a1a); margin: var(--spacing-200, 12px) 0;
-        white-space: pre-wrap; word-break: break-all;
-      }
-      ew-setup-app .success-msg { color: var(--s2-green-900, #2d9e4f); font-size: var(--s2-body-s-size, 13px); margin: 0 0 var(--spacing-200, 12px); }
-      ew-setup-app .error-msg { color: var(--s2-red-900, #c9271a); font-size: var(--s2-body-s-size, 13px); line-height: 1.5; }
-
-      ew-setup-app .dialog-overlay {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-        display: flex; align-items: center; justify-content: center; z-index: 1000;
-      }
-      ew-setup-app .dialog-panel {
-        background: #fff; border-radius: var(--s2-radius-200, 10px);
-        padding: var(--spacing-400, 24px) var(--spacing-500, 32px);
-        max-width: 480px; width: 90%;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-      }
-      ew-setup-app .dialog-title {
-        font-size: var(--s2-heading-s-size, 18px); font-weight: 700;
-        margin: 0 0 var(--spacing-200, 12px); color: var(--s2-gray-900, #1a1a1a);
-      }
-      ew-setup-app .dialog-body {
-        font-size: var(--s2-body-m-size, 14px); color: var(--s2-gray-700, #444);
-        line-height: 1.6; margin: 0 0 var(--spacing-400, 24px);
-      }
-
-      ew-setup-app .spinner {
-        width: 20px; height: 20px;
-        border: 2px solid var(--s2-gray-200, #e0e0e0); border-top-color: var(--ew-accent);
-        border-radius: 50%; animation: ew-spin 0.85s linear infinite; flex-shrink: 0;
-      }
-      @keyframes ew-spin { to { transform: rotate(360deg); } }
-
-      @media (max-width: 600px) {
-        ew-setup-app .org-site-row { flex-direction: column; align-items: stretch; }
-        ew-setup-app .org-site-submit { width: 100%; }
-        ew-setup-app .card { padding: var(--spacing-300, 16px); }
-      }
-    `;
-    document.head.append(style);
   }
 
   async _init() {
@@ -252,10 +110,10 @@ class EwSetupApp extends LitElement {
             in your project — without it, Experience Workspace functionality will be limited.
           </p>
           <div class="cta-bar">
-            <button class="btn-primary" @click=${() => { this._showContinueWarning = false; this._onNext(); }}>
+            <sl-button class="ew-fill-accent" @click=${() => { this._showContinueWarning = false; this._onNext(); }}>
               Continue anyway
-            </button>
-            <button class="btn-secondary" @click=${() => { this._showContinueWarning = false; }}>Cancel</button>
+            </sl-button>
+            <sl-button class="ew-quiet-secondary" @click=${() => { this._showContinueWarning = false; }}>Cancel</sl-button>
           </div>
         </div>
       </div>`;
@@ -302,15 +160,15 @@ class EwSetupApp extends LitElement {
 
         <div class="cta-bar">
           ${bothPass ? html`
-            <button class="btn-primary" @click=${() => this._onNext()}>
+            <sl-button class="ew-fill-accent" @click=${() => this._onNext()}>
               Next: Enable Experience Workspace
-            </button>` : nothing}
+            </sl-button>` : nothing}
           ${anyFail ? html`
-            <button class="btn-secondary" @click=${() => this._runChecks()}>Re-check</button>
-            <button class="btn-secondary" @click=${() => { this._showContinueWarning = true; }}>Continue anyway</button>
+            <sl-button class="ew-quiet-secondary" @click=${() => this._runChecks()}>Re-check</sl-button>
+            <sl-button class="ew-quiet-secondary" @click=${() => { this._showContinueWarning = true; }}>Continue anyway</sl-button>
           ` : nothing}
           ${pending && !anyFail ? html`
-            <button class="btn-primary" disabled>Checking…</button>` : nothing}
+            <sl-button class="ew-fill-accent" disabled>Checking…</sl-button>` : nothing}
         </div>
       </div>`;
   }
@@ -441,14 +299,14 @@ class EwSetupApp extends LitElement {
             ❌ You don't have permission to update the org config for '${this._org}'.<br>
             Org config changes require org admin access in DA. Please ask your DA org admin
             to add the following entry at
-            <a href="https://da.live/config#/${this._org}/" target="_blank" style="color:#eb1000">
+            <a href="https://da.live/config#/${this._org}/" target="_blank" style="color:var(--ew-accent)">
               da.live/config#/${this._org}/
             </a> manually:
           </p>
           <div class="config-snippet">${manualSnippet}</div>
-          <button class="btn-secondary" @click=${() => navigator.clipboard?.writeText(manualSnippet)}>
+          <sl-button class="ew-quiet-secondary" @click=${() => navigator.clipboard?.writeText(manualSnippet)}>
             Copy
-          </button>
+          </sl-button>
         </div>`;
     }
 
@@ -458,7 +316,7 @@ class EwSetupApp extends LitElement {
           <p class="card-title">Step 2 — Enable Experience Workspace</p>
           <p class="error-msg">❌ ${this._errorMsg === 'network' ? 'Network error — check your connection and try again.' : this._errorMsg}</p>
           <div class="cta-bar">
-            <button class="btn-secondary" @click=${() => this._readConfig()}>Retry</button>
+            <sl-button class="ew-quiet-secondary" @click=${() => this._readConfig()}>Retry</sl-button>
           </div>
         </div>`;
     }
@@ -472,16 +330,18 @@ class EwSetupApp extends LitElement {
       <p class="app-title">Enable Experience Workspace</p>
 
       <div class="org-site-row">
-        <input
-          class="org-site-input"
-          type="text"
-          placeholder="/org/site"
-          .value=${this._orgSiteInput}
-          @input=${(e) => { this._orgSiteInput = e.target.value; }}
-        />
-        <button class="btn-primary" ?disabled=${!canContinue} @click=${() => this._onContinue()}>
+        <div class="org-site-field">
+          <label class="org-site-label">Org / Site</label>
+          <sl-input
+            type="text"
+            placeholder="/org/site"
+            .value=${this._orgSiteInput}
+            @input=${(e) => { this._orgSiteInput = e.target.value; }}
+          ></sl-input>
+        </div>
+        <sl-button class="ew-fill-accent org-site-submit" ?disabled=${!canContinue} @click=${() => this._onContinue()}>
           Check Requirements
-        </button>
+        </sl-button>
       </div>
 
       ${this._step !== 'input' ? this._renderStepIndicator() : nothing}
