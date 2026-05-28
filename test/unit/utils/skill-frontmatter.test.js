@@ -1,8 +1,12 @@
 import { expect } from '@esm-bundle/chai';
 import {
   parseFrontmatter,
+  parseSkillIndexEntry,
+  stripFrontmatter,
   validateSkillFrontmatter,
   ensureSkillFrontmatter,
+  bumpSkillVersion,
+  INDEX_ENTRY_KEYS,
 } from '../../../blocks/skills/utils/skill-frontmatter.js';
 
 describe('parseFrontmatter', () => {
@@ -62,98 +66,257 @@ describe('parseFrontmatter', () => {
   });
 });
 
+describe('stripFrontmatter', () => {
+  it('returns body with frontmatter removed', () => {
+    const md = '---\nname: test\ndescription: ok\nversion: 1\n---\n\n# Heading\nBody text';
+    expect(stripFrontmatter(md)).to.equal('# Heading\nBody text');
+  });
+
+  it('returns input unchanged when no frontmatter present', () => {
+    expect(stripFrontmatter('# Just a heading\nbody')).to.equal('# Just a heading\nbody');
+  });
+
+  it('handles null/undefined inputs gracefully', () => {
+    expect(stripFrontmatter(null)).to.equal('');
+    expect(stripFrontmatter(undefined)).to.equal('');
+  });
+});
+
+describe('parseSkillIndexEntry', () => {
+  it('returns the four index fields from valid frontmatter', () => {
+    const md = '---\nname: my-skill\ndescription: Does things\nversion: 3\nstatus: approved\n---\n\nBody';
+    expect(parseSkillIndexEntry(md)).to.deep.equal({
+      name: 'my-skill',
+      description: 'Does things',
+      version: 3,
+      status: 'approved',
+    });
+  });
+
+  it('defaults version to 1 when missing', () => {
+    const md = '---\nname: test\ndescription: ok\n---\n\nBody';
+    expect(parseSkillIndexEntry(md).version).to.equal(1);
+  });
+
+  it('defaults version to 1 when not a positive integer', () => {
+    const md = '---\nname: test\ndescription: ok\nversion: not-a-number\n---\n';
+    expect(parseSkillIndexEntry(md).version).to.equal(1);
+  });
+
+  it('defaults status to approved when missing or invalid', () => {
+    const missing = '---\nname: test\ndescription: ok\n---\n';
+    const invalid = '---\nname: test\ndescription: ok\nstatus: weird\n---\n';
+    expect(parseSkillIndexEntry(missing).status).to.equal('approved');
+    expect(parseSkillIndexEntry(invalid).status).to.equal('approved');
+  });
+
+  it('preserves draft status', () => {
+    const md = '---\nname: test\ndescription: ok\nstatus: draft\n---\n';
+    expect(parseSkillIndexEntry(md).status).to.equal('draft');
+  });
+
+  it('returns empty strings when frontmatter is absent', () => {
+    const entry = parseSkillIndexEntry('# Just markdown\nNo frontmatter');
+    expect(entry.name).to.equal('');
+    expect(entry.description).to.equal('');
+    expect(entry.version).to.equal(1);
+    expect(entry.status).to.equal('approved');
+  });
+
+  it('does not touch the body (manifest-only)', () => {
+    const md = '---\nname: tiny\ndescription: ok\nversion: 1\n---\n\nbody '.repeat(1000);
+    const entry = parseSkillIndexEntry(md);
+    expect(entry.description.length).to.be.lessThan(20);
+  });
+});
+
+describe('INDEX_ENTRY_KEYS', () => {
+  it('exposes exactly the four index fields', () => {
+    expect([...INDEX_ENTRY_KEYS]).to.deep.equal(['name', 'description', 'version', 'status']);
+  });
+});
+
 describe('validateSkillFrontmatter', () => {
-  it('returns empty array for valid frontmatter', () => {
-    const errors = validateSkillFrontmatter({ name: 'my-skill', description: 'Does things' });
+  it('returns empty array for fully valid frontmatter', () => {
+    const errors = validateSkillFrontmatter({
+      name: 'my-skill', description: 'Does things', version: '1', status: 'approved',
+    });
+    expect(errors).to.deep.equal([]);
+  });
+
+  it('accepts version as a number value', () => {
+    const errors = validateSkillFrontmatter({
+      name: 'my-skill', description: 'Does things', version: 7,
+    });
     expect(errors).to.deep.equal([]);
   });
 
   it('requires name field', () => {
-    const errors = validateSkillFrontmatter({ description: 'ok' });
-    expect(errors).to.have.lengthOf(1);
-    expect(errors[0]).to.include('missing');
-    expect(errors[0]).to.include('name');
+    const errors = validateSkillFrontmatter({ description: 'ok', version: '1' });
+    expect(errors.some((e) => e.includes('name'))).to.be.true;
   });
 
   it('requires description field', () => {
-    const errors = validateSkillFrontmatter({ name: 'test' });
-    expect(errors).to.have.lengthOf(1);
-    expect(errors[0]).to.include('description');
+    const errors = validateSkillFrontmatter({ name: 'test', version: '1' });
+    expect(errors.some((e) => e.includes('description'))).to.be.true;
+  });
+
+  it('requires version field', () => {
+    const errors = validateSkillFrontmatter({ name: 'test', description: 'ok' });
+    expect(errors.some((e) => e.toLowerCase().includes('version'))).to.be.true;
+  });
+
+  it('rejects non-positive-integer version', () => {
+    const cases = ['0', '-1', '1.5', 'abc', ' '];
+    cases.forEach((v) => {
+      const errors = validateSkillFrontmatter({ name: 't', description: 'ok', version: v });
+      expect(errors.some((e) => e.includes('version')), `version=${v}`).to.be.true;
+    });
+  });
+
+  it('rejects unknown status values', () => {
+    const errors = validateSkillFrontmatter({
+      name: 't', description: 'ok', version: '1', status: 'pending',
+    });
+    expect(errors.some((e) => e.includes('status'))).to.be.true;
   });
 
   it('enforces name max length (64)', () => {
     const long = 'a'.repeat(65);
-    const errors = validateSkillFrontmatter({ name: long, description: 'ok' });
+    const errors = validateSkillFrontmatter({ name: long, description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('64'))).to.be.true;
   });
 
   it('enforces lowercase/hyphens/numbers in name', () => {
-    const errors = validateSkillFrontmatter({ name: 'Bad Name!', description: 'ok' });
+    const errors = validateSkillFrontmatter({ name: 'Bad Name!', description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('lowercase'))).to.be.true;
   });
 
   it('rejects XML tags in name', () => {
-    const errors = validateSkillFrontmatter({ name: '<script>', description: 'ok' });
+    const errors = validateSkillFrontmatter({ name: '<script>', description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('XML'))).to.be.true;
   });
 
   it('rejects reserved words in name', () => {
-    const errors = validateSkillFrontmatter({ name: 'my-anthropic-skill', description: 'ok' });
+    const errors = validateSkillFrontmatter({ name: 'my-anthropic-skill', description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('anthropic'))).to.be.true;
   });
 
   it('rejects "claude" in name', () => {
-    const errors = validateSkillFrontmatter({ name: 'claude-helper', description: 'ok' });
+    const errors = validateSkillFrontmatter({ name: 'claude-helper', description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('claude'))).to.be.true;
   });
 
   it('enforces description max length (1024)', () => {
     const long = 'x'.repeat(1025);
-    const errors = validateSkillFrontmatter({ name: 'test', description: long });
+    const errors = validateSkillFrontmatter({ name: 'test', description: long, version: '1' });
     expect(errors.some((e) => e.includes('1024'))).to.be.true;
   });
 
   it('rejects XML tags in description', () => {
-    const errors = validateSkillFrontmatter({ name: 'test', description: '<div>bad</div>' });
+    const errors = validateSkillFrontmatter({ name: 'test', description: '<div>bad</div>', version: '1' });
     expect(errors.some((e) => e.includes('XML'))).to.be.true;
   });
 
   it('collects multiple errors', () => {
     const errors = validateSkillFrontmatter({});
-    expect(errors.length).to.be.greaterThanOrEqual(2);
+    expect(errors.length).to.be.greaterThanOrEqual(3);
   });
 });
 
 describe('ensureSkillFrontmatter', () => {
-  it('injects frontmatter when absent', () => {
+  it('injects a full skeleton when no frontmatter is present', () => {
     const result = ensureSkillFrontmatter('Just body text', 'my-skill', 'approved');
     expect(result.injected).to.be.true;
     expect(result.markdown).to.include('---');
     expect(result.markdown).to.include('name: my-skill');
+    expect(result.markdown).to.include('version: 1');
     expect(result.markdown).to.include('status: approved');
     expect(result.markdown).to.include('Just body text');
-    expect(result.warnings).to.deep.equal([]);
   });
 
-  it('preserves existing frontmatter and validates', () => {
-    const md = '---\nname: existing\ndescription: ok\n---\n\nBody';
+  it('flags isValid=false when injected body has no description', () => {
+    const result = ensureSkillFrontmatter('Just body text', 'my-skill', 'approved');
+    expect(result.isValid).to.be.false;
+    expect(result.warnings.some((w) => w.includes('description'))).to.be.true;
+  });
+
+  it('preserves existing frontmatter when all required fields are present', () => {
+    const md = '---\nname: existing\ndescription: ok\nversion: 2\nstatus: draft\n---\n\nBody';
     const result = ensureSkillFrontmatter(md, 'fallback', 'draft');
     expect(result.injected).to.be.false;
     expect(result.markdown).to.equal(md);
-    expect(result.warnings).to.deep.equal([]);
+    expect(result.isValid).to.be.true;
   });
 
-  it('returns warnings for invalid existing frontmatter', () => {
-    const md = '---\nname: BAD NAME\ndescription: \n---\n\nBody';
-    const result = ensureSkillFrontmatter(md, 'fallback', 'draft');
-    expect(result.injected).to.be.false;
-    expect(result.warnings.length).to.be.greaterThan(0);
+  it('auto-fills missing version on an existing block', () => {
+    const md = '---\nname: legacy\ndescription: ok\n---\n\nBody';
+    const result = ensureSkillFrontmatter(md, 'legacy', 'approved');
+    expect(result.injected).to.be.true;
+    expect(result.markdown).to.include('version: 1');
+    expect(result.isValid).to.be.true;
   });
 
-  it('handles null/undefined markdown', () => {
+  it('auto-fills missing name from the skill ID', () => {
+    const md = '---\ndescription: ok\nversion: 4\n---\n\nBody';
+    const result = ensureSkillFrontmatter(md, 'rescued', 'approved');
+    expect(result.injected).to.be.true;
+    expect(result.markdown).to.include('name: rescued');
+    expect(result.isValid).to.be.true;
+  });
+
+  it('does NOT auto-fill description (caller blocks the save instead)', () => {
+    const md = '---\nname: x\nversion: 1\n---\n\nBody';
+    const result = ensureSkillFrontmatter(md, 'x', 'approved');
+    expect(result.isValid).to.be.false;
+    expect(result.warnings.some((w) => w.includes('description'))).to.be.true;
+  });
+
+  it('preserves unknown frontmatter keys round-trip', () => {
+    const md = '---\nname: x\ndescription: ok\nversion: 1\ntags: hello\nicon: 🚀\n---\n\nBody';
+    const result = ensureSkillFrontmatter(md, 'x', 'approved');
+    expect(result.markdown).to.include('tags: hello');
+    expect(result.markdown).to.include('icon: 🚀');
+  });
+
+  it('handles null/undefined markdown by injecting a skeleton', () => {
     const result = ensureSkillFrontmatter(null, 'my-skill', 'draft');
     expect(result.injected).to.be.true;
     expect(result.markdown).to.include('name: my-skill');
     expect(result.markdown).to.include('status: draft');
+    expect(result.markdown).to.include('version: 1');
+  });
+});
+
+describe('bumpSkillVersion', () => {
+  it('increments an existing version', () => {
+    const md = '---\nname: x\ndescription: ok\nversion: 3\n---\n\nBody';
+    const result = bumpSkillVersion(md, 'x');
+    expect(result.version).to.equal(4);
+    expect(result.markdown).to.include('version: 4');
+    expect(result.markdown).to.include('Body');
+  });
+
+  it('defaults to version 1 when missing on existing frontmatter', () => {
+    const md = '---\nname: x\ndescription: ok\n---\n\nBody';
+    const result = bumpSkillVersion(md, 'x');
+    expect(result.version).to.equal(1);
+    expect(result.markdown).to.include('version: 1');
+  });
+
+  it('injects frontmatter from scratch when none exists', () => {
+    const result = bumpSkillVersion('Bare body', 'fresh');
+    expect(result.version).to.equal(1);
+    expect(result.markdown).to.include('name: fresh');
+    expect(result.markdown).to.include('version: 1');
+    expect(result.markdown).to.include('Bare body');
+  });
+
+  it('preserves other frontmatter fields during bump', () => {
+    const md = '---\nname: x\ndescription: ok\nversion: 9\nstatus: draft\ntags: a\n---\n\nBody';
+    const result = bumpSkillVersion(md, 'x');
+    expect(result.version).to.equal(10);
+    expect(result.markdown).to.include('status: draft');
+    expect(result.markdown).to.include('tags: a');
   });
 });
