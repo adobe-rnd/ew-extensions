@@ -46,58 +46,116 @@ class EwSetupApp extends LitElement {
     style.id = 'ew-setup-styles';
     style.textContent = `
       ew-setup-app {
-        display: block; min-height: 100vh; background: #fff; color: #1a1a1a;
-        font-family: adobe-clean, 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-        padding: 40px 24px; box-sizing: border-box;
+        --ew-accent: #eb1000;
+        display: block;
+        max-width: var(--grid-container-width, 900px);
+        margin: var(--spacing-800, 48px) auto;
+        padding: 0 var(--spacing-400, 24px);
+        box-sizing: border-box;
+        -webkit-font-smoothing: antialiased;
+        font-family: var(--body-font-family, adobe-clean, 'Source Sans Pro', -apple-system, sans-serif);
+        color: var(--s2-gray-800, #222);
       }
-      ew-setup-app .app-title { font-size: 24px; font-weight: 700; margin: 0 0 32px; color: #1a1a1a; }
-      ew-setup-app .org-site-row { display: flex; gap: 12px; align-items: center; margin-bottom: 32px; max-width: 600px; }
+      ew-setup-app .app-title {
+        font-size: var(--s2-heading-xl-size, 28px);
+        font-weight: 700;
+        margin: 0 0 var(--spacing-400, 24px);
+        color: var(--s2-gray-900, #1a1a1a);
+        letter-spacing: -0.02em;
+      }
+      ew-setup-app .org-site-row {
+        display: flex; flex-wrap: wrap; gap: var(--spacing-300, 16px);
+        align-items: flex-end; margin-bottom: var(--spacing-600, 40px);
+      }
+      ew-setup-app .org-site-field { flex: 1 1 18rem; min-width: 12rem; display: flex; flex-direction: column; gap: var(--spacing-75, 6px); }
+      ew-setup-app .org-site-label { font-size: var(--s2-body-s-size, 13px); font-weight: 600; color: var(--s2-gray-800, #222); }
       ew-setup-app .org-site-input {
-        flex: 1; background: #fff; border: 1px solid #d0d0d0; border-radius: 6px;
-        color: #1a1a1a; font-size: 14px; padding: 8px 12px; outline: none;
+        width: 100%; background: var(--s2-gray-25, #fff);
+        border: 1px solid var(--s2-gray-300, #ccc); border-radius: var(--s2-radius-100, 6px);
+        color: var(--s2-gray-900, #1a1a1a); font-size: var(--s2-body-s-size, 13px);
+        padding: var(--spacing-100, 8px) var(--spacing-200, 12px); outline: none;
+        box-sizing: border-box; font-family: inherit;
       }
-      ew-setup-app .org-site-input:focus { border-color: #999; }
-      ew-setup-app .steps { display: flex; gap: 8px; align-items: center; margin-bottom: 24px; }
+      ew-setup-app .org-site-input:focus { border-color: var(--s2-gray-600, #666); box-shadow: 0 0 0 2px var(--s2-gray-200, #eee); }
+      ew-setup-app .org-site-submit { flex: 0 0 auto; align-self: flex-end; }
+
+      ew-setup-app .steps {
+        display: flex; gap: var(--spacing-100, 8px); align-items: center;
+        margin-bottom: var(--spacing-400, 24px);
+      }
       ew-setup-app .step-badge {
-        width: 28px; height: 28px; border-radius: 50%; display: flex;
-        align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
-        border: 2px solid #bbb; color: #bbb; flex-shrink: 0;
+        width: 26px; height: 26px; border-radius: 50%; display: flex;
+        align-items: center; justify-content: center;
+        font-size: var(--s2-body-s-size, 13px); font-weight: 700;
+        border: 2px solid var(--s2-gray-300, #ccc); color: var(--s2-gray-400, #aaa); flex-shrink: 0;
       }
-      ew-setup-app .step-badge.active { background: #eb1000; border-color: #eb1000; color: #fff; }
-      ew-setup-app .step-badge.done { border-color: #2d9e4f; color: #2d9e4f; }
-      ew-setup-app .step-label { font-size: 13px; color: #767676; }
-      ew-setup-app .step-label.active { color: #1a1a1a; font-weight: 600; }
-      ew-setup-app .step-divider { flex: 0 0 32px; height: 1px; background: #e0e0e0; }
-      ew-setup-app .card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 10px; padding: 28px; max-width: 600px; }
-      ew-setup-app .card-title { font-size: 18px; font-weight: 600; margin: 0 0 20px; color: #1a1a1a; }
-      ew-setup-app .check-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e8e8e8; }
-      ew-setup-app .check-row:last-of-type { border-bottom: none; }
+      ew-setup-app .step-badge.active { background: var(--ew-accent); border-color: var(--ew-accent); color: #fff; }
+      ew-setup-app .step-badge.done { border-color: var(--s2-green-700, #2d9e4f); color: var(--s2-green-700, #2d9e4f); }
+      ew-setup-app .step-label { font-size: var(--s2-body-s-size, 13px); color: var(--s2-gray-600, #767676); }
+      ew-setup-app .step-label.active { color: var(--s2-gray-900, #1a1a1a); font-weight: 600; }
+      ew-setup-app .step-divider { flex: 0 0 28px; height: 1px; background: var(--s2-gray-200, #e0e0e0); }
+
+      ew-setup-app .card {
+        background: var(--s2-gray-50, #f9f9f9);
+        border: 1px solid var(--s2-gray-200, #e0e0e0);
+        border-radius: var(--s2-radius-200, 10px);
+        padding: var(--spacing-400, 24px) var(--spacing-500, 32px);
+      }
+      ew-setup-app .card-title {
+        font-size: var(--s2-heading-s-size, 18px); font-weight: 700;
+        margin: 0 0 var(--spacing-300, 16px); color: var(--s2-gray-900, #1a1a1a);
+      }
+
+      ew-setup-app .check-row {
+        display: flex; align-items: flex-start; gap: var(--spacing-200, 12px);
+        padding: var(--spacing-200, 12px) 0; border-bottom: 1px solid var(--s2-gray-200, #e0e0e0);
+      }
+      ew-setup-app .check-row:last-of-type { border-bottom: none; padding-bottom: 0; }
       ew-setup-app .check-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-      ew-setup-app .check-label { font-size: 14px; font-weight: 500; color: #1a1a1a; }
-      ew-setup-app .check-error { font-size: 13px; color: #c9271a; margin-top: 4px; }
-      ew-setup-app .remediation-link { display: inline-block; margin-top: 6px; font-size: 13px; color: #eb1000; }
-      ew-setup-app .cta-bar { margin-top: 24px; display: flex; gap: 12px; align-items: center; }
+      ew-setup-app .check-label { font-size: var(--s2-body-m-size, 14px); font-weight: 600; color: var(--s2-gray-900, #1a1a1a); }
+      ew-setup-app .check-error { font-size: var(--s2-body-s-size, 13px); color: var(--s2-red-900, #c9271a); margin-top: var(--spacing-75, 4px); }
+      ew-setup-app .remediation-link { display: inline-block; margin-top: var(--spacing-75, 6px); font-size: var(--s2-body-s-size, 13px); color: var(--ew-accent); }
+
+      ew-setup-app .cta-bar { margin-top: var(--spacing-400, 24px); display: flex; gap: var(--spacing-200, 12px); align-items: center; }
       ew-setup-app .btn-primary {
-        background: #eb1000; color: #fff; border: none; border-radius: 20px;
-        padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer;
+        background: var(--ew-accent); color: #fff; border: none;
+        border-radius: var(--s2-radius-300, 20px);
+        padding: var(--spacing-150, 10px) var(--spacing-400, 24px);
+        font-size: var(--s2-body-s-size, 13px); font-weight: 700; cursor: pointer;
+        font-family: inherit;
       }
+      ew-setup-app .btn-primary:hover:not(:disabled) { filter: brightness(0.92); }
       ew-setup-app .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
       ew-setup-app .btn-secondary {
-        background: #e8e8e8; color: #1a1a1a; border: none; border-radius: 20px;
-        padding: 10px 24px; font-size: 14px; cursor: pointer;
+        background: var(--s2-gray-75, #f0f0f0); color: var(--s2-gray-800, #222);
+        border: 1px solid var(--s2-gray-300, #ccc); border-radius: var(--s2-radius-300, 20px);
+        padding: var(--spacing-150, 10px) var(--spacing-400, 24px);
+        font-size: var(--s2-body-s-size, 13px); cursor: pointer; font-family: inherit;
       }
+      ew-setup-app .btn-secondary:hover { background: var(--s2-gray-100, #e8e8e8); }
+
       ew-setup-app .config-snippet {
-        background: #f0f0f0; border: 1px solid #e0e0e0; border-radius: 6px;
-        padding: 12px; font-family: monospace; font-size: 13px; color: #1a1a1a;
-        margin: 12px 0; white-space: pre-wrap; word-break: break-all;
+        background: var(--s2-gray-100, #f0f0f0); border: 1px solid var(--s2-gray-200, #e0e0e0);
+        border-radius: var(--s2-radius-100, 6px); padding: var(--spacing-200, 12px);
+        font-family: var(--fixed-font-family, monospace); font-size: var(--s2-body-s-size, 13px);
+        color: var(--s2-gray-900, #1a1a1a); margin: var(--spacing-200, 12px) 0;
+        white-space: pre-wrap; word-break: break-all;
       }
-      ew-setup-app .success-msg { color: #2d9e4f; font-size: 14px; margin: 0 0 12px; }
-      ew-setup-app .error-msg { color: #c9271a; font-size: 14px; line-height: 1.5; }
+      ew-setup-app .success-msg { color: var(--s2-green-900, #2d9e4f); font-size: var(--s2-body-s-size, 13px); margin: 0 0 var(--spacing-200, 12px); }
+      ew-setup-app .error-msg { color: var(--s2-red-900, #c9271a); font-size: var(--s2-body-s-size, 13px); line-height: 1.5; }
+
       ew-setup-app .spinner {
-        width: 18px; height: 18px; border: 2px solid #e0e0e0; border-top-color: #eb1000;
-        border-radius: 50%; animation: ew-spin 0.7s linear infinite; flex-shrink: 0;
+        width: 20px; height: 20px;
+        border: 2px solid var(--s2-gray-200, #e0e0e0); border-top-color: var(--ew-accent);
+        border-radius: 50%; animation: ew-spin 0.85s linear infinite; flex-shrink: 0;
       }
       @keyframes ew-spin { to { transform: rotate(360deg); } }
+
+      @media (max-width: 600px) {
+        ew-setup-app .org-site-row { flex-direction: column; align-items: stretch; }
+        ew-setup-app .org-site-submit { width: 100%; }
+        ew-setup-app .card { padding: var(--spacing-300, 16px); }
+      }
     `;
     document.head.append(style);
   }
