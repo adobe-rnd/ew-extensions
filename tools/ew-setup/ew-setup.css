@@ -57,6 +57,13 @@ ew-setup-app sl-input {
   width: 100%;
 }
 
+ew-setup-app .app-intro {
+  font-size: var(--s2-body-m-size, 14px);
+  color: var(--s2-gray-600, #767676);
+  line-height: 1.6;
+  margin: 0 0 var(--spacing-300, 16px);
+}
+
 ew-setup-app .app-title {
   font-size: var(--s2-heading-xl-size, 28px);
   font-weight: 700;

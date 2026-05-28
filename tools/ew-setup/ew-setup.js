@@ -139,7 +139,7 @@ class EwSetupApp extends LitElement {
             <div class="check-label">Quick Edit module</div>
             ${this._checkA === 'fail' ? html`
               <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
-              <a class="remediation-link" href="https://docs.da.live/about/early-access/quick-edit" target="_blank">
+              <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
           </div>
@@ -152,7 +152,7 @@ class EwSetupApp extends LitElement {
             <div class="check-info">Script path resolved from <code>head.html</code></div>
             ${this._checkB === 'fail' ? html`
               <div class="check-error">export function loadPage not found in scripts.js</div>
-              <a class="remediation-link" href="https://docs.da.live/about/early-access/quick-edit" target="_blank">
+              <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
           </div>
@@ -327,6 +327,11 @@ class EwSetupApp extends LitElement {
   render() {
     const canContinue = !!parseOrgSite(this._orgSiteInput);
     return html`
+      <p class="app-intro">
+        This app helps you enable your current project for Experience Workspace in two simple steps.
+        It is meant to be run once per project, but can also be used as a checker to verify that
+        your project is ready for Experience Workspace.
+      </p>
       <p class="app-title">Enable Experience Workspace</p>
 
       <div class="org-site-row">
