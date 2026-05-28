@@ -5,6 +5,9 @@ import { parseOrgSite, findEditorPathRows, hasEditorPathForSite, buildUpdatedCon
 const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
 const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
 
+const CORS_PROXY = 'https://da-etc.adobeaem.workers.dev/cors?url=';
+const proxyFetch = (url) => fetch(`${CORS_PROXY}${encodeURIComponent(url)}`);
+
 class EwSetupApp extends LitElement {
   static properties = {
     _orgSiteInput: { state: true },
@@ -504,8 +507,12 @@ class EwSetupApp extends LitElement {
         This app helps you enable your current project for Experience Workspace in two simple steps.
         It is meant to be run once per project, but can also be used as a checker to verify that
         your project is ready for Experience Workspace.<br>
+<<<<<<< ew-sidekick
         Note: enabling a project requires the current user to have permissions to modify the DA org-level config
         and EDS config admin permissions to update the sidekick configuration.
+=======
+        Note: enabling a project requires the current user to have permissions to modify the DA org-level config.
+>>>>>>> main
       </p>
 
       <div class="org-site-row">
