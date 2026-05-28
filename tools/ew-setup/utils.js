@@ -26,7 +26,7 @@ export function buildUpdatedConfig(existingJson, org, site) {
   if (!existingJson) return { data: [newRow] };
   const { sheetKey, rows } = findEditorPathRows(existingJson);
   if (hasEditorPathForSite(rows, org, site)) return existingJson;
-  const updatedRows = [...rows, newRow];
+  const updatedRows = [...rows.filter((r) => r.key || r.value), newRow];
   if (sheetKey) {
     return { ...existingJson, [sheetKey]: { ...existingJson[sheetKey], data: updatedRows } };
   }
