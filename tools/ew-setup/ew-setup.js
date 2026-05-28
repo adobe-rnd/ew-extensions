@@ -185,13 +185,16 @@ class EwSetupApp extends LitElement {
 
   async _init() {
     try {
-      const { context, token } = await DA_SDK;
+      const { token } = await DA_SDK;
       this._token = token;
-      this._org = context.org || '';
-      this._site = context.repo || context.site || '';
-      this._orgSiteInput = (this._org && this._site) ? `/${this._org}/${this._site}` : '';
     } catch {
-      // SDK unavailable in standalone/dev — leave fields empty for manual input
+      // SDK unavailable in standalone/dev — token stays null
+    }
+    const parsed = parseOrgSite(window.location.hash.replace(/^#/, ''));
+    if (parsed) {
+      this._org = parsed.org;
+      this._site = parsed.site;
+      this._orgSiteInput = `/${parsed.org}/${parsed.site}`;
     }
   }
 
