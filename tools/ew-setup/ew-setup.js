@@ -249,6 +249,7 @@ class EwSetupApp extends LitElement {
             </button>` : nothing}
           ${anyFail ? html`
             <button class="btn-secondary" @click=${() => this._runChecks()}>Re-check</button>
+            <button class="btn-secondary" @click=${() => this._onNext()}>Continue anyway</button>
           ` : nothing}
           ${pending && !anyFail ? html`
             <button class="btn-primary" disabled>Checking…</button>` : nothing}
