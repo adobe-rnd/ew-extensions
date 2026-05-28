@@ -468,6 +468,7 @@ class EwSetupApp extends LitElement {
           <p class="error-msg">
             ❌ You don't have permission to update the sidekick config for '${this._org}/${this._site}'.<br>
             Please ask a project admin to add the following entry to the sidekick config manually.
+            See the <a href="https://www.aem.live/developer/sidekick-development#custom-edit-urls" target="_blank" style="color:var(--s2-red-900)">sidekick configuration docs</a> for details.
           </p>
           <div class="config-snippet">${snippet}</div>
           <sl-button class="ew-quiet-secondary" @click=${() => navigator.clipboard?.writeText(snippet)}>
