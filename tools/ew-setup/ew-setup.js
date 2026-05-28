@@ -78,28 +78,32 @@ class EwSetupApp extends LitElement {
   async _runChecks() {
     const base = `https://main--${this._site}--${this._org}.aem.live`;
 
-    proxyFetch(`${base}/tools/quick-edit/quick-edit.js`)
-      .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
-      .catch(() => { this._checkA = 'fail'; });
-
-    (async () => {
-      try {
-        const headResp = await proxyFetch(`${base}/head.html`);
-        if (!headResp.ok) { this._checkB = 'fail'; return; }
-        const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
-        const scriptTag = [...doc.querySelectorAll('script[src]')]
-          .find((s) => s.getAttribute('src').endsWith('scripts.js'));
-        if (!scriptTag) { this._checkB = 'fail'; return; }
+    // Check B first: resolve scripts.js from head.html
+    try {
+      const headResp = await proxyFetch(`${base}/head.html`);
+      if (!headResp.ok) { this._checkB = 'fail'; this._checkA = 'fail'; return; }
+      const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
+      const scriptTag = [...doc.querySelectorAll('script[src]')]
+        .find((s) => s.getAttribute('src').endsWith('scripts.js'));
+      if (!scriptTag) { this._checkB = 'fail'; } else {
         const src = scriptTag.getAttribute('src');
         const scriptUrl = src.startsWith('http') ? src : `${base}${src}`;
         const scriptResp = await proxyFetch(scriptUrl);
-        if (!scriptResp.ok) { this._checkB = 'fail'; return; }
-        const text = await scriptResp.text();
-        this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
-      } catch {
-        this._checkB = 'fail';
+        if (!scriptResp.ok) { this._checkB = 'fail'; } else {
+          const text = await scriptResp.text();
+          this._checkB = /export\s+(async\s+)?function\s+loadPage/.test(text) ? 'pass' : 'fail';
+        }
       }
-    })();
+    } catch {
+      this._checkB = 'fail';
+      this._checkA = 'fail';
+      return;
+    }
+
+    // Check A only once the site is confirmed reachable via head.html
+    proxyFetch(`${base}/tools/quick-edit/quick-edit.js`)
+      .then((r) => { this._checkA = r.ok ? 'pass' : 'fail'; })
+      .catch(() => { this._checkA = 'fail'; });
   }
 
   _renderWarningDialog() {
