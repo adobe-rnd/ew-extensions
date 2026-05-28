@@ -14,6 +14,7 @@ class EwSetupApp extends LitElement {
     _configStatus: { state: true }, // 'idle'|'loading'|'exists'|'written'|'error'
     _existingValue: { state: true },
     _errorMsg: { state: true },
+    _showContinueWarning: { state: true },
   };
 
   constructor() {
@@ -30,6 +31,7 @@ class EwSetupApp extends LitElement {
     this._errorMsg = null;
     this._configJson = null;
     this._configInFlight = false;
+    this._showContinueWarning = false;
   }
 
   createRenderRoot() { return this; }
@@ -146,6 +148,25 @@ class EwSetupApp extends LitElement {
       ew-setup-app .success-msg { color: var(--s2-green-900, #2d9e4f); font-size: var(--s2-body-s-size, 13px); margin: 0 0 var(--spacing-200, 12px); }
       ew-setup-app .error-msg { color: var(--s2-red-900, #c9271a); font-size: var(--s2-body-s-size, 13px); line-height: 1.5; }
 
+      ew-setup-app .dialog-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+        display: flex; align-items: center; justify-content: center; z-index: 1000;
+      }
+      ew-setup-app .dialog-panel {
+        background: #fff; border-radius: var(--s2-radius-200, 10px);
+        padding: var(--spacing-400, 24px) var(--spacing-500, 32px);
+        max-width: 480px; width: 90%;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      }
+      ew-setup-app .dialog-title {
+        font-size: var(--s2-heading-s-size, 18px); font-weight: 700;
+        margin: 0 0 var(--spacing-200, 12px); color: var(--s2-gray-900, #1a1a1a);
+      }
+      ew-setup-app .dialog-body {
+        font-size: var(--s2-body-m-size, 14px); color: var(--s2-gray-700, #444);
+        line-height: 1.6; margin: 0 0 var(--spacing-400, 24px);
+      }
+
       ew-setup-app .spinner {
         width: 20px; height: 20px;
         border: 2px solid var(--s2-gray-200, #e0e0e0); border-top-color: var(--ew-accent);
@@ -217,6 +238,26 @@ class EwSetupApp extends LitElement {
     })();
   }
 
+  _renderWarningDialog() {
+    if (!this._showContinueWarning) return nothing;
+    return html`
+      <div class="dialog-overlay" @click=${() => { this._showContinueWarning = false; }}>
+        <div class="dialog-panel" @click=${(e) => e.stopPropagation()}>
+          <p class="dialog-title">Continue without passing checks?</p>
+          <p class="dialog-body">
+            Only continue if you know what you are doing. Quick Edit must be properly set up
+            in your project — without it, Experience Workspace functionality will be limited.
+          </p>
+          <div class="cta-bar">
+            <button class="btn-primary" @click=${() => { this._showContinueWarning = false; this._onNext(); }}>
+              Continue anyway
+            </button>
+            <button class="btn-secondary" @click=${() => { this._showContinueWarning = false; }}>Cancel</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   _renderIcon(status) {
     if (status === 'pending') return html`<div class="spinner"></div>`;
     return html`<span class="check-icon">${status === 'pass' ? '✅' : '❌'}</span>`;
@@ -263,7 +304,7 @@ class EwSetupApp extends LitElement {
             </button>` : nothing}
           ${anyFail ? html`
             <button class="btn-secondary" @click=${() => this._runChecks()}>Re-check</button>
-            <button class="btn-secondary" @click=${() => this._onNext()}>Continue anyway</button>
+            <button class="btn-secondary" @click=${() => { this._showContinueWarning = true; }}>Continue anyway</button>
           ` : nothing}
           ${pending && !anyFail ? html`
             <button class="btn-primary" disabled>Checking…</button>` : nothing}
@@ -443,6 +484,7 @@ class EwSetupApp extends LitElement {
       ${this._step !== 'input' ? this._renderStepIndicator() : nothing}
       ${this._step === 1 ? this._renderStep1() : nothing}
       ${this._step === 2 ? this._renderStep2() : nothing}
+      ${this._renderWarningDialog()}
     `;
   }
 }
