@@ -489,7 +489,8 @@ class EwSetupApp extends LitElement {
         This app helps you enable your current project for Experience Workspace in two simple steps.
         It is meant to be run once per project, but can also be used as a checker to verify that
         your project is ready for Experience Workspace.<br>
-        Note: enabling a project requires the current user to have permissions to modify the DA org-level config.
+        Note: enabling a project requires the current user to have permissions to modify the DA org-level config
+        and EDS config admin permissions to update the sidekick configuration.
       </p>
 
       <div class="org-site-row">
