@@ -30,6 +30,14 @@ describe('parseFrontmatter', () => {
     expect(result.body).to.equal('Body here');
   });
 
+  it('lowercases all keys', () => {
+    const md = '---\nName: foo\nDESCRIPTION: bar\n---\n';
+    const result = parseFrontmatter(md);
+    expect(result.fields.name).to.equal('foo');
+    expect(result.fields.description).to.equal('bar');
+    expect(result.fields.Name).to.be.undefined;
+  });
+
   it('handles leading whitespace before frontmatter', () => {
     const md = '  ---\nname: ws-skill\n---\n\nBody';
     const result = parseFrontmatter(md);
@@ -64,6 +72,21 @@ describe('parseFrontmatter', () => {
     const result = parseFrontmatter(md);
     expect(result.fields.description).to.equal('');
   });
+
+  it('unescapes double-quoted values with colons', () => {
+    const md = '---\ndescription: "hello: world"\n---\n';
+    expect(parseFrontmatter(md).fields.description).to.equal('hello: world');
+  });
+
+  it('unescapes double-quoted values with hash', () => {
+    const md = '---\ndescription: "# heading"\n---\n';
+    expect(parseFrontmatter(md).fields.description).to.equal('# heading');
+  });
+
+  it('unescapes \\n escape sequence in double-quoted values', () => {
+    const md = '---\ndescription: "line1\\nline2"\n---\n';
+    expect(parseFrontmatter(md).fields.description).to.equal('line1\nline2');
+  });
 });
 
 describe('stripFrontmatter', () => {
@@ -79,6 +102,12 @@ describe('stripFrontmatter', () => {
   it('handles null/undefined inputs gracefully', () => {
     expect(stripFrontmatter(null)).to.equal('');
     expect(stripFrontmatter(undefined)).to.equal('');
+  });
+
+  it('strips the unclosed opener line on malformed frontmatter', () => {
+    const result = stripFrontmatter('---\nname: x\nnobody closes this');
+    expect(result.startsWith('---')).to.be.false;
+    expect(result).to.include('name: x');
   });
 });
 
@@ -167,11 +196,15 @@ describe('validateSkillFrontmatter', () => {
   });
 
   it('rejects non-positive-integer version', () => {
-    const cases = ['0', '-1', '1.5', 'abc', ' '];
-    cases.forEach((v) => {
+    ['0', '-1', '1.5', 'abc', ' '].forEach((v) => {
       const errors = validateSkillFrontmatter({ name: 't', description: 'ok', version: v });
       expect(errors.some((e) => e.includes('version')), `version=${v}`).to.be.true;
     });
+  });
+
+  it('rejects multi-line description', () => {
+    const errors = validateSkillFrontmatter({ name: 't', description: 'line1\nline2', version: '1' });
+    expect(errors.some((e) => e.includes('single line'))).to.be.true;
   });
 
   it('rejects unknown status values', () => {
@@ -197,14 +230,24 @@ describe('validateSkillFrontmatter', () => {
     expect(errors.some((e) => e.includes('XML'))).to.be.true;
   });
 
-  it('rejects reserved words in name', () => {
+  it('rejects "claude" in name (word boundary)', () => {
+    const errors = validateSkillFrontmatter({ name: 'claude-helper', description: 'ok', version: '1' });
+    expect(errors.some((e) => e.includes('claude'))).to.be.true;
+  });
+
+  it('does NOT reject "claudine" (not a reserved word boundary match)', () => {
+    const errors = validateSkillFrontmatter({ name: 'claudine', description: 'ok', version: '1' });
+    expect(errors).to.deep.equal([]);
+  });
+
+  it('rejects "anthropic" in name (word boundary)', () => {
     const errors = validateSkillFrontmatter({ name: 'my-anthropic-skill', description: 'ok', version: '1' });
     expect(errors.some((e) => e.includes('anthropic'))).to.be.true;
   });
 
-  it('rejects "claude" in name', () => {
-    const errors = validateSkillFrontmatter({ name: 'claude-helper', description: 'ok', version: '1' });
-    expect(errors.some((e) => e.includes('claude'))).to.be.true;
+  it('does NOT reject "philanthropic"', () => {
+    const errors = validateSkillFrontmatter({ name: 'philanthropic', description: 'ok', version: '1' });
+    expect(errors).to.deep.equal([]);
   });
 
   it('enforces description max length (1024)', () => {
@@ -273,10 +316,10 @@ describe('ensureSkillFrontmatter', () => {
   });
 
   it('preserves unknown frontmatter keys round-trip', () => {
-    const md = '---\nname: x\ndescription: ok\nversion: 1\ntags: hello\nicon: 🚀\n---\n\nBody';
+    const md = '---\nname: x\ndescription: ok\nversion: 1\ntags: hello\nicon: rocket\n---\n\nBody';
     const result = ensureSkillFrontmatter(md, 'x', 'approved');
     expect(result.markdown).to.include('tags: hello');
-    expect(result.markdown).to.include('icon: 🚀');
+    expect(result.markdown).to.include('icon: rocket');
   });
 
   it('handles null/undefined markdown by injecting a skeleton', () => {
@@ -318,5 +361,19 @@ describe('bumpSkillVersion', () => {
     expect(result.version).to.equal(10);
     expect(result.markdown).to.include('status: draft');
     expect(result.markdown).to.include('tags: a');
+  });
+
+  it('round-trips description containing a URL (colon)', () => {
+    const md = '---\nname: x\ndescription: "https://example.com"\nversion: 1\n---\n\nbody';
+    const result = bumpSkillVersion(md, 'x');
+    const parsed = parseFrontmatter(result.markdown);
+    expect(parsed.fields.description).to.equal('https://example.com');
+  });
+
+  it('round-trips description containing a hash', () => {
+    const md = '---\nname: x\ndescription: "# My Skill"\nversion: 1\n---\n\nbody';
+    const result = bumpSkillVersion(md, 'x');
+    const parsed = parseFrontmatter(result.markdown);
+    expect(parsed.fields.description).to.equal('# My Skill');
   });
 });
