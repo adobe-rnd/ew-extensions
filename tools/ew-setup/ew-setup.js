@@ -141,11 +141,12 @@ class EwSetupApp extends LitElement {
         <p class="card-title">Step 1 — Check Code Requirements</p>
 
         <div class="check-row">
-          ${this._renderIcon(this._checkA)}
+          ${this._renderIcon(this._checkB)}
           <div>
-            <div class="check-label">Quick Edit module</div>
-            ${this._checkA === 'fail' ? html`
-              <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
+            <div class="check-label">loadPage export in scripts.js</div>
+            <div class="check-info">Script path resolved from <code>head.html</code></div>
+            ${this._checkB === 'fail' ? html`
+              <div class="check-error">export function loadPage not found in scripts.js</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
@@ -153,12 +154,11 @@ class EwSetupApp extends LitElement {
         </div>
 
         <div class="check-row">
-          ${this._renderIcon(this._checkB)}
+          ${this._renderIcon(this._checkA)}
           <div>
-            <div class="check-label">loadPage export in scripts.js</div>
-            <div class="check-info">Script path resolved from <code>head.html</code></div>
-            ${this._checkB === 'fail' ? html`
-              <div class="check-error">export function loadPage not found in scripts.js</div>
+            <div class="check-label">Quick Edit module</div>
+            ${this._checkA === 'fail' ? html`
+              <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
               </a>` : nothing}
