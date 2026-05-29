@@ -3,7 +3,7 @@ import { loadStyle, HashController } from './utils/utils.js';
 import { toSafeId } from './utils/sheet-utils.js';
 import './shared/tabs/tabs.js';
 import './shared/card/card.js';
-import './shared/popover/popover.js';
+import 'nx-popover';
 import {
   fetchDaConfigSheets,
   upsertPromptInConfig,
