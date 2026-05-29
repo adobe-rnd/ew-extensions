@@ -162,7 +162,7 @@ class EwSetupApp extends LitElement {
 
         ${this._headAuthBlocked ? html`
           <div class="check-auth-notice">
-            ⚠️ This tool cannot verify the code requirements because the site has authentication enabled.
+            ⚠️ This tool cannot verify the code requirements because the EDS site has site authentication enabled.
             You can still continue if you are sure the requirements are met.
           </div>` : nothing}
 
