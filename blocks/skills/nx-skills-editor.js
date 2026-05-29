@@ -43,6 +43,7 @@ import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
   FRESH_FORM_STATE,
+  RELOAD_STALE_THRESHOLD_MS,
   STATUS,
   STATUS_TYPE,
 } from './constants.js';
@@ -83,6 +84,7 @@ class NxSkillsEditor extends LitElement {
     _configuredMcpServerHeaders: { state: true },
     _formSkillId: { state: true },
     _formSkillBody: { state: true },
+    _isSkillBodyLoading: { state: true },
     _isFormEdit: { state: true },
     _formPromptTitle: { state: true },
     _formPromptCategory: { state: true },
@@ -126,6 +128,17 @@ class NxSkillsEditor extends LitElement {
   // ─── non-reactive instance fields (simple inits, not LitElement state) ────
   _loadedKey = null;
 
+  /** Tracks which org/site has already had migration run so we skip on subsequent reloads. */
+  _migrationDoneKey = null;
+
+  /** Timestamp (ms) of the last completed _reload — used to debounce visibility-triggered reloads. */
+  _lastReloadAt = 0;
+
+  /** Cached derived maps from _skillsIndex — recomputed in _reload and _restoreDataSnapshot. */
+  _skillsMap = {};
+
+  _skillStatusesMap = {};
+
   _statusTimer = null;
 
   _dirtyForms = {}; // non-reactive: { [tabId]: snapshot }
@@ -154,6 +167,7 @@ class NxSkillsEditor extends LitElement {
 
   _onVisibilityChangeHandler = () => {
     if (document.hidden || !this._org || !this._site) return;
+    if (Date.now() - this._lastReloadAt < RELOAD_STALE_THRESHOLD_MS) return;
     this._reload({ silent: true, showRefreshIndicator: true });
   };
 
@@ -350,6 +364,8 @@ class NxSkillsEditor extends LitElement {
       const snap = JSON.parse(raw);
       if (!snap || typeof snap !== 'object') return false;
       this._skillsIndex = Array.isArray(snap.skillsIndex) ? snap.skillsIndex : [];
+      this._skillsMap = Object.fromEntries(this._skillsIndex.map((e) => [e.id, e.name]));
+      this._skillStatusesMap = Object.fromEntries(this._skillsIndex.map((e) => [e.id, e.status]));
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
@@ -431,9 +447,13 @@ class NxSkillsEditor extends LitElement {
     if (!silent) this._isLoading = true;
     if (showRefreshIndicator) this._refreshingCount += 1;
 
+    const currentKey = `${this._org}/${this._site}`;
     try {
-      // Run migration on every load — no-op after first run (marker gates re-runs).
-      await migrateSkillsIfNeeded(this._org, this._site);
+      // Run migration once per org/site — subsequent reloads skip the marker GET.
+      if (this._migrationDoneKey !== currentKey) {
+        await migrateSkillsIfNeeded(this._org, this._site);
+        this._migrationDoneKey = currentKey;
+      }
 
       const [folderResult, configResult] = await Promise.all([
         listSkillFolders(this._org, this._site),
@@ -441,12 +461,15 @@ class NxSkillsEditor extends LitElement {
       ]);
 
       this._skillsIndex = folderResult.entries || [];
+      this._skillsMap = Object.fromEntries(this._skillsIndex.map((e) => [e.id, e.name]));
+      this._skillStatusesMap = Object.fromEntries(this._skillsIndex.map((e) => [e.id, e.status]));
       this._prompts = configResult.json?.prompts?.data || [];
       this._agentRows = configResult.agentRows || [];
       this._mcpRows = configResult.mcpRows || [];
       this._configuredMcpServers = configResult.configuredMcpServers || {};
       this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
       this._toolOverrides = configResult.toolOverrides || {};
+      this._lastReloadAt = Date.now();
       this._saveDataSnapshot();
       this._applySuggestion();
     } finally {
@@ -755,8 +778,10 @@ class NxSkillsEditor extends LitElement {
     }
 
     // Frontmatter — ensure all required fields, then bump version on edits.
+    // Don't bump when injected: frontmatter was just created (version=1), incrementing
+    // to 2 on the same save would skip version 1 for that save.
     const { markdown: withFm, injected, warnings } = ensureSkillFrontmatter(body, id, status);
-    body = this._isFormEdit ? bumpSkillVersion(withFm, id).markdown : withFm;
+    body = this._isFormEdit && !injected ? bumpSkillVersion(withFm, id).markdown : withFm;
     if (injected) {
       this._formSkillBody = body;
       this._setStatus(
@@ -859,6 +884,7 @@ class NxSkillsEditor extends LitElement {
 
     this._formSkillId = skillId;
     this._formSkillBody = '';
+    this._isSkillBodyLoading = true;
     this._isFormEdit = true;
     this._statusMsg = '';
     this._activeToolRefs = null;
@@ -869,12 +895,16 @@ class NxSkillsEditor extends LitElement {
     // Capture the context at the time of the request to guard against stale responses.
     const requestedId = skillId;
     const requestedTab = tab;
-    const { text } = await readSkillFolderMd(this._org, this._site, skillId);
-    // Discard the response if the user navigated away before it resolved.
-    if (text && !this._isFormDirty
-      && this._formSkillId === requestedId
-      && this._catalogTab === requestedTab) {
-      this._formSkillBody = text;
+    try {
+      const { text } = await readSkillFolderMd(this._org, this._site, skillId);
+      // Discard the response if the user navigated away before it resolved.
+      if (text && !this._isFormDirty
+        && this._formSkillId === requestedId
+        && this._catalogTab === requestedTab) {
+        this._formSkillBody = text;
+      }
+    } finally {
+      if (this._formSkillId === requestedId) this._isSkillBodyLoading = false;
     }
   }
 
@@ -1288,8 +1318,9 @@ class NxSkillsEditor extends LitElement {
       promptSearch: this._promptSearch,
       // skills: { [id]: name } — renderers use Object.keys for the list
       // and the value as the card title (name from frontmatter).
-      skills: Object.fromEntries((this._skillsIndex || []).map((e) => [e.id, e.name])),
-      skillStatuses: Object.fromEntries((this._skillsIndex || []).map((e) => [e.id, e.status])),
+      skills: this._skillsMap,
+      skillStatuses: this._skillStatusesMap,
+      isSkillBodyLoading: this._isSkillBodyLoading,
       prompts: this._prompts,
       agents: this._agents,
       agentRows: this._agentRows,

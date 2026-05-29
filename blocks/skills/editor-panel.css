@@ -113,6 +113,11 @@
 
 .is-suggestion > textarea { border-radius: calc(var(--s2-corner-radius-200) - 2px); }
 
+.is-loading > textarea {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .form input:not([type="checkbox"]):focus,
 .form textarea:focus {
   border-color: var(--s2-blue-900);
