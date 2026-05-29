@@ -187,7 +187,11 @@ class EwSetupApp extends LitElement {
               <div class="check-error">tools/quick-edit/quick-edit.js not found</div>
               <a class="remediation-link" href="https://docs.da.live/about/early-access/experience-workspace#setup" target="_blank">
                 View setup instructions →
-              </a>` : nothing}
+              </a>
+              <div class="check-tip">
+                💡 Use the <a href="https://github.com/exp-workspace/plugin-claude" target="_blank">exp-workspace plugin</a>
+                — a skill for Claude or Cursor to enable Quick Edit automatically.
+              </div>` : nothing}
           </div>
         </div>
 

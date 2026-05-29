@@ -140,6 +140,18 @@ ew-setup-app .card-title {
   color: var(--s2-gray-900, #1a1a1a);
 }
 
+ew-setup-app .check-tip {
+  font-size: var(--s2-body-s-size, 13px);
+  color: var(--s2-blue-900, #0265dc);
+  background: var(--s2-blue-100, #e8f4fd);
+  border-radius: var(--s2-radius-100, 6px);
+  padding: var(--spacing-150, 10px) var(--spacing-200, 12px);
+  margin-top: var(--spacing-150, 10px);
+  line-height: 1.5;
+}
+
+ew-setup-app .check-tip a { color: inherit; font-weight: 600; }
+
 ew-setup-app .check-auth-notice {
   font-size: var(--s2-body-s-size, 13px);
   color: var(--s2-orange-900, #8a4800);
