@@ -6,13 +6,6 @@ import './shared/card/card.js';
 import './shared/popover/popover.js';
 import {
   fetchDaConfigSheets,
-  loadSkillsWithStatuses,
-  syncOrphanSkillsToConfig,
-  upsertSkillInConfig,
-  deleteSkillFromConfig,
-  writeSkillMdFile,
-  readSkillMdFile,
-  deleteSkillMdFile,
   upsertPromptInConfig,
   deletePromptFromConfig,
   loadAgentPresets,
@@ -40,6 +33,13 @@ import {
   DA_SKILLS_LAB_PROMPT_SEND,
 } from './skills-editor-api.js';
 import {
+  listSkillFolders,
+  writeSkillFolderMd,
+  readSkillFolderMd,
+  deleteSkillFolder,
+} from './utils/skill-folder-api.js';
+import { migrateSkillsIfNeeded } from './utils/skill-migration.js';
+import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
   FRESH_FORM_STATE,
@@ -51,7 +51,7 @@ import {
   renderListCol,
   renderEditorPanel,
 } from './renderers.js';
-import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
+import { ensureSkillFrontmatter, bumpSkillVersion } from './utils/skill-frontmatter.js';
 import {
   onMessage,
   sendMessage,
@@ -73,8 +73,7 @@ class NxSkillsEditor extends LitElement {
     _refreshingCount: { state: true },
     _catalogTab: { state: true },
     _catalogFilter: { state: true },
-    _skills: { state: true },
-    _skillStatuses: { state: true },
+    _skillsIndex: { state: true },
     _prompts: { state: true },
     _agents: { state: true },
     _agentRows: { state: true },
@@ -135,8 +134,6 @@ class NxSkillsEditor extends LitElement {
 
   _chatLoaded = false;
 
-  _syncOrphansInFlight = false;
-
   _agentsLoadInFlight = false;
 
   _mcpToolsLoadInFlight = false;
@@ -151,9 +148,14 @@ class NxSkillsEditor extends LitElement {
 
   _onClearFormHandler = () => this._clearForm();
 
-  _onSkillsChangedHandler = () => this._loadSkills({ silent: true, showRefreshIndicator: true });
+  _onSkillsChangedHandler = () => this._reload({ silent: true, showRefreshIndicator: true });
 
   _onPopstateHandler = (e) => this._onPopstate(e);
+
+  _onVisibilityChangeHandler = () => {
+    if (document.hidden || !this._org || !this._site) return;
+    this._reload({ silent: true, showRefreshIndicator: true });
+  };
 
   constructor() {
     super();
@@ -162,8 +164,7 @@ class NxSkillsEditor extends LitElement {
     this._refreshingCount = 0;
     this._catalogTab = 'skills';
     this._catalogFilter = 'all';
-    this._skills = {};
-    this._skillStatuses = {};
+    this._skillsIndex = [];
     this._prompts = [];
     this._agents = [];
     this._agentRows = [];
@@ -243,6 +244,7 @@ class NxSkillsEditor extends LitElement {
     if (pending) this._onSuggestionFromChannel(pending);
 
     window.addEventListener('popstate', this._onPopstateHandler);
+    document.addEventListener('visibilitychange', this._onVisibilityChangeHandler);
     history.replaceState({ ...history.state, skillsEditorTab: this._catalogTab }, '');
   }
 
@@ -257,6 +259,7 @@ class NxSkillsEditor extends LitElement {
     window.removeEventListener(DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
     window.removeEventListener('da-skills-changed', this._onSkillsChangedHandler);
     window.removeEventListener('popstate', this._onPopstateHandler);
+    document.removeEventListener('visibilitychange', this._onVisibilityChangeHandler);
   }
 
   async updated(changed) {
@@ -268,11 +271,7 @@ class NxSkillsEditor extends LitElement {
       const restored = this._restoreDataSnapshot();
       if (restored) {
         this._isLoading = false;
-        await this._reload({
-          silent: true,
-          showRefreshIndicator: true,
-          includeMdFiles: false,
-        });
+        await this._reload({ silent: true, showRefreshIndicator: true });
       } else {
         await this._reload();
       }
@@ -329,8 +328,7 @@ class NxSkillsEditor extends LitElement {
   _saveDataSnapshot() {
     if (!this._org || !this._site) return;
     const snapshot = {
-      skills: this._skills,
-      skillStatuses: this._skillStatuses,
+      skillsIndex: this._skillsIndex,
       prompts: this._prompts,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -351,8 +349,7 @@ class NxSkillsEditor extends LitElement {
       if (!raw) return false;
       const snap = JSON.parse(raw);
       if (!snap || typeof snap !== 'object') return false;
-      this._skills = snap.skills || {};
-      this._skillStatuses = snap.skillStatuses || {};
+      this._skillsIndex = Array.isArray(snap.skillsIndex) ? snap.skillsIndex : [];
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
@@ -428,46 +425,22 @@ class NxSkillsEditor extends LitElement {
 
   // ─── data loading ─────────────────────────────────────────────────────────
 
-  _scheduleOrphanSkillSync() {
-    if (this._syncOrphansInFlight || !this._org || !this._site) return;
-    const loadKey = this._loadedKey;
-    this._syncOrphansInFlight = true;
-    syncOrphanSkillsToConfig(this._org, this._site)
-      .then((backfilled) => {
-        const changed = backfilled?.configBackfilled?.length || backfilled?.filesWritten?.length;
-        if (!changed) return;
-        // eslint-disable-next-line no-console
-        console.info('[skills-editor] background sync:', backfilled);
-        if (`${this._org}/${this._site}` === loadKey) {
-          this._reload({
-            silent: true,
-            showRefreshIndicator: true,
-            includeMdFiles: true,
-          }).catch(() => {});
-        }
-      })
-      .catch(() => { /* non-fatal */ })
-      .finally(() => { this._syncOrphansInFlight = false; });
-  }
-
   async _reload(options = {}) {
     if (!this._org || !this._site) return;
-    const {
-      silent = false,
-      showRefreshIndicator = false,
-      includeMdFiles = true,
-    } = options;
+    const { silent = false, showRefreshIndicator = false } = options;
     if (!silent) this._isLoading = true;
     if (showRefreshIndicator) this._refreshingCount += 1;
 
     try {
-      const configResult = await fetchDaConfigSheets(this._org, this._site);
-      const [skillsResult] = await Promise.all([
-        loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles }),
+      // Run migration on every load — no-op after first run (marker gates re-runs).
+      await migrateSkillsIfNeeded(this._org, this._site);
+
+      const [folderResult, configResult] = await Promise.all([
+        listSkillFolders(this._org, this._site),
+        fetchDaConfigSheets(this._org, this._site),
       ]);
 
-      this._skills = skillsResult.map;
-      this._skillStatuses = skillsResult.statuses;
+      this._skillsIndex = folderResult.entries || [];
       this._prompts = configResult.json?.prompts?.data || [];
       this._agentRows = configResult.agentRows || [];
       this._mcpRows = configResult.mcpRows || [];
@@ -475,9 +448,7 @@ class NxSkillsEditor extends LitElement {
       this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
       this._toolOverrides = configResult.toolOverrides || {};
       this._saveDataSnapshot();
-
       this._applySuggestion();
-      this._scheduleOrphanSkillSync();
     } finally {
       if (!silent) this._isLoading = false;
       if (showRefreshIndicator) this._refreshingCount = Math.max(0, this._refreshingCount - 1);
@@ -777,14 +748,15 @@ class NxSkillsEditor extends LitElement {
     }
 
     // Duplicate ID guard — only applies when creating a new skill, not editing.
-    if (!this._isFormEdit && this._skills && id in this._skills) {
+    const existingIds = new Set((this._skillsIndex || []).map((e) => e.id));
+    if (!this._isFormEdit && existingIds.has(id)) {
       this._setStatus(`A skill with ID "${id}" already exists. Edit it from the list.`, STATUS_TYPE.ERR);
       return;
     }
 
-    // Frontmatter — inject if missing, then validate against Anthropic's requirements.
+    // Frontmatter — ensure all required fields, then bump version on edits.
     const { markdown: withFm, injected, warnings } = ensureSkillFrontmatter(body, id, status);
-    body = withFm;
+    body = this._isFormEdit ? bumpSkillVersion(withFm, id).markdown : withFm;
     if (injected) {
       this._formSkillBody = body;
       this._setStatus(
@@ -798,22 +770,9 @@ class NxSkillsEditor extends LitElement {
     this._isSaveBusy = true;
     this._statusMsg = '';
 
-    // Write the .md file first — if it fails we don't touch the config sheet.
-    const fileResult = await writeSkillMdFile(this._org, this._site, id, body);
+    const fileResult = await writeSkillFolderMd(this._org, this._site, id, body);
     if (!fileResult.ok) {
       this._setStatus('Failed to write skill file', STATUS_TYPE.ERR);
-      this._isSaveBusy = false;
-      return;
-    }
-
-    const configResult = await upsertSkillInConfig(this._org, this._site, id, body, { status });
-    if (!configResult.ok) {
-      // Rollback: the .md file was written but config failed — delete the orphan
-      // for new skills. Edits are safe to leave (file overwrote an existing body).
-      if (!this._isFormEdit) {
-        deleteSkillMdFile(this._org, this._site, id).catch(() => {});
-      }
-      this._setStatus(configResult.error || 'Failed to save skill config', STATUS_TYPE.ERR);
       this._isSaveBusy = false;
       return;
     }
@@ -838,25 +797,11 @@ class NxSkillsEditor extends LitElement {
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    // Read existing content before deleting, so we can rollback if needed.
-    const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
-
-    const fileResult = await deleteSkillMdFile(this._org, this._site, id);
-    if (!fileResult.ok) {
-      this._setStatus('Failed to delete skill file', STATUS_TYPE.ERR);
-      this._isSaveBusy = false;
-      return;
-    }
-
-    const configResult = await deleteSkillFromConfig(this._org, this._site, id);
+    const result = await deleteSkillFolder(this._org, this._site, id);
     this._isSaveBusy = false;
 
-    if (!configResult.ok) {
-      // Rollback: re-create the .md file we just deleted
-      if (rollbackBody) {
-        writeSkillMdFile(this._org, this._site, id, rollbackBody).catch(() => {});
-      }
-      this._setStatus(configResult.error || 'Failed to delete skill from config', STATUS_TYPE.ERR);
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
       return;
     }
 
@@ -868,23 +813,11 @@ class NxSkillsEditor extends LitElement {
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
-
-    const fileResult = await deleteSkillMdFile(this._org, this._site, id);
-    if (!fileResult.ok) {
-      this._setStatus('Failed to delete skill file', STATUS_TYPE.ERR);
-      this._isSaveBusy = false;
-      return;
-    }
-
-    const configResult = await deleteSkillFromConfig(this._org, this._site, id);
+    const result = await deleteSkillFolder(this._org, this._site, id);
     this._isSaveBusy = false;
 
-    if (!configResult.ok) {
-      if (rollbackBody) {
-        writeSkillMdFile(this._org, this._site, id, rollbackBody).catch(() => {});
-      }
-      this._setStatus(configResult.error || 'Failed to delete skill', STATUS_TYPE.ERR);
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
       return;
     }
     if (this._formSkillId === id) this._closeEditor();
@@ -925,7 +858,7 @@ class NxSkillsEditor extends LitElement {
     }
 
     this._formSkillId = skillId;
-    this._formSkillBody = this._skills[skillId] || '';
+    this._formSkillBody = '';
     this._isFormEdit = true;
     this._statusMsg = '';
     this._activeToolRefs = null;
@@ -936,7 +869,7 @@ class NxSkillsEditor extends LitElement {
     // Capture the context at the time of the request to guard against stale responses.
     const requestedId = skillId;
     const requestedTab = tab;
-    const { text } = await readSkillMdFile(this._org, this._site, skillId);
+    const { text } = await readSkillFolderMd(this._org, this._site, skillId);
     // Discard the response if the user navigated away before it resolved.
     if (text && !this._isFormDirty
       && this._formSkillId === requestedId
@@ -1353,8 +1286,10 @@ class NxSkillsEditor extends LitElement {
       statusMsg: this._statusMsg,
       statusType: this._statusType,
       promptSearch: this._promptSearch,
-      skills: this._skills,
-      skillStatuses: this._skillStatuses,
+      // skills: { [id]: name } — renderers use Object.keys for the list
+      // and the value as the card title (name from frontmatter).
+      skills: Object.fromEntries((this._skillsIndex || []).map((e) => [e.id, e.name])),
+      skillStatuses: Object.fromEntries((this._skillsIndex || []).map((e) => [e.id, e.status])),
       prompts: this._prompts,
       agents: this._agents,
       agentRows: this._agentRows,
