@@ -189,7 +189,7 @@ class EwSetupApp extends LitElement {
                 View setup instructions →
               </a>
               <div class="check-tip">
-                💡 Use the <a href="https://github.com/exp-workspace/plugin-claude" target="_blank">exp-workspace plugin</a>
+                💡 Use the <a href="https://github.com/exp-workspace/plugin-claude" target="_blank">Experience Workspace enablement</a>
                 — a skill for Claude or Cursor to enable Quick Edit automatically.
               </div>` : nothing}
           </div>
