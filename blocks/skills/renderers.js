@@ -374,10 +374,12 @@ export function renderSkillForm(vm) {
         ?readonly=${vm.isFormEdit}
         @input=${(e) => vm.setFormSkillId(e.target.value)}
       >
-      <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''}">
+      <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''} ${vm.isSkillBodyLoading ? 'is-loading' : ''}">
         <textarea
-          placeholder="Write or revise skill markdown"
+          placeholder=${vm.isSkillBodyLoading ? 'Loading…' : 'Write or revise skill markdown'}
           aria-label="Skill markdown"
+          aria-busy=${vm.isSkillBodyLoading ? 'true' : 'false'}
+          ?disabled=${vm.isSkillBodyLoading}
           .value=${vm.formSkillBody}
           @input=${(e) => vm.setFormSkillBody(e.target.value)}
         ></textarea>
