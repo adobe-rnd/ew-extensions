@@ -18,6 +18,7 @@ class EwSetupApp extends LitElement {
     _existingValue: { state: true },
     _errorMsg: { state: true },
     _showContinueWarning: { state: true },
+    _headAuthBlocked: { state: true },
     _sidekickStatus: { state: true }, // 'idle'|'loading'|'exists'|'written'|'error'
     _sidekickErrorMsg: { state: true },
     _sidekickErrorSource: { state: true }, // 'read'|'write'
@@ -38,6 +39,7 @@ class EwSetupApp extends LitElement {
     this._configJson = null;
     this._configInFlight = false;
     this._showContinueWarning = false;
+    this._headAuthBlocked = false;
     this._sidekickStatus = 'idle';
     this._sidekickErrorMsg = null;
     this._sidekickErrorSource = null;
@@ -79,6 +81,7 @@ class EwSetupApp extends LitElement {
     this._errorMsg = null;
     this._configJson = null;
     this._configInFlight = false;
+    this._headAuthBlocked = false;
     this._sidekickStatus = 'idle';
     this._sidekickErrorMsg = null;
     this._sidekickErrorSource = null;
@@ -92,6 +95,12 @@ class EwSetupApp extends LitElement {
     // Check B first: resolve scripts.js from head.html
     try {
       const headResp = await proxyFetch(`${base}/head.html`);
+      if (headResp.status === 401) {
+        this._headAuthBlocked = true;
+        this._checkB = 'fail';
+        this._checkA = 'fail';
+        return;
+      }
       if (!headResp.ok) { this._checkB = 'fail'; this._checkA = 'fail'; return; }
       const doc = new DOMParser().parseFromString(await headResp.text(), 'text/html');
       const scriptTag = [...doc.querySelectorAll('script[src]')]
@@ -150,6 +159,12 @@ class EwSetupApp extends LitElement {
     return html`
       <div class="card">
         <p class="card-title">Step 1 — Check Code Requirements</p>
+
+        ${this._headAuthBlocked ? html`
+          <div class="check-auth-notice">
+            ⚠️ This tool cannot verify the code requirements because the site has authentication enabled.
+            You can still continue if you are sure the requirements are met.
+          </div>` : nothing}
 
         <div class="check-row">
           ${this._renderIcon(this._checkB)}
@@ -504,12 +519,8 @@ class EwSetupApp extends LitElement {
         This app helps you enable your current project for Experience Workspace in two simple steps.
         It is meant to be run once per project, but can also be used as a checker to verify that
         your project is ready for Experience Workspace.<br>
-<<<<<<< ew-sidekick
         Note: enabling a project requires the current user to have permissions to modify the DA org-level config
         and EDS config admin permissions to update the sidekick configuration.
-=======
-        Note: enabling a project requires the current user to have permissions to modify the DA org-level config.
->>>>>>> main
       </p>
 
       <div class="org-site-row">
