@@ -4,6 +4,8 @@ import {
   findEditorPathRows,
   hasEditorPathForSite,
   buildUpdatedConfig,
+  hasCorrectSidekickConfig,
+  buildUpdatedSidekickConfig,
 } from '../../../tools/ew-setup/utils.js';
 
 describe('parseOrgSite', () => {
@@ -69,6 +71,45 @@ describe('hasEditorPathForSite', () => {
   it('returns false for rows without a value property', () => {
     const rows = [{ key: 'editor.path' }, { key: 'other' }];
     expect(hasEditorPathForSite(rows, 'myorg', 'mysite')).to.be.false;
+  });
+});
+
+describe('hasCorrectSidekickConfig', () => {
+  const PATTERN = 'https://da.live/canvas#/{{org}}/{{site}}{{pathname}}';
+  it('returns true when editUrlPattern matches', () => {
+    expect(hasCorrectSidekickConfig({ editUrlPattern: PATTERN })).to.be.true;
+  });
+  it('returns false when editUrlPattern differs', () => {
+    expect(hasCorrectSidekickConfig({ editUrlPattern: 'https://other.example.com' })).to.be.false;
+  });
+  it('returns false when editUrlPattern is missing', () => {
+    expect(hasCorrectSidekickConfig({ project: 'My Project' })).to.be.false;
+  });
+  it('returns false for null input', () => {
+    expect(hasCorrectSidekickConfig(null)).to.be.false;
+  });
+});
+
+describe('buildUpdatedSidekickConfig', () => {
+  const PATTERN = 'https://da.live/canvas#/{{org}}/{{site}}{{pathname}}';
+  it('creates bare minimum config when existingJson is null', () => {
+    const result = buildUpdatedSidekickConfig(null);
+    expect(result).to.deep.equal({ project: 'Experience Workspace Project', editUrlPattern: PATTERN });
+  });
+  it('injects editUrlPattern into existing config', () => {
+    const result = buildUpdatedSidekickConfig({ project: 'My Project', plugins: [] });
+    expect(result.editUrlPattern).to.equal(PATTERN);
+    expect(result.project).to.equal('My Project');
+    expect(result.plugins).to.deep.equal([]);
+  });
+  it('overwrites an existing editUrlPattern', () => {
+    const result = buildUpdatedSidekickConfig({ editUrlPattern: 'https://old.example.com' });
+    expect(result.editUrlPattern).to.equal(PATTERN);
+  });
+  it('does not mutate the input object', () => {
+    const input = { project: 'My Project' };
+    buildUpdatedSidekickConfig(input);
+    expect(input).to.not.have.property('editUrlPattern');
   });
 });
 

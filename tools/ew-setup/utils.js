@@ -21,6 +21,17 @@ export function hasEditorPathForSite(rows, org, site) {
   return rows.some((r) => typeof r.value === 'string' && r.value.includes(needle));
 }
 
+const SIDEKICK_EDIT_URL = 'https://da.live/canvas#/{{org}}/{{site}}{{pathname}}';
+
+export function hasCorrectSidekickConfig(json) {
+  return json?.editUrlPattern === SIDEKICK_EDIT_URL;
+}
+
+export function buildUpdatedSidekickConfig(existingJson) {
+  if (!existingJson) return { project: 'Experience Workspace Project', editUrlPattern: SIDEKICK_EDIT_URL };
+  return { ...existingJson, editUrlPattern: SIDEKICK_EDIT_URL };
+}
+
 export function buildUpdatedConfig(existingJson, org, site) {
   const newRow = { key: 'editor.path', value: `/${org}/${site}=https://da.live/canvas#` };
   if (!existingJson) return { data: [newRow] };
