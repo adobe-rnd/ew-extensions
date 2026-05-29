@@ -26,9 +26,10 @@
 
 import { DA_ORIGIN, daFetch } from './da-fetch.js';
 import { toSafeId, normaliseRowKey } from './sheet-utils.js';
-import { ensureSkillFrontmatter } from './skill-frontmatter.js';
+import { stripFrontmatter, buildFrontmatterBlock } from './skill-frontmatter.js';
 import { writeSkillFolderMd, readSkillFolderMd } from './skill-folder-api.js';
 import { fetchDaConfigSheets, saveDaConfig } from '../skills-editor-api.js';
+import { sendMessage } from './skills-channel.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,19 +45,9 @@ export const MIGRATION_VERSION = 1;
 const MARKER_FILENAME = '.migrated.json';
 const LEASE_KEY_PREFIX = 'da-skills-migration:';
 const LEASE_TTL_MS = 60_000;
-const BC_CHANNEL = 'da-skills-editor';
-
-// ---------------------------------------------------------------------------
-// BroadcastChannel helpers
-// ---------------------------------------------------------------------------
-
-function broadcast(type, payload = {}) {
-  try {
-    const bc = new BroadcastChannel(BC_CHANNEL);
-    bc.postMessage({ type, payload });
-    bc.close();
-  } catch { /* non-critical */ }
-}
+// Minimum character count for a derived description line to be considered usable.
+// Lines shorter than this are likely noise (e.g. lone punctuation, short headings).
+const MIN_DESCRIPTION_CHARS = 4;
 
 // ---------------------------------------------------------------------------
 // Marker file
@@ -184,7 +175,7 @@ function deriveDescription(body, skillId) {
   const lines = body.split('\n');
   for (const line of lines) {
     const trimmed = line.replace(/^#+\s*/, '').trim();
-    if (trimmed && trimmed.length >= 4) {
+    if (trimmed && trimmed.length >= MIN_DESCRIPTION_CHARS) {
       return trimmed.slice(0, 200);
     }
   }
@@ -205,11 +196,12 @@ export async function migrateOneSkill(org, site, rawId, body, status) {
   const id = toSafeId(rawId) || String(rawId).trim();
   if (!id) return { ok: false, id: rawId, error: 'empty id after normalisation' };
 
-  // compose frontmatter — ensureSkillFrontmatter fills name, version, status;
-  // we patch in the derived description before writing.
-  const description = deriveDescription(body || '', id);
-  const preComposed = `---\nname: ${id}\ndescription: ${description}\nversion: 1\nstatus: ${status}\n---\n${(body || '').trimStart()}`;
-  const { markdown: composed } = ensureSkillFrontmatter(preComposed, id, status);
+  // Strip any existing frontmatter from the body before composing — defensive
+  // against callers that pass raw file text and against partially-migrated files.
+  const cleanBody = stripFrontmatter(body || '').trimStart();
+  const description = deriveDescription(cleanBody, id);
+  const fm = buildFrontmatterBlock({ name: id, description, version: 1, status });
+  const composed = fm + cleanBody;
 
   const writeResult = await writeSkillFolderMd(org, site, id, composed);
   if (!writeResult.ok) {
@@ -231,11 +223,10 @@ export async function migrateOneSkill(org, site, rawId, body, status) {
 
 /**
  * Remove the `skills` sheet key from the DA config and update `:names`.
+ * Returns a shallow copy — does not mutate the input object.
  *
- * @param {string} org
- * @param {string} site
- * @param {Record<string, unknown>} cfg - the full config JSON object (mutated in place)
- * @returns {Record<string, unknown>} the mutated config
+ * @param {Record<string, unknown>} cfg - the full config JSON object
+ * @returns {Record<string, unknown>} a new config object with `skills` removed
  */
 export function dropSkillsFromConfig(cfg) {
   const updated = { ...cfg };
@@ -325,7 +316,7 @@ export async function migrateSkillsIfNeeded(org, site) {
     return { skipped: true, migratedIds: [], failedIds: [], markerWritten: false };
   }
 
-  broadcast('migration-started', { org, site });
+  sendMessage('migration-started', { org, site });
 
   const migratedIds = [];
   const failedIds = [];
@@ -384,7 +375,9 @@ export async function migrateSkillsIfNeeded(org, site) {
         );
         if (flatResp.ok) {
           const flatText = await flatResp.text();
-          if (flatText && flatText.trim()) body = flatText;
+          // Strip any frontmatter from the flat file — migrateOneSkill also strips,
+          // but doing it here keeps body semantically correct at the call site.
+          if (flatText && flatText.trim()) body = stripFrontmatter(flatText);
         }
       } catch { /* sheet body is the fallback */ }
 
@@ -402,8 +395,8 @@ export async function migrateSkillsIfNeeded(org, site) {
       else failedIds.push(result.id ?? '?');
     });
 
-    // 5. Drop skills sheet from config (only if all skills migrated successfully)
-    if (failedIds.length === 0 && migratedIds.length >= 0) {
+    // 5. Drop skills sheet from config (only if no skills failed to migrate)
+    if (failedIds.length === 0) {
       const updatedCfg = dropSkillsFromConfig(loaded.json);
       await saveDaConfig(org, site, updatedCfg);
     }
@@ -411,10 +404,10 @@ export async function migrateSkillsIfNeeded(org, site) {
     // 6. Write migration marker
     const { ok: markerWritten } = await writeMigrationMarker(org, site, migratedIds);
 
-    broadcast('migration-complete', { org, site, migratedIds, failedIds });
+    sendMessage('migration-complete', { org, site, migratedIds, failedIds });
     return { skipped: false, migratedIds, failedIds, markerWritten };
   } catch (err) {
-    broadcast('skills-out-of-sync', { org, site, reason: String(err?.message ?? err) });
+    sendMessage('skills-out-of-sync', { org, site, reason: String(err?.message ?? err) });
     return { skipped: false, migratedIds, failedIds, markerWritten: false };
   } finally {
     releaseLease(org, site, leaseId);

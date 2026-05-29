@@ -246,6 +246,48 @@ describe('migrateOneSkill', () => {
     expect(writtenBody).to.include('name:');
     expect(writtenBody).to.include('version:');
   });
+
+  it('correctly escapes a description containing colons and quotes', async () => {
+    let writtenBody = '';
+    fetchHandler = async (req) => {
+      if (req.method === 'PUT') {
+        const fd = req.opts?.body;
+        if (fd instanceof FormData) {
+          const blob = fd.get('data');
+          if (blob?.text) writtenBody = await blob.text();
+        }
+        return mockResponse({ status: 200 });
+      }
+      return mockResponse({ body: writtenBody || '---\nname: x\n---\n' });
+    };
+    const body = 'SEO tips: always use "short" titles.\n\nFull body here.';
+    await migrateOneSkill(ORG, SITE, 'seo-tips', body, 'approved');
+    // description must be present and non-empty (not silently dropped due to YAML parse failure)
+    expect(writtenBody).to.include('description:');
+    const descLine = writtenBody.split('\n').find((l) => l.startsWith('description:'));
+    expect(descLine).to.be.a('string');
+    expect(descLine.length).to.be.greaterThan('description:'.length + 1);
+  });
+
+  it('strips existing frontmatter from body before composing', async () => {
+    let writtenBody = '';
+    fetchHandler = async (req) => {
+      if (req.method === 'PUT') {
+        const fd = req.opts?.body;
+        if (fd instanceof FormData) {
+          const blob = fd.get('data');
+          if (blob?.text) writtenBody = await blob.text();
+        }
+        return mockResponse({ status: 200 });
+      }
+      return mockResponse({ body: writtenBody || '---\nname: x\n---\n' });
+    };
+    // body already has stale frontmatter — should not produce double frontmatter
+    const bodyWithFm = '---\nname: old-name\nversion: 5\n---\nActual content here.';
+    await migrateOneSkill(ORG, SITE, 'my-skill', bodyWithFm, 'approved');
+    const fmMatches = (writtenBody.match(/^---$/gm) || []).length;
+    expect(fmMatches).to.equal(2); // exactly one open and one close delimiter
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -265,11 +307,9 @@ describe('migrateSkillsIfNeeded', () => {
   });
 
   it('skips when another tab holds the lease', async () => {
-    // simulate no-marker (marker returns 404 for /source path)
     fetchHandler = (req) => {
       if (req.url.includes('.migrated.json')) return mockResponse({ status: 404, ok: false });
-      // config sheet
-      return mockResponse({ body: JSON.stringify({ ok: true, json: {} }) });
+      return mockResponse({ body: JSON.stringify({ ':names': [] }) });
     };
     acquireLease(ORG, SITE); // claim lease in this tab first
     const result = await migrateSkillsIfNeeded(ORG, SITE);
@@ -277,24 +317,19 @@ describe('migrateSkillsIfNeeded', () => {
   });
 
   it('returns skipped:false and writes marker when there are no skills to migrate', async () => {
-    const calls = [];
+    const markerPuts = [];
     fetchHandler = (req) => {
-      calls.push(req.url);
       if (req.url.includes('.migrated.json') && req.method === 'GET') {
         return mockResponse({ status: 404, ok: false });
       }
+      if (req.url.includes('.migrated.json') && req.method === 'PUT') {
+        markerPuts.push(req.url);
+        return mockResponse({ status: 200 });
+      }
+      if (req.url.includes('/list/')) return mockResponse({ body: JSON.stringify([]) });
+      if (req.method === 'POST' && req.url.includes('/config/')) return mockResponse({ status: 200 });
       if (req.url.includes('/config/')) {
         return mockResponse({ body: JSON.stringify({ ':names': [], ':type': 'multi-sheet' }) });
-      }
-      if (req.url.includes('/list/')) {
-        return mockResponse({ body: JSON.stringify([]) });
-      }
-      if (req.url.includes('.migrated.json') && req.method === 'PUT') {
-        return mockResponse({ status: 200 });
-      }
-      // saveDaConfig
-      if (req.method === 'POST' && req.url.includes('/config/')) {
-        return mockResponse({ status: 200 });
       }
       return mockResponse({ status: 404, ok: false });
     };
@@ -303,5 +338,127 @@ describe('migrateSkillsIfNeeded', () => {
     expect(result.migratedIds).to.deep.equal([]);
     expect(result.failedIds).to.deep.equal([]);
     expect(result.markerWritten).to.be.true;
+    expect(markerPuts.length).to.equal(1);
+  });
+
+  it('migrates skills from the config sheet to the folder layout', async () => {
+    const sheetData = [
+      { key: 'brand-voice', content: 'Brand tone and voice guidelines.', status: 'approved' },
+      { key: 'seo-checklist', content: 'SEO checklist for editors.', status: 'approved' },
+    ];
+    const writtenFiles = {};
+    const configPosts = [];
+
+    fetchHandler = async (req) => {
+      // marker read
+      if (req.url.includes('.migrated.json') && req.method === 'GET') {
+        return mockResponse({ status: 404, ok: false });
+      }
+      // marker write
+      if (req.url.includes('.migrated.json') && req.method === 'PUT') {
+        return mockResponse({ status: 200 });
+      }
+      // config sheet GET
+      if (req.method === 'GET' && req.url.includes('/config/')) {
+        return mockResponse({
+          body: JSON.stringify({
+            ':names': ['skills'],
+            skills: { data: sheetData },
+          }),
+        });
+      }
+      // config sheet POST (saveDaConfig)
+      if (req.method === 'POST' && req.url.includes('/config/')) {
+        configPosts.push(req.url);
+        return mockResponse({ status: 200 });
+      }
+      // list flat .md files — none in this test
+      if (req.url.includes('/list/')) return mockResponse({ body: JSON.stringify([]) });
+      // flat .md reads — return 404 (no flat files)
+      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
+        return mockResponse({ status: 404, ok: false });
+      }
+      // folder skill.md PUT (write)
+      if (req.method === 'PUT' && req.url.includes('/skill.md')) {
+        const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
+        const fd = req.opts?.body;
+        if (fd instanceof FormData) {
+          const blob = fd.get('data');
+          if (blob?.text) writtenFiles[skillId] = await blob.text();
+        }
+        return mockResponse({ status: 200 });
+      }
+      // folder skill.md GET (round-trip verify)
+      if (req.method === 'GET' && req.url.includes('/skill.md')) {
+        const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
+        return mockResponse({ body: writtenFiles[skillId] || '---\nname: x\n---\n' });
+      }
+      return mockResponse({ status: 404, ok: false });
+    };
+
+    const result = await migrateSkillsIfNeeded(ORG, SITE);
+
+    expect(result.skipped).to.be.false;
+    expect(result.failedIds).to.deep.equal([]);
+    expect(result.migratedIds).to.have.members(['brand-voice', 'seo-checklist']);
+    expect(result.markerWritten).to.be.true;
+    // sheet was dropped (saveDaConfig called)
+    expect(configPosts.length).to.equal(1);
+    // written files have frontmatter
+    expect(writtenFiles['brand-voice']).to.include('name: brand-voice');
+    expect(writtenFiles['brand-voice']).to.include('version:');
+  });
+
+  it('populates failedIds and does NOT drop the sheet when a skill write fails', async () => {
+    const sheetData = [
+      { key: 'good-skill', content: 'Works fine.', status: 'approved' },
+      { key: 'bad-skill', content: 'This one will fail to write.', status: 'approved' },
+    ];
+    const writtenFiles = {};
+    const configPosts = [];
+
+    fetchHandler = async (req) => {
+      if (req.url.includes('.migrated.json') && req.method === 'GET') {
+        return mockResponse({ status: 404, ok: false });
+      }
+      if (req.url.includes('.migrated.json') && req.method === 'PUT') {
+        return mockResponse({ status: 200 });
+      }
+      if (req.method === 'GET' && req.url.includes('/config/')) {
+        return mockResponse({
+          body: JSON.stringify({ ':names': ['skills'], skills: { data: sheetData } }),
+        });
+      }
+      if (req.method === 'POST' && req.url.includes('/config/')) {
+        configPosts.push(req.url);
+        return mockResponse({ status: 200 });
+      }
+      if (req.url.includes('/list/')) return mockResponse({ body: JSON.stringify([]) });
+      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
+        return mockResponse({ status: 404, ok: false });
+      }
+      if (req.method === 'PUT' && req.url.includes('/skill.md')) {
+        const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
+        if (skillId === 'bad-skill') return mockResponse({ status: 500, ok: false });
+        const fd = req.opts?.body;
+        if (fd instanceof FormData) {
+          const blob = fd.get('data');
+          if (blob?.text) writtenFiles[skillId] = await blob.text();
+        }
+        return mockResponse({ status: 200 });
+      }
+      if (req.method === 'GET' && req.url.includes('/skill.md')) {
+        const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
+        return mockResponse({ body: writtenFiles[skillId] || '---\nname: x\n---\n' });
+      }
+      return mockResponse({ status: 404, ok: false });
+    };
+
+    const result = await migrateSkillsIfNeeded(ORG, SITE);
+
+    expect(result.failedIds).to.have.members(['bad-skill']);
+    expect(result.migratedIds).to.have.members(['good-skill']);
+    // sheet must NOT be dropped when there are failures
+    expect(configPosts.length).to.equal(0);
   });
 });
