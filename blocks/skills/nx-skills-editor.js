@@ -3,7 +3,9 @@ import { loadStyle, HashController } from './utils/utils.js';
 import { toSafeId } from './utils/sheet-utils.js';
 import './shared/tabs/tabs.js';
 import './shared/card/card.js';
-import 'nx-popover';
+// CDN import — absolute URL required because this module is loaded by da-nx's
+// document context which does not carry skills.html's importmap.
+import 'https://da.live/nx2/blocks/shared/popover/popover.js';
 import {
   fetchDaConfigSheets,
   upsertPromptInConfig,
