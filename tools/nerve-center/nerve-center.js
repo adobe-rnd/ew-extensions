@@ -123,6 +123,17 @@ class NerveCenterApp extends LitElement {
     ].join('\n');
   }
 
+  _toast(message) {
+    const el = Object.assign(document.createElement('sl-alert'), {
+      variant: 'success',
+      closable: true,
+      duration: 2500,
+      innerHTML: message,
+    });
+    document.body.appendChild(el);
+    el.toast();
+  }
+
   _canvasUrl(item) {
     // item.path is like /org/site/drafts/... — strip leading slash and extension
     const hash = item.ext
@@ -197,7 +208,7 @@ class NerveCenterApp extends LitElement {
               if (this._actions?.setPrompt) {
                 this._actions.setPrompt(prompt);
               } else {
-                navigator.clipboard?.writeText(prompt);
+                navigator.clipboard?.writeText(prompt).then(() => this._toast('Prompt copied to clipboard'));
               }
             }}>Chat about this</sl-button>
           </div>
