@@ -192,7 +192,7 @@ class NerveCenterApp extends LitElement {
   _renderButton(obs) {
     const drafts = this._drafts[obs.id];
     const hasDrafts = drafts && !drafts.loading && drafts.items.length > 0;
-    const label = hasDrafts ? 'Start Publish Workflow' : 'Chat about this';
+    const label = hasDrafts ? 'Start Publish Workflow' : 'Generate content from observation';
     const prompt = hasDrafts
       ? this._buildPublishPrompt(obs, drafts.items)
       : this._buildPrompt(obs);
