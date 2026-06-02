@@ -124,14 +124,15 @@ class NerveCenterApp extends LitElement {
   }
 
   _toast(message) {
-    const el = Object.assign(document.createElement('sl-alert'), {
-      variant: 'success',
-      closable: true,
-      duration: 2500,
-      innerHTML: message,
-    });
+    const el = document.createElement('div');
+    el.className = 'nc-toast';
+    el.textContent = message;
     document.body.appendChild(el);
-    el.toast();
+    requestAnimationFrame(() => el.classList.add('nc-toast--visible'));
+    setTimeout(() => {
+      el.classList.remove('nc-toast--visible');
+      el.addEventListener('transitionend', () => el.remove(), { once: true });
+    }, 2500);
   }
 
   _canvasUrl(item) {

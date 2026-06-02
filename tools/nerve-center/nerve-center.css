@@ -161,6 +161,28 @@ nerve-center-app .obs-chat-btn {
   width: 100%;
 }
 
+.nc-toast {
+  position: fixed;
+  bottom: var(--spacing-400, 24px);
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--s2-gray-900, #1a1a1a);
+  color: #fff;
+  font-size: var(--s2-body-s-size, 13px);
+  padding: var(--spacing-150, 10px) var(--spacing-300, 16px);
+  border-radius: var(--s2-radius-200, 10px);
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+}
+
+.nc-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media (width <= 600px) {
   nerve-center-app .card { padding: var(--spacing-300, 16px); }
 }
