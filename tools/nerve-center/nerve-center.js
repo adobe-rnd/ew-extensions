@@ -2,6 +2,8 @@ import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 
 const API_BASE_URL = 'https://d31bkz463thsuv.cloudfront.net';
+const DA_ADMIN = 'https://admin.da.live';
+const DA_CANVAS = 'https://da.live/canvas';
 
 class NerveCenterApp extends LitElement {
   static properties = {
@@ -11,6 +13,7 @@ class NerveCenterApp extends LitElement {
     _observations: { state: true },
     _loading: { state: true },
     _error: { state: true },
+    _drafts: { state: true },
   };
 
   constructor() {
@@ -21,6 +24,12 @@ class NerveCenterApp extends LitElement {
     this._observations = [];
     this._loading = false;
     this._error = null;
+    this._drafts = {};
+    // Non-reactive — don't trigger re-renders
+    this._actions = null;
+    this._org = null;
+    this._site = null;
+    this._draftsStarted = false;
   }
 
   createRenderRoot() { return this; }
@@ -40,8 +49,12 @@ class NerveCenterApp extends LitElement {
     }
 
     try {
-      const { token } = await DA_SDK;
+      const { token, actions, project } = await DA_SDK;
       this._token = token;
+      this._actions = actions;
+      this._org = project?.org;
+      this._site = project?.repo;
+      this._checkFetchDrafts();
     } catch {
       // SDK unavailable in standalone/dev
     }
@@ -58,11 +71,79 @@ class NerveCenterApp extends LitElement {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const { data } = await resp.json();
       this._observations = data.items?.slice(0, 3) ?? [];
+      this._checkFetchDrafts();
     } catch (err) {
       this._error = err.message;
     } finally {
       this._loading = false;
     }
+  }
+
+  _checkFetchDrafts() {
+    if (this._actions && this._org && this._site && this._observations.length > 0 && !this._draftsStarted) {
+      this._draftsStarted = true;
+      Promise.all(this._observations.map((obs) => this._fetchDrafts(obs.id)));
+    }
+  }
+
+  async _fetchDrafts(obsId) {
+    this._drafts = { ...this._drafts, [obsId]: { loading: true, items: [] } };
+    try {
+      const url = `${DA_ADMIN}/list/${this._org}/${this._site}/drafts/nerve-center/${obsId}`;
+      const resp = await this._actions.daFetch(url);
+      if (!resp.ok) {
+        this._drafts = { ...this._drafts, [obsId]: { loading: false, items: [] } };
+        return;
+      }
+      const payload = await resp.json();
+      const items = Array.isArray(payload) ? payload.filter((i) => i.ext) : [];
+      this._drafts = { ...this._drafts, [obsId]: { loading: false, items } };
+    } catch {
+      this._drafts = { ...this._drafts, [obsId]: { loading: false, items: [] } };
+    }
+  }
+
+  _buildPrompt(obs) {
+    const lines = [
+      `Observation: ${obs.name}`,
+      obs.description ? `Description: ${obs.description}` : null,
+      obs.summary ? `Summary: ${obs.summary}` : null,
+      obs.classification ? `Classification: ${obs.classification}` : null,
+      obs.confidence != null ? `Confidence: ${(obs.confidence * 100).toFixed(0)}%` : null,
+      obs.recommendedAction ? `Recommended action: ${obs.recommendedAction}` : null,
+      obs.recommendedActionRationale ? `Rationale: ${obs.recommendedActionRationale}` : null,
+      obs.businessImpact ? `Business impact: ${obs.businessImpact}` : null,
+    ].filter(Boolean);
+
+    return [
+      lines.join('\n'),
+      '',
+      'Based on this observation, generate three pages that can help drive traffic or conversions on our website.',
+      `Create 3 different variations of content based on the observation at /drafts/nerve-center/${obs.id}/`,
+    ].join('\n');
+  }
+
+  _canvasUrl(item) {
+    // item.path is like /org/site/drafts/... — strip leading slash and extension
+    const hash = item.ext
+      ? item.path.slice(1, -(item.ext.length + 1))
+      : item.path.replace(/^\//, '');
+    return `${DA_CANVAS}#/${hash}`;
+  }
+
+  _renderDrafts(obsId) {
+    const entry = this._drafts[obsId];
+    if (!entry) return nothing;
+    if (entry.loading) return html`<p class="drafts-loading">Loading drafts…</p>`;
+    if (entry.items.length === 0) return nothing;
+
+    return html`
+      <div class="drafts">
+        <p class="drafts-label">Draft pages</p>
+        ${entry.items.map((item) => html`
+          <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${item.name}</a>
+        `)}
+      </div>`;
   }
 
   _renderContent() {
@@ -110,7 +191,15 @@ class NerveCenterApp extends LitElement {
               ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
               ${obs.confidence != null ? html`<span class="badge confidence">${(obs.confidence * 100).toFixed(0)}% confidence</span>` : nothing}
             </div>
-            <sl-button class="ew-fill-accent obs-chat-btn">Chat about this</sl-button>
+            ${this._renderDrafts(obs.id)}
+            <sl-button class="ew-fill-accent obs-chat-btn" @click=${() => {
+              const prompt = this._buildPrompt(obs);
+              if (this._actions?.setPrompt) {
+                this._actions.setPrompt(prompt);
+              } else {
+                navigator.clipboard?.writeText(prompt);
+              }
+            }}>Chat about this</sl-button>
           </div>
         `)}
       </div>`;

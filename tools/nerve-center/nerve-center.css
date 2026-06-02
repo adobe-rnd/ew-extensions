@@ -121,6 +121,42 @@ nerve-center-app .badge.confidence {
   color: var(--s2-green-900, #166534);
 }
 
+nerve-center-app .drafts {
+  margin-bottom: var(--spacing-200, 12px);
+}
+
+nerve-center-app .drafts-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-gray-500, #999);
+  margin: 0 0 var(--spacing-75, 6px);
+}
+
+nerve-center-app .drafts-loading {
+  font-size: var(--s2-body-s-size, 13px);
+  color: var(--s2-gray-500, #999);
+  margin: 0 0 var(--spacing-200, 12px);
+}
+
+nerve-center-app .draft-link {
+  display: block;
+  font-size: var(--s2-body-s-size, 13px);
+  color: var(--ew-accent);
+  text-decoration: none;
+  padding: var(--spacing-75, 6px) 0;
+  border-bottom: 1px solid var(--s2-gray-100, #f0f0f0);
+}
+
+nerve-center-app .draft-link:last-child {
+  border-bottom: none;
+}
+
+nerve-center-app .draft-link:hover {
+  text-decoration: underline;
+}
+
 nerve-center-app .obs-chat-btn {
   width: 100%;
 }
