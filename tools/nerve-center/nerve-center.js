@@ -123,6 +123,20 @@ class NerveCenterApp extends LitElement {
     ].join('\n');
   }
 
+  _renderWithLinks(text) {
+    const parts = [];
+    const re = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+    let last = 0;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > last) parts.push(text.slice(last, match.index));
+      parts.push(html`<a href=${match[2]} target="_blank" rel="noopener noreferrer">${match[1]}</a>`);
+      last = match.index + match[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts;
+  }
+
   _toast(message) {
     const el = document.createElement('div');
     el.className = 'nc-toast';
@@ -197,7 +211,7 @@ class NerveCenterApp extends LitElement {
         ${this._observations.map((obs) => html`
           <div class="observation-item">
             <p class="obs-name">${obs.name}</p>
-            ${obs.description ? html`<p class="obs-description">${obs.description}</p>` : nothing}
+            ${obs.description ? html`<p class="obs-description">${this._renderWithLinks(obs.description)}</p>` : nothing}
             <div class="obs-meta">
               <span class="badge">${obs.status}</span>
               ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
