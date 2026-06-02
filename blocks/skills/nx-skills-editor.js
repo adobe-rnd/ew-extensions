@@ -47,6 +47,7 @@ import {
   STATUS_TYPE,
 } from './constants.js';
 import {
+  renderTopNav,
   renderChatDrawer,
   renderListCol,
   renderEditorPanel,
@@ -1510,9 +1511,12 @@ class NxSkillsEditor extends LitElement {
           <span class="refresh-indicator-track"><span class="refresh-indicator-bar"></span></span>
         </div>
       ` : nothing}
-      ${renderChatDrawer(vm)}
-      ${renderListCol(vm)}
-      ${renderEditorPanel(vm)}
+      ${renderTopNav(vm)}
+      <div class="content-area">
+        ${renderChatDrawer(vm)}
+        ${renderListCol(vm)}
+        ${renderEditorPanel(vm)}
+      </div>
       ${dlg ? html`
         <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
           <div class="confirm-dialog" role="alertdialog"

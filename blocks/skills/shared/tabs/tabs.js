@@ -70,7 +70,7 @@ class NxTabs extends LitElement {
             aria-selected=${item.id === this.active ? 'true' : 'false'}
             tabindex=${item.id === this.active ? '0' : '-1'}
             @click=${() => this._select(item.id)}
-          >${item.label}</button>
+          >${item.icon ? item.icon : nothing}<span class="tab-label">${item.label}</span></button>
         `)}
       </div>
     `;

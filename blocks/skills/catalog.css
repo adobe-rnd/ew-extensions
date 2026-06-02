@@ -182,7 +182,7 @@
   flex-shrink: 0;
 }
 
-/* ─── list header (sticky so tabs stay visible while list scrolls) ──────────── */
+/* ─── list header (sticky action bar above the catalog scroll) ──────────────── */
 
 .list-header {
   position: sticky;

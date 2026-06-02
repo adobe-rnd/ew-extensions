@@ -1,16 +1,16 @@
 /** Canonical tab ID strings — use these instead of bare string literals. */
 const TAB_SKILLS = 'skills';
-const TAB_AGENTS = 'agents';
+const TAB_AGENTS = 'agents'; // UI label: "Plugins"
 const TAB_PROMPTS = 'prompts';
-const TAB_MCPS = 'mcps';
+const TAB_MCPS = 'mcps'; // UI label: "Marketplace"
 const TAB_MEMORY = 'memory';
 
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
-  { id: TAB_SKILLS, label: 'Skills' },
-  { id: TAB_AGENTS, label: 'Agents' },
   { id: TAB_PROMPTS, label: 'Prompts' },
-  { id: TAB_MCPS, label: 'MCPs' },
+  { id: TAB_AGENTS, label: 'Plugins' },
+  { id: TAB_SKILLS, label: 'Skills' },
+  { id: TAB_MCPS, label: 'Marketplace' },
   { id: TAB_MEMORY, label: 'Memory' },
 ];
 

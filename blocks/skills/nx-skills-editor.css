@@ -152,12 +152,66 @@
 
 .root {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   flex: 1;
   height: 100%;
   min-height: 0;
   position: relative;
-  overflow: hidden; /* required to clip the drawer while it slides */
+  overflow: hidden;
+}
+
+/* ─── top navigation bar (full-width, above content columns) ────────────────── */
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-height: 40px;
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
+  border-bottom: 1px solid var(--s2-gray-200);
+}
+
+.top-nav nx-tabs { flex: 1; min-width: 0; }
+
+/* ─── chat toggle (visible in top-nav when chat is closed) ───────────────── */
+
+.chat-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--s2-corner-radius-100);
+  background: none;
+  color: var(--s2-gray-700);
+  font-family: inherit;
+  font-size: var(--s2-body-size-s);
+  font-weight: var(--s2-heading-font-weight);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+
+.chat-toggle-btn:hover {
+  color: var(--s2-gray-900);
+  background: var(--s2-gray-100);
+}
+
+.chat-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* ─── content area (horizontal row below the top nav) ───────────────────────── */
+
+.content-area {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .col {
@@ -201,32 +255,6 @@
   background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
 }
 
-/* ─── chat toggle button ─────────────────────────────────────────────────────── */
-
-.chat-toggle-btn {
-  margin-left: auto;
-  padding: var(--s2-spacing-50) var(--s2-spacing-150, var(--s2-spacing-100));
-  border: 1px solid var(--s2-gray-300);
-  border-radius: var(--s2-corner-radius-200);
-  background: none;
-  color: var(--s2-gray-700);
-  font-size: var(--s2-body-size-xs);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.chat-toggle-btn:hover {
-  background: var(--s2-gray-100);
-  color: var(--s2-gray-900);
-}
-
-.chat-toggle-btn.is-active {
-  background: var(--s2-blue-100);
-  border-color: var(--s2-blue-400);
-  color: var(--s2-blue-900);
-}
-
 /* ─── chat drawer: collapsed by default, slides in from the left ─────────── */
 
 .chat-drawer {
@@ -243,30 +271,7 @@
   border-right: 1px solid var(--s2-gray-200);
 }
 
-.chat-drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--s2-spacing-100) var(--s2-spacing-200);
-  border-bottom: 1px solid var(--s2-gray-200);
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
-}
-
-.chat-drawer-title {
-  font-weight: 700;
-  font-size: var(--s2-body-size-m);
-  color: var(--s2-gray-900);
-}
-
-.chat-drawer-body {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-drawer-body nx-chat {
+.chat-drawer nx-chat {
   flex: 1;
   min-height: 0;
 }
@@ -383,7 +388,11 @@
 /* ─── responsive ──────────────────────────────────────────────────────────────── */
 
 @media (width <= 900px) {
-  .root {
+  .top-nav { flex-wrap: wrap; }
+
+  .chat-toggle-btn { padding: 4px 10px; }
+
+  .content-area {
     flex-direction: column;
     overflow: hidden;
   }
@@ -394,7 +403,6 @@
     max-height: 50vh;
   }
 
-  /* Drawer slides in from below on mobile */
   .col-editor {
     flex: 0 0 100%;
     max-width: unset;

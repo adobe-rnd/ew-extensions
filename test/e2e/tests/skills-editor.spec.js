@@ -29,7 +29,7 @@ const HAS_AUTH = process.env.DA_AUTH_OK === '1';
  * Minimum required catalog tabs. The test reads actual tab names from the DOM
  * so it can't go stale, but we still assert these are present at minimum.
  */
-const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'MCPs', 'Memory'];
+const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'Plugins', 'Marketplace', 'Memory'];
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -648,7 +648,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Agents' }).click();
+    await page.getByRole('tab', { name: 'Plugins' }).click();
 
     const catalog = page.getByRole('region', { name: 'Catalog' });
     await expect(catalog.getByTestId('agent-builtin-card')).toBeVisible({ timeout: 10000 });
@@ -660,7 +660,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Agents' }).click();
+    await page.getByRole('tab', { name: 'Plugins' }).click();
 
     const agentCard = page.getByTestId('agent-builtin-card').first();
     await expect(agentCard).toBeVisible({ timeout: 10000 });
@@ -674,7 +674,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Agents' }).click();
+    await page.getByRole('tab', { name: 'Plugins' }).click();
     await page.getByTestId('agent-builtin-card').first().click();
 
     // Drawer should open with the agent's tools selector
@@ -694,7 +694,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     const catalog = page.getByRole('region', { name: 'Catalog' });
     await expect(catalog.getByTestId('mcp-builtin-card').first()).toBeVisible({ timeout: 10000 });
@@ -705,7 +705,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     const builtinCard = page.getByTestId('mcp-builtin-card').first();
     await expect(builtinCard).toBeVisible({ timeout: 10000 });
@@ -717,7 +717,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
     await page.getByRole('button', { name: '+ Register MCP' }).click();
 
     // Drawer opens in "Register MCP Server" mode — no editing label
@@ -733,7 +733,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
     await page.getByRole('button', { name: '+ Register MCP' }).click();
 
     await expect(page.getByLabel('MCP server description')).toBeVisible({ timeout: 5000 });
@@ -749,7 +749,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     // Open editor for an existing custom MCP via ⋮ → Edit
     const customCard = page.getByTestId('mcp-card').first();
@@ -773,7 +773,7 @@ test.describe('MCPs', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     const customCard = page.getByTestId('mcp-card').first();
     const hasCustom = await customCard.isVisible({ timeout: 2000 }).catch(() => false);
@@ -795,7 +795,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
     const builtinCard = page.getByTestId('mcp-builtin-card').first();
     await expect(builtinCard).toBeVisible({ timeout: 10000 });
 
@@ -811,7 +811,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
     const builtinCard = page.getByTestId('mcp-builtin-card').first();
     await expect(builtinCard).toBeVisible({ timeout: 10000 });
 
@@ -837,7 +837,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
 
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     const customCard = page.getByTestId('mcp-card').first();
     await expect(customCard).toBeVisible({ timeout: 10000 });
@@ -865,7 +865,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
 
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     const customCard = page.getByTestId('mcp-card').first();
     const moreButton = customCard.getByRole('button', { name: /^More actions for / });
@@ -934,7 +934,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Agents' }).click();
+    await page.getByRole('tab', { name: 'Plugins' }).click();
     const agentCard = page.getByTestId('agent-builtin-card').first();
     await expect(agentCard).toBeVisible({ timeout: 10000 });
 
@@ -1064,7 +1064,7 @@ test.describe('Performance UX', () => {
     await waitForReady(page);
     expect(agentListCalls).toBe(0);
 
-    await page.getByRole('tab', { name: 'Agents' }).click();
+    await page.getByRole('tab', { name: 'Plugins' }).click();
     await expect.poll(() => agentListCalls).toBeGreaterThan(0);
   });
 
@@ -1096,7 +1096,7 @@ test.describe('Performance UX', () => {
     await waitForReady(page);
     expect(mcpToolsCalls).toBe(0);
 
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
 
     // Wait for the mcp-tools fetch to fire, proving lazy loading works.
     await expect.poll(() => mcpToolsCalls, { timeout: 10000 }).toBeGreaterThan(0);
@@ -1224,7 +1224,7 @@ test.describe('Cross-tab regression', () => {
     await waitForReady(page);
 
     // Visit MCPs tab and open the Register MCP editor
-    await page.getByRole('tab', { name: 'MCPs' }).click();
+    await page.getByRole('tab', { name: 'Marketplace' }).click();
     await page.getByRole('button', { name: '+ Register MCP' }).click();
     await expect(page.getByLabel('MCP server id')).toBeVisible({ timeout: 5000 });
 
