@@ -123,6 +123,23 @@ class NerveCenterApp extends LitElement {
     ].join('\n');
   }
 
+  _buildPublishPrompt(obs, draftItems) {
+    const variantList = draftItems
+      .map((item, i) => `${i + 1}. ${item.name} (${item.path})`)
+      .join('\n');
+
+    return [
+      `I have ${draftItems.length} content variant${draftItems.length > 1 ? 's' : ''} in drafts for the observation "${obs.name}":`,
+      '',
+      variantList,
+      '',
+      'Please ask me which variant I prefer, then:',
+      '1. Move the chosen page out of the drafts folder to an appropriate location on the site',
+      '2. Preview the page',
+      `3. Ask me if I want to clean up the remaining draft pages under /drafts/nerve-center/${obs.id}/`,
+    ].join('\n');
+  }
+
   _renderWithLinks(text) {
     const parts = [];
     const re = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
@@ -172,6 +189,24 @@ class NerveCenterApp extends LitElement {
       </div>`;
   }
 
+  _renderButton(obs) {
+    const drafts = this._drafts[obs.id];
+    const hasDrafts = drafts && !drafts.loading && drafts.items.length > 0;
+    const label = hasDrafts ? 'Start Publish Workflow' : 'Chat about this';
+    const prompt = hasDrafts
+      ? this._buildPublishPrompt(obs, drafts.items)
+      : this._buildPrompt(obs);
+
+    return html`
+      <sl-button class="ew-fill-accent obs-chat-btn" @click=${() => {
+        if (this._actions?.setPrompt) {
+          this._actions.setPrompt(prompt);
+        } else {
+          navigator.clipboard?.writeText(prompt).then(() => this._toast('Prompt copied to clipboard'));
+        }
+      }}>${label}</sl-button>`;
+  }
+
   _renderContent() {
     if (!this._siteId || !this._apiKey) {
       return html`
@@ -218,14 +253,7 @@ class NerveCenterApp extends LitElement {
               ${obs.confidence != null ? html`<span class="badge confidence">${(obs.confidence * 100).toFixed(0)}% confidence</span>` : nothing}
             </div>
             ${this._renderDrafts(obs.id)}
-            <sl-button class="ew-fill-accent obs-chat-btn" @click=${() => {
-              const prompt = this._buildPrompt(obs);
-              if (this._actions?.setPrompt) {
-                this._actions.setPrompt(prompt);
-              } else {
-                navigator.clipboard?.writeText(prompt).then(() => this._toast('Prompt copied to clipboard'));
-              }
-            }}>Chat about this</sl-button>
+            ${this._renderButton(obs)}
           </div>
         `)}
       </div>`;
