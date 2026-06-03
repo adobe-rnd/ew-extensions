@@ -36,7 +36,27 @@ class NerveCenterApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this._onAgentChange = (e) => {
+      if (e.data?.action !== 'agentChange') return;
+      const { detail } = e.data;
+      if (detail?.scope !== 'file') return;
+      const prefix = '/drafts/nerve-center/';
+      for (const p of detail.paths ?? []) {
+        const idx = p.indexOf(prefix);
+        if (idx === -1) continue;
+        const obsId = p.slice(idx + prefix.length).split('/')[0];
+        if (obsId && this._observations.some((obs) => obs.id === obsId)) {
+          this._fetchDrafts(obsId);
+        }
+      }
+    };
+    window.addEventListener('message', this._onAgentChange);
     this._init();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('message', this._onAgentChange);
   }
 
   async _init() {
@@ -109,7 +129,7 @@ class NerveCenterApp extends LitElement {
       obs.description ? `Description: ${obs.description}` : null,
       obs.summary ? `Summary: ${obs.summary}` : null,
       obs.classification ? `Classification: ${obs.classification}` : null,
-      obs.confidence != null ? `Confidence: ${(obs.confidence * 100).toFixed(0)}%` : null,
+      Number.isFinite(obs.confidence) ? `Confidence: ${(obs.confidence * 100).toFixed(0)}%` : null,
       obs.recommendedAction ? `Recommended action: ${obs.recommendedAction}` : null,
       obs.recommendedActionRationale ? `Rationale: ${obs.recommendedActionRationale}` : null,
       obs.businessImpact ? `Business impact: ${obs.businessImpact}` : null,
@@ -200,7 +220,7 @@ class NerveCenterApp extends LitElement {
     return html`
       <sl-button class="ew-fill-accent obs-chat-btn" @click=${() => {
         if (this._actions?.setPrompt) {
-          this._actions.setPrompt(prompt);
+          this._actions.setPrompt(prompt, { autoSend: true });
         } else {
           navigator.clipboard?.writeText(prompt).then(() => this._toast('Prompt copied to clipboard'));
         }
@@ -250,7 +270,7 @@ class NerveCenterApp extends LitElement {
             <div class="obs-meta">
               <span class="badge">${obs.status}</span>
               ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
-              ${obs.confidence != null ? html`<span class="badge confidence">${(obs.confidence * 100).toFixed(0)}% confidence</span>` : nothing}
+              ${Number.isFinite(obs.confidence) ? html`<span class="badge confidence">${(obs.confidence * 100).toFixed(0)}% confidence</span>` : nothing}
             </div>
             ${this._renderDrafts(obs.id)}
             ${this._renderButton(obs)}
