@@ -113,6 +113,7 @@ class NxSkillsEditor extends LitElement {
     _toolsSearch: { state: true },
     _toolsGroupCollapsed: { state: true },
     _showDepTree: { state: true },
+    _catalogViewMode: { state: true },
     _formPromptTools: { state: true },
     _newAgentId: { state: true },
     _newAgentName: { state: true },
@@ -185,6 +186,7 @@ class NxSkillsEditor extends LitElement {
     this._toolsSearch = '';
     this._toolsGroupCollapsed = { DA: false, MCP: false };
     this._showDepTree = false;
+    this._catalogViewMode = 'grid';
     this._formPromptTools = [];
     this._isChatOpen = false;
   }
@@ -1370,6 +1372,7 @@ class NxSkillsEditor extends LitElement {
       toolsSearch: this._toolsSearch,
       toolsGroupCollapsed: this._toolsGroupCollapsed,
       showDepTree: this._showDepTree,
+      catalogViewMode: this._catalogViewMode,
       formSkillId: this._formSkillId,
       formSkillBody: this._formSkillBody,
       newAgentId: this._newAgentId,
@@ -1407,6 +1410,7 @@ class NxSkillsEditor extends LitElement {
       },
       setShowDepTree: (v) => { this._showDepTree = v; },
       setCatalogFilter: (v) => { this._catalogFilter = v; },
+      setCatalogViewMode: (v) => { this._catalogViewMode = v; },
       // ── actions / event handlers ───────────────────────────────────────────
       onTabChange: (id) => this._onTabChange(id),
       onToggleChat: () => this._toggleChat(),

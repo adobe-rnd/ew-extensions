@@ -24,7 +24,9 @@ import {
   skillRowEnabled,
   skillRowStatus,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
+  DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
+  DA_SKILLS_LAB_PROMPT_SEND,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -103,6 +105,26 @@ const PROMPT_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="n
 const PLUGIN_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v3M10 2v3M4 5h8a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M6 10h4"/></svg>`;
 const MCP_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7h1M5 9.5h1M10 7h1M10 9.5h1"/></svg>`;
 const SKILL_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>`;
+const GRID_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`;
+const LIST_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 3h10M4 8h10M4 13h10M2 3h0M2 8h0M2 13h0"/></svg>`;
+
+function renderViewToggle(vm) {
+  const { catalogViewMode: mode } = vm;
+  return html`
+    <div class="view-toggle" role="radiogroup" aria-label="View mode">
+      <button type="button" class="view-toggle-btn ${mode === 'grid' ? 'is-active' : ''}"
+        aria-pressed=${mode === 'grid' ? 'true' : 'false'}
+        title="Grid view"
+        @click=${() => vm.setCatalogViewMode('grid')}
+      >${GRID_ICON}</button>
+      <button type="button" class="view-toggle-btn ${mode === 'list' ? 'is-active' : ''}"
+        aria-pressed=${mode === 'list' ? 'true' : 'false'}
+        title="List view"
+        @click=${() => vm.setCatalogViewMode('list')}
+      >${LIST_ICON}</button>
+    </div>
+  `;
+}
 
 function renderSkillCard(vm, id) {
   const body = vm.skills[id] || '';
@@ -138,6 +160,36 @@ function renderSkillCard(vm, id) {
         <span class="plugin-card-count">${lineCount}L</span>
       </footer>
     </article>
+  `;
+}
+
+function renderSkillRow(vm, id) {
+  const body = vm.skills[id] || '';
+  const title = extractTitle(body);
+  const isEditing = vm.isFormEdit && vm.formSkillId === id;
+  const usedBy = agentsUsingSkill(vm, id);
+
+  return html`
+    <div class="catalog-row ${isEditing ? 'is-selected' : ''}" role="button"
+      tabindex="0"
+      aria-label="Edit skill ${id}"
+      data-testid="skill-card"
+      data-skill-id=${id}
+      @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
+      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
+    >
+      <span class="catalog-row-pill">${SKILL_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${id}</span>
+          ${usedBy.length ? html`
+            <span class="catalog-row-meta">⚡ ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
+          ` : nothing}
+        </div>
+        ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
+      </div>
+      ${DRILL_CHEVRON}
+    </div>
   `;
 }
 
@@ -187,6 +239,30 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
         ` : nothing}
       </footer>
     </article>
+  `;
+}
+
+function renderAgentRow(vm, agent, isBuiltin = false) {
+  const title = agent.label || agent.name || agent.preset?.name || agent.id;
+  const description = agent.description || agent.preset?.description || '';
+
+  return html`
+    <div class="catalog-row" role="button" tabindex="0"
+      aria-label="Open agent ${title}"
+      data-testid=${isBuiltin ? 'agent-builtin-card' : 'agent-card'}
+      @click=${(e) => vm.onCardClick(e, () => vm.onSelectAgent(agent))}
+      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onSelectAgent(agent))}
+    >
+      <span class="catalog-row-pill">${PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${title}</span>
+          <span class="catalog-row-meta">${isBuiltin ? 'built-in' : 'custom'}</span>
+        </div>
+        ${description ? html`<span class="catalog-row-desc">${description}</span>` : nothing}
+      </div>
+      ${DRILL_CHEVRON}
+    </div>
   `;
 }
 
@@ -709,6 +785,13 @@ export function renderEditorFooter(vm, tab) {
         >Add to Chat</button>
         <button type="button" data-variant="secondary"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
+          @click=${() => {
+            vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_SEND, vm.formPromptBody);
+            vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_SEND, vm.formPromptBody);
+          }}
+        >Send to Chat</button>
+        <button type="button" data-variant="secondary"
+          ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => vm.onRunPrompt()}
         >Run / Test</button>
         ${vm.isFormPromptEdit ? html`
@@ -751,6 +834,8 @@ export function renderSkillsCatalog(vm) {
     });
   }
 
+  const isGrid = vm.catalogViewMode === 'grid';
+
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Filter skills">
       ${[STATUS.APPROVED, STATUS.DRAFT].map((status) => html`
@@ -765,12 +850,11 @@ export function renderSkillsCatalog(vm) {
         aria-pressed=${vm.catalogFilter === 'all' ? 'true' : 'false'}
         @click=${() => vm.setCatalogFilter('all')}
       >All</button>
+      ${renderViewToggle(vm)}
     </div>
-    ${!filtered.length
-      ? html`<div class="empty">No skills found</div>`
-      : html`<div class="plugin-grid">
-          ${filtered.map((id) => renderSkillCard(vm, id))}
-        </div>`}
+    ${!filtered.length ? html`<div class="empty">No skills found</div>` : nothing}
+    ${filtered.length && isGrid ? html`<div class="plugin-grid">${filtered.map((id) => renderSkillCard(vm, id))}</div>` : nothing}
+    ${filtered.length && !isGrid ? html`<div class="catalog-list">${filtered.map((id) => renderSkillRow(vm, id))}</div>` : nothing}
   `;
 }
 
@@ -817,15 +901,20 @@ function renderDepTree(vm, agent, isBuiltin) {
 
 export function renderAgentsCatalog(vm) {
   const showTree = vm.showDepTree;
+  const isGrid = vm.catalogViewMode === 'grid';
+
   return html`
-    <div class="dep-tree-toggle">
-      <label>
-        <input type="checkbox"
-          .checked=${showTree || false}
-          @change=${(e) => vm.setShowDepTree(e.target.checked)}
-        >
-        <span class="dep-tree-toggle-label">Dependency view</span>
-      </label>
+    <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
+      <div class="dep-tree-toggle">
+        <label>
+          <input type="checkbox"
+            .checked=${showTree || false}
+            @change=${(e) => vm.setShowDepTree(e.target.checked)}
+          >
+          <span class="dep-tree-toggle-label">Dependency view</span>
+        </label>
+      </div>
+      ${renderViewToggle(vm)}
     </div>
 
     ${showTree ? html`
@@ -834,34 +923,14 @@ export function renderAgentsCatalog(vm) {
       ${vm.agents.map((agent) => renderDepTree(vm, agent, false))}
     ` : html`
       <h3 class="section-h">Built-in (${BUILTIN_AGENTS.length})</h3>
-      <div class="plugin-grid">
-        ${BUILTIN_AGENTS.map((agent) => renderAgentCard(vm, agent, true))}
-      </div>
+      ${isGrid
+        ? html`<div class="plugin-grid">${BUILTIN_AGENTS.map((a) => renderAgentCard(vm, a, true))}</div>`
+        : html`<div class="catalog-list">${BUILTIN_AGENTS.map((a) => renderAgentRow(vm, a, true))}</div>`}
       ${vm.agents.length ? html`
         <h3 class="section-h">Custom (${vm.agents.length})</h3>
-        <div class="plugin-grid">
-          ${vm.agents.map((agent) => renderAgentCard(vm, agent, false))}
-        </div>
-      ` : nothing}
-      ${vm.agentRows.length ? html`
-        <h3 class="section-h">Config Agents (${vm.agentRows.length})</h3>
-        <div class="plugin-grid">
-          ${vm.agentRows.map((row) => html`
-            <article class="plugin-card" role="listitem" data-testid="agent-config-card">
-              <header class="plugin-card-top">
-                <span class="plugin-card-pill">${PLUGIN_ICON}</span>
-                <div class="plugin-card-identity">
-                  <span class="plugin-card-name">${row.key}</span>
-                  <span class="plugin-card-source">config</span>
-                </div>
-              </header>
-              <p class="plugin-card-desc">${row.url}</p>
-              <footer class="plugin-card-meta">
-                <span class="plugin-card-badge">CONFIG</span>
-              </footer>
-            </article>
-          `)}
-        </div>
+        ${isGrid
+          ? html`<div class="plugin-grid">${vm.agents.map((a) => renderAgentCard(vm, a, false))}</div>`
+          : html`<div class="catalog-list">${vm.agents.map((a) => renderAgentRow(vm, a, false))}</div>`}
       ` : nothing}
     `}
   `;
@@ -915,6 +984,77 @@ export function renderPromptsCatalog(vm) {
   `;
 }
 
+function mcpShared(vm, s, isBuiltin) {
+  const key = isBuiltin ? s.id : (s.key || '');
+  const desc = isBuiltin ? s.description : (s.url || s.value || '');
+  const toolCount = isBuiltin
+    ? (BUILTIN_TOOL_DETAILS[s.id]?.length || 0)
+    : mcpServerToolData(vm, key).tools.length;
+  let transport = '';
+  if (!isBuiltin) transport = s.url ? 'HTTP' : 'stdio';
+  const isSelected = isBuiltin
+    ? vm.viewingMcpServerId === s.id && !vm.editingMcpKey
+    : vm.isEditorOpen && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
+  const onClick = isBuiltin
+    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))
+    : (e) => vm.onMcpCardClick(e, () => vm.onEditMcp(s));
+  const onKey = isBuiltin
+    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))
+    : (e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(s));
+  let badge = 'BUILT-IN';
+  if (!isBuiltin) badge = (skillRowStatus(s) === STATUS.APPROVED && skillRowEnabled(s)) ? 'CONNECTED' : 'DISABLED';
+  return { key, desc, toolCount, transport, isSelected, onClick, onKey, badge };
+}
+
+function renderMcpCard(vm, s, isBuiltin) {
+  const { key, desc, toolCount, transport, isSelected, onClick, onKey, badge } = mcpShared(vm, s, isBuiltin);
+
+  return html`
+    <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
+      role="button" tabindex="0"
+      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
+      data-mcp-key=${key}
+      @click=${onClick} @keydown=${onKey}
+    >
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${MCP_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${key || '(unnamed)'}</span>
+          <span class="plugin-card-source">${desc}</span>
+        </div>
+        ${transport ? html`<span class="plugin-card-badge">${transport}</span>` : nothing}
+      </header>
+      <footer class="plugin-card-meta">
+        <span class="plugin-card-badge">${badge}</span>
+        <span class="plugin-card-count">${toolCount} tools</span>
+      </footer>
+    </article>
+  `;
+}
+
+function renderMcpRow(vm, s, isBuiltin) {
+  const { key, desc, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
+
+  return html`
+    <div class="catalog-row ${isSelected ? 'is-selected' : ''}" role="button" tabindex="0"
+      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
+      data-mcp-key=${key}
+      @click=${onClick} @keydown=${onKey}
+    >
+      <span class="catalog-row-pill">${MCP_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${key || '(unnamed)'}</span>
+          <span class="catalog-row-meta">${desc} · ${transport || 'built-in'}</span>
+        </div>
+      </div>
+      ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
 export function renderMcpsCatalog(vm) {
   const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
@@ -927,78 +1067,22 @@ export function renderMcpsCatalog(vm) {
     });
   }
   const showBuiltins = filterPasses(STATUS.APPROVED);
+  const isGrid = vm.catalogViewMode === 'grid';
 
   return html`
+    <div class="catalog-toolbar" role="toolbar" aria-label="MCP view controls">
+      ${renderViewToggle(vm)}
+    </div>
     ${showBuiltins ? html`
-      <h3 class="section-h">Built-in (${BUILTIN_MCP_SERVERS.length})</h3>
-      <div class="plugin-grid">
-        ${BUILTIN_MCP_SERVERS.map((s) => {
-          const isViewing = vm.viewingMcpServerId === s.id && !vm.editingMcpKey;
-          const toolCount = BUILTIN_TOOL_DETAILS[s.id]?.length || 0;
-          return html`
-            <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
-              role="button"
-              tabindex="0"
-              aria-label="View tools for ${s.id}"
-              data-testid="mcp-builtin-card"
-              @click=${(e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))}
-              @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))}
-            >
-              <header class="plugin-card-top">
-                <span class="plugin-card-pill">${MCP_ICON}</span>
-                <div class="plugin-card-identity">
-                  <span class="plugin-card-name">${s.id}</span>
-                  <span class="plugin-card-source">${s.description}</span>
-                </div>
-              </header>
-              <footer class="plugin-card-meta">
-                <span class="plugin-card-badge">BUILT-IN</span>
-                <span class="plugin-card-count">${toolCount} tools</span>
-              </footer>
-            </article>
-          `;
-        })}
-      </div>
+      <h3 class="section-h">Connected (${BUILTIN_MCP_SERVERS.length})</h3>
+      ${isGrid
+        ? html`<div class="plugin-grid">${BUILTIN_MCP_SERVERS.map((s) => renderMcpCard(vm, s, true))}</div>`
+        : html`<div class="catalog-list">${BUILTIN_MCP_SERVERS.map((s) => renderMcpRow(vm, s, true))}</div>`}
     ` : nothing}
     <h3 class="section-h">Custom (${filteredCustom.length})</h3>
-    ${!filteredCustom.length
-      ? html`<div class="empty">No custom MCP servers registered</div>`
-      : html`<div class="plugin-grid">
-        ${filteredCustom.map((row) => {
-          const isApproved = skillRowStatus(row) === STATUS.APPROVED;
-          const isEnabled = isApproved && skillRowEnabled(row);
-          const key = row.key || '';
-          const isSelected = vm.isEditorOpen
-            && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
-          const { tools: liveTools } = mcpServerToolData(vm, key);
-          const toolCount = liveTools.length;
-          const transport = row.url ? 'HTTP' : 'stdio';
-          return html`
-            <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
-              role="button"
-              tabindex="0"
-              aria-label="Edit MCP server ${key || '(unnamed)'}"
-              data-testid="mcp-card"
-              data-mcp-key=${key}
-              @click=${(e) => vm.onMcpCardClick(e, () => vm.onEditMcp(row))}
-              @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(row))}
-            >
-              <header class="plugin-card-top">
-                <span class="plugin-card-pill">${MCP_ICON}</span>
-                <div class="plugin-card-identity">
-                  <span class="plugin-card-name">${key || '(unnamed)'}</span>
-                  <span class="plugin-card-source">${row.url || row.value || ''}</span>
-                </div>
-                <span class="plugin-card-badge">${transport}</span>
-              </header>
-              <footer class="plugin-card-meta">
-                <span class="plugin-card-badge">${isEnabled ? 'CONNECTED' : 'DISABLED'}</span>
-                <span class="plugin-card-count">${toolCount} tools</span>
-              </footer>
-            </article>
-          `;
-        })}
-      </div>`}
+    ${!filteredCustom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
+    ${filteredCustom.length && isGrid ? html`<div class="plugin-grid">${filteredCustom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
+    ${filteredCustom.length && !isGrid ? html`<div class="catalog-list">${filteredCustom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
   `;
 }
 

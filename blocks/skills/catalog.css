@@ -164,9 +164,9 @@
 
 .catalog-toolbar {
   display: flex;
+  align-items: center;
   gap: var(--s2-spacing-75);
   flex-wrap: wrap;
-  justify-content: flex-end;
   padding: var(--s2-spacing-100) 0 var(--s2-spacing-50);
 }
 
@@ -456,6 +456,119 @@
 
 /* ─── card menu ───────────────────────────────────────────────────────────────── */
 
+/* ─── view toggle (grid / list) ────────────────────────────────────────────── */
+
+.view-toggle {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--s2-gray-300);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--s2-gray-500);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.view-toggle-btn:hover { color: var(--s2-gray-800); }
+
+.view-toggle-btn.is-active {
+  background: var(--s2-gray-200);
+  color: var(--s2-gray-900);
+}
+
+/* ─── catalog list rows (list-mode alternative to plugin-grid) ─────────────── */
+
+.catalog-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--s2-gray-200) 40%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.catalog-row:hover {
+  background: light-dark(
+    color-mix(in srgb, var(--s2-gray-100) 50%, transparent),
+    color-mix(in srgb, var(--s2-gray-75) 50%, transparent)
+  );
+}
+
+.catalog-row.is-selected {
+  background: light-dark(var(--s2-gray-100), var(--s2-gray-75));
+}
+
+.catalog-row-pill {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--s2-gray-200);
+  color: var(--s2-gray-600);
+}
+
+.catalog-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.catalog-row-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.catalog-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--s2-gray-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-row-meta {
+  font-size: 12px;
+  color: var(--s2-gray-500);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.catalog-row-desc {
+  font-size: 12px;
+  color: var(--s2-gray-500);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ─── drill-down chevron (trailing affordance on interactive rows) ──────────── */
 
 .drill-chevron {
@@ -464,6 +577,7 @@
   transition: color 0.15s;
 }
 
-.prompt-row:hover .drill-chevron {
+.prompt-row:hover .drill-chevron,
+.catalog-row:hover .drill-chevron {
   color: var(--s2-gray-700);
 }
