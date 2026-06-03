@@ -19,11 +19,74 @@ Two flavours exist — pick based on intent:
 
 ## Step 0 — Gather info
 
-Use AskQuestion to collect:
+Before generating anything, interview the developer with AskQuestion to understand
+what they're building. Ask these in sequence — each answer shapes the next question.
 
-1. **Extension name** — lowercase, hyphen-separated (e.g. `my-widget`). This becomes the folder name and the custom-element tag prefix.
-2. **Type** — Block or Tool.
-3. **One-line description** — what it does (used in the HTML `<title>` and code comments).
+### Q1: What does this extension do?
+
+Free-text. Ask the developer to describe the extension in one or two sentences.
+Use their answer to derive the HTML `<title>`, component comments, and suggest
+a name in Q2.
+
+### Q2: Extension name
+
+Suggest a kebab-case name based on Q1 (e.g. if they said "a tool for managing
+content fragments" → suggest `content-fragments`). Let them override.
+Constraints: lowercase, hyphen-separated, no spaces, 2–30 chars.
+This becomes the folder name, file names, and custom-element tag prefix.
+
+### Q3: Block or Tool?
+
+Use AskQuestion with two options:
+
+- **Block** — loaded inside the da-live shell via `loadBlock()` (like the Skills Editor).
+  Best for extensions that appear as a page inside `da.live/apps/{name}`.
+- **Tool** — standalone full-page DA App SDK app at `/tools/{name}/{name}.html`.
+  Best for utilities, setup wizards, or anything that runs outside the da-live shell.
+
+### Q4: Does it need authentication?
+
+Use AskQuestion:
+
+- **Yes — IMS token** (default for blocks) — the extension reads the user's IMS
+  token from `window.adobeIMS` (injected by the da-live shell). Use this for
+  anything calling DA Admin API or AEM APIs.
+- **Yes — DA App SDK** (default for tools) — the extension gets the token via
+  `const { token } = await DA_SDK`. Same token, different delivery mechanism.
+- **No** — the extension works without auth (rare; e.g. static calculators,
+  documentation viewers).
+
+Pre-select the default based on the type chosen in Q3.
+
+### Q5: Will it call DA Admin API endpoints?
+
+Use AskQuestion:
+
+- **Yes** — include the `da-fetch.js` auth wrapper in `utils/` (handles token
+  attachment and origin resolution for admin/content/AEM URLs).
+- **No** — skip `da-fetch.js`; the developer will add their own API layer later.
+
+### Q6: Custom element tag name
+
+Suggest a tag based on the name:
+- Blocks: `nx-{name}` (e.g. `nx-content-fragments`)
+- Tools: `{name}-app` (e.g. `content-fragments-app`)
+
+Let the developer override if they prefer something else.
+Validate: must contain a hyphen (web component requirement), lowercase, no spaces.
+
+### Summary confirmation
+
+Before generating files, print a summary table and ask the developer to confirm:
+
+```
+Extension:  {name}
+Type:       Block / Tool
+Tag:        {tag}
+Auth:       IMS / DA SDK / None
+DA Fetch:   Yes / No
+Description: {their description from Q1}
+```
 
 ## Step 1 — Create the file tree
 
