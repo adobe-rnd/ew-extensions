@@ -160,7 +160,28 @@
   overflow: hidden;
 }
 
-/* ─── top navigation bar (full-width, above content columns) ────────────────── */
+/* ─── content area (horizontal: chat drawer | main area) ─────────────────── */
+
+.content-area {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── main area (right of chat: top-nav + panels stacked vertically) ─────── */
+
+.main-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ─── top navigation bar (above catalog + editor panels) ─────────────────── */
 
 .top-nav {
   display: flex;
@@ -203,14 +224,13 @@
   flex-shrink: 0;
 }
 
-/* ─── content area (horizontal row below the top nav) ───────────────────────── */
+/* ─── panels row (catalog list + editor drawer side by side) ─────────────── */
 
-.content-area {
+.panels {
   display: flex;
   flex-direction: row;
   flex: 1;
   min-height: 0;
-  position: relative;
   overflow: hidden;
 }
 
@@ -393,6 +413,11 @@
   .chat-toggle-btn { padding: 4px 10px; }
 
   .content-area {
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panels {
     flex-direction: column;
     overflow: hidden;
   }

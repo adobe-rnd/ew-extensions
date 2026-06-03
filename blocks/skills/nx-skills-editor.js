@@ -1511,11 +1511,15 @@ class NxSkillsEditor extends LitElement {
           <span class="refresh-indicator-track"><span class="refresh-indicator-bar"></span></span>
         </div>
       ` : nothing}
-      ${renderTopNav(vm)}
       <div class="content-area">
         ${renderChatDrawer(vm)}
-        ${renderListCol(vm)}
-        ${renderEditorPanel(vm)}
+        <div class="main-area">
+          ${renderTopNav(vm)}
+          <div class="panels">
+            ${renderListCol(vm)}
+            ${renderEditorPanel(vm)}
+          </div>
+        </div>
       </div>
       ${dlg ? html`
         <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>

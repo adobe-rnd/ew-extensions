@@ -40,8 +40,8 @@
 }
 
 .tab.is-active {
-  color: light-dark(white, var(--s2-gray-900));
-  background: light-dark(var(--s2-gray-900), white);
+  color: light-dark(#fff, #1a1a1a);
+  background: light-dark(#1a1a1a, #fff);
 }
 
 /* ─── tab icon (inline SVG passed via item.icon) ──────────────────────────── */
