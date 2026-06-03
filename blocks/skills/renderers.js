@@ -24,9 +24,7 @@ import {
   skillRowEnabled,
   skillRowStatus,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
-  DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
-  DA_SKILLS_LAB_PROMPT_SEND,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -99,14 +97,24 @@ function agentsUsingSkill(vm, skillId) {
   return result;
 }
 
+// ─── shared icon constants (used in catalog cards and detail views) ───────────
+const DRILL_CHEVRON = html`<svg class="drill-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>`;
+const PROMPT_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`;
+const PLUGIN_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v3M10 2v3M4 5h8a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M6 10h4"/></svg>`;
+const MCP_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7h1M5 9.5h1M10 7h1M10 9.5h1"/></svg>`;
+const SKILL_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>`;
+
 function renderSkillCard(vm, id) {
-  const title = extractTitle(vm.skills[id]);
+  const body = vm.skills[id] || '';
+  const title = extractTitle(body);
   const status = vm.skillStatuses[id] || STATUS.APPROVED;
   const isEditing = vm.isFormEdit && vm.formSkillId === id;
   const isDraft = status === STATUS.DRAFT;
   const usedBy = agentsUsingSkill(vm, id);
+  const lineCount = body.split('\n').length;
+
   return html`
-    <article
+    <article class="plugin-card ${isEditing ? 'is-selected' : ''}"
       role="button"
       tabindex="0"
       aria-label="Edit skill ${id}"
@@ -115,40 +123,20 @@ function renderSkillCard(vm, id) {
       @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
     >
-      <nx-card
-        interactive
-        heading=${id}
-        subheading=${title || nothing}
-        ?selected=${isEditing}
-      >
-        <span slot="pill"
-          class="status-dot ${isDraft ? 'status-dot-draft' : 'status-dot-approved'}"
-          aria-label=${isDraft ? 'Draft' : 'Approved'}
-        ></span>
-        <span slot="actions" class="entity-badge entity-badge-skill">${isDraft ? 'Draft' : 'Approved'}</span>
-        <button slot="actions" type="button" class="btn-icon more-btn"
-          aria-label="More actions for ${id}"
-          @click=${(e) => { e.stopPropagation(); vm.onOpenSkillMenu(e, id); }}
-        >⋮</button>
-      </nx-card>
-      ${usedBy.length ? html`
-        <div class="card-relations">
-          <span class="card-relations-label">Used by</span>
-          <ul class="card-relations-chips">
-            ${usedBy.map((name) => html`<li class="entity-chip entity-chip-agent">${name}</li>`)}
-          </ul>
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${SKILL_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${id}</span>
         </div>
-      ` : nothing}
-      <nx-popover placement="auto">
-        <div class="card-menu" role="menu">
-          <button role="menuitem" type="button"
-            @click=${() => { vm.onCloseSkillMenu(id); vm.onEditSkill(id); }}
-          >Edit</button>
-          <button role="menuitem" type="button" class="card-menu-delete"
-            @click=${() => { vm.onCloseSkillMenu(id); vm.onDeleteSkillById(id); }}
-          >Delete</button>
-        </div>
-      </nx-popover>
+      </header>
+      ${title ? html`<p class="plugin-card-desc">${title}</p>` : nothing}
+      <footer class="plugin-card-meta">
+        ${usedBy.length ? html`
+          ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
+        ` : nothing}
+        <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
+        <span class="plugin-card-count">${lineCount}L</span>
+      </footer>
     </article>
   `;
 }
@@ -164,94 +152,40 @@ function agentMcpServerIds(agent, isBuiltin) {
   return [];
 }
 
-function agentCapabilitySummary(agent, isBuiltin) {
-  const mcps = agentMcpServerIds(agent, isBuiltin);
-  const skills = agentSkillIds(agent);
-  const parts = [];
-  if (mcps.includes('da-tools')) parts.push('read, write, and manage DA content');
-  if (mcps.includes('eds-preview')) parts.push('preview and publish to EDS');
-  mcps.filter((m) => m !== 'da-tools' && m !== 'eds-preview')
-    .forEach((m) => parts.push(`use ${m} tools`));
-  if (skills.length) parts.push(`follow ${skills.length} skill instruction${skills.length > 1 ? 's' : ''}`);
-  if (!parts.length) return agent.description || agent.preset?.description || '';
-  return `Can ${parts.join(', ')}.`;
-}
-
-function groupToolsByMcp(toolIds) {
-  const groups = {};
-  toolIds.forEach((id) => {
-    if (id.startsWith('mcp__')) {
-      const [, server, ...rest] = id.split('__');
-      if (!groups[server]) groups[server] = [];
-      groups[server].push(rest.join('__'));
-    } else {
-      if (!groups.da) groups.da = [];
-      groups.da.push(id);
-    }
-  });
-  return groups;
-}
-
 function renderAgentCard(vm, agent, isBuiltin = false) {
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
   const description = agent.description || agent.preset?.description || '';
-  const tools = vm.getAgentToolIds(agent, isBuiltin);
   const skills = agentSkillIds(agent);
   const mcps = agentMcpServerIds(agent, isBuiltin);
-  const capability = agentCapabilitySummary(agent, isBuiltin);
-  const toolsByMcp = groupToolsByMcp(tools);
+  const skillCount = skills.length;
+  const mcpCount = mcps.length;
 
   return html`
-    <article class="agent-card" role="button" tabindex="0"
+    <article class="plugin-card" role="button" tabindex="0"
       aria-label="Open agent ${title}"
       data-testid=${isBuiltin ? 'agent-builtin-card' : 'agent-card'}
       @click=${(e) => vm.onCardClick(e, () => vm.onSelectAgent(agent))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onSelectAgent(agent))}
     >
-      <header class="agent-card-header">
-        <span class="status-dot status-dot-approved" aria-label="Active"></span>
-        <span class="agent-card-title">${title}</span>
-        <span class="entity-badge entity-badge-agent">${isBuiltin ? 'built-in' : 'custom'}</span>
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${title}</span>
+          <span class="plugin-card-source">${isBuiltin ? 'built-in' : 'custom'}</span>
+        </div>
+      </header>
+      ${description ? html`<p class="plugin-card-desc">${description}</p>` : nothing}
+      <footer class="plugin-card-meta">
+        <span class="plugin-card-badge">${isBuiltin ? 'BUILT-IN' : 'CUSTOM'}</span>
+        ${skillCount ? html`<span class="plugin-card-count">${skillCount} Skill${skillCount > 1 ? 's' : ''}</span>` : nothing}
+        ${mcpCount ? html`<span class="plugin-card-count">${mcpCount} MCP${mcpCount > 1 ? 's' : ''}</span>` : nothing}
         ${!isBuiltin ? html`
-          <button type="button" class="btn-icon more-btn"
+          <button type="button" class="plugin-card-action"
             aria-label="Delete agent ${title}"
             @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-          >✕</button>
+          >× Delete</button>
         ` : nothing}
-      </header>
-      ${description ? html`<p class="agent-card-desc">${description}</p>` : nothing}
-      ${capability ? html`<p class="capability-summary">${capability}</p>` : nothing}
-
-      ${skills.length ? html`
-        <div class="card-relations">
-          <span class="card-relations-label">Skills (${skills.length})</span>
-          <ul class="card-relations-chips">
-            ${skills.map((s) => html`<li class="entity-chip entity-chip-skill">${s}</li>`)}
-          </ul>
-        </div>
-      ` : nothing}
-
-      ${mcps.length ? html`
-        <div class="card-relations">
-          <span class="card-relations-label">Tools by MCP</span>
-          ${mcps.map((mcpId) => {
-            const mcpTools = toolsByMcp[mcpId] || toolsByMcp[mcpId.replace(/-/g, '_')] || [];
-            const builtinTools = BUILTIN_TOOL_DETAILS[mcpId];
-            const displayTools = builtinTools || mcpTools.map((t) => ({ name: t }));
-            const preview = displayTools.slice(0, 4);
-            const more = displayTools.length - preview.length;
-            return html`
-              <div class="agent-mcp-group">
-                <span class="entity-chip entity-chip-mcp">${mcpId}</span>
-                <ul class="card-relations-chips">
-                  ${preview.map((t) => html`<li class="entity-chip entity-chip-tool">${t.name || t}</li>`)}
-                  ${more > 0 ? html`<li class="entity-chip entity-chip-tool">+${more}</li>` : nothing}
-                </ul>
-              </div>
-            `;
-          })}
-        </div>
-      ` : nothing}
+      </footer>
     </article>
   `;
 }
@@ -834,7 +768,9 @@ export function renderSkillsCatalog(vm) {
     </div>
     ${!filtered.length
       ? html`<div class="empty">No skills found</div>`
-      : filtered.map((id) => renderSkillCard(vm, id))}
+      : html`<div class="plugin-grid">
+          ${filtered.map((id) => renderSkillCard(vm, id))}
+        </div>`}
   `;
 }
 
@@ -898,23 +834,34 @@ export function renderAgentsCatalog(vm) {
       ${vm.agents.map((agent) => renderDepTree(vm, agent, false))}
     ` : html`
       <h3 class="section-h">Built-in (${BUILTIN_AGENTS.length})</h3>
-      ${BUILTIN_AGENTS.map((agent) => renderAgentCard(vm, agent, true))}
+      <div class="plugin-grid">
+        ${BUILTIN_AGENTS.map((agent) => renderAgentCard(vm, agent, true))}
+      </div>
       ${vm.agents.length ? html`
         <h3 class="section-h">Custom (${vm.agents.length})</h3>
-        ${vm.agents.map((agent) => renderAgentCard(vm, agent, false))}
+        <div class="plugin-grid">
+          ${vm.agents.map((agent) => renderAgentCard(vm, agent, false))}
+        </div>
       ` : nothing}
       ${vm.agentRows.length ? html`
         <h3 class="section-h">Config Agents (${vm.agentRows.length})</h3>
-        ${vm.agentRows.map((row) => html`
-          <article class="agent-card" role="listitem" data-testid="agent-config-card">
-            <header class="agent-card-header">
-              <span class="status-dot status-dot-approved" aria-label="Configured"></span>
-              <span class="agent-card-title">${row.key}</span>
-              <span class="entity-badge entity-badge-agent">config</span>
-            </header>
-            <p class="agent-card-desc">${row.url}</p>
-          </article>
-        `)}
+        <div class="plugin-grid">
+          ${vm.agentRows.map((row) => html`
+            <article class="plugin-card" role="listitem" data-testid="agent-config-card">
+              <header class="plugin-card-top">
+                <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+                <div class="plugin-card-identity">
+                  <span class="plugin-card-name">${row.key}</span>
+                  <span class="plugin-card-source">config</span>
+                </div>
+              </header>
+              <p class="plugin-card-desc">${row.url}</p>
+              <footer class="plugin-card-meta">
+                <span class="plugin-card-badge">CONFIG</span>
+              </footer>
+            </article>
+          `)}
+        </div>
       ` : nothing}
     `}
   `;
@@ -947,67 +894,23 @@ export function renderPromptsCatalog(vm) {
               @click=${(e) => vm.onCardClick(e, () => vm.onOpenEditor(row))}
               @keydown=${(e) => vm.onCardKeydown(e, () => vm.onOpenEditor(row))}
             >
+              <span class="prompt-row-pill">${PROMPT_ICON}</span>
               <div class="prompt-row-body">
-                <span class="prompt-row-title">${title || '(untitled)'}</span>
-                ${row.category ? html`
-                  <span class="category-badge cat-${catClass}">${row.category}</span>
+                <div class="prompt-row-title-line">
+                  <span class="prompt-row-title">${title || '(untitled)'}</span>
+                  ${row.category ? html`
+                    <span class="category-badge cat-${catClass}">${row.category}</span>
+                  ` : nothing}
+                </div>
+                ${row.prompt ? html`
+                  <span class="prompt-row-desc">${row.prompt}</span>
                 ` : nothing}
               </div>
-              <div class="prompt-row-actions">
-                <button type="button" class="btn-icon row-action-btn" title="Edit"
-                  aria-label="Edit ${title}"
-                  @click=${(e) => { e.stopPropagation(); vm.onOpenEditor(row); }}
-                >✎</button>
-                <button type="button" class="btn-icon row-action-btn" title="Duplicate"
-                  aria-label="Duplicate ${title}"
-                  @click=${(e) => { e.stopPropagation(); vm.onDuplicatePrompt(row); }}
-                >⧉</button>
-                <button type="button" class="btn-icon row-action-btn" title="Add to chat"
-                  aria-label="Add to chat: ${title}"
-                  @click=${(e) => {
-                    e.stopPropagation();
-                    vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, row.prompt);
-                    vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT, row.prompt);
-                  }}
-                >+</button>
-                <button type="button" class="btn-icon row-action-btn" title="Send to chat"
-                  aria-label="Send to chat: ${title}"
-                  @click=${(e) => {
-                    e.stopPropagation();
-                    vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_SEND, row.prompt);
-                    vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_SEND, row.prompt);
-                  }}
-                >▶</button>
-                <button type="button" class="btn-icon row-action-btn row-action-btn-delete" title="Delete"
-                  aria-label="Delete ${title}"
-                  @click=${(e) => { e.stopPropagation(); vm.onDeletePromptDirect(row); }}
-                >🗑</button>
-              </div>
+              ${DRILL_CHEVRON}
             </div>
           </article>
         `;
       })}
-    </div>
-  `;
-}
-
-function renderMcpToolPreview(serverId) {
-  const tools = BUILTIN_TOOL_DETAILS[serverId];
-  if (!tools?.length) return nothing;
-  const preview = tools.slice(0, 5);
-  const remaining = tools.length - preview.length;
-  return html`
-    <div class="mcp-card-tools">
-      <span class="card-relations-label">Tools (${tools.length})</span>
-      ${preview.map((t) => html`
-        <div class="mcp-tool-inline">
-          <span class="mcp-tool-inline-name">${t.name}</span>
-          <span class="mcp-tool-inline-desc">${t.description}</span>
-        </div>
-      `)}
-      ${remaining > 0 ? html`
-        <span class="mcp-tool-inline-desc">+ ${remaining} more</span>
-      ` : nothing}
     </div>
   `;
 }
@@ -1028,87 +931,74 @@ export function renderMcpsCatalog(vm) {
   return html`
     ${showBuiltins ? html`
       <h3 class="section-h">Built-in (${BUILTIN_MCP_SERVERS.length})</h3>
-      ${BUILTIN_MCP_SERVERS.map((s) => {
-        const isViewing = vm.viewingMcpServerId === s.id && !vm.editingMcpKey;
-        const toolCount = BUILTIN_TOOL_DETAILS[s.id]?.length || 0;
-        return html`
-          <article
-            role="button"
-            tabindex="0"
-            aria-label="View tools for ${s.id}"
-            data-testid="mcp-builtin-card"
-            @click=${(e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))}
-            @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))}
-          >
-            <nx-card heading=${s.id} subheading=${s.description}
-              interactive
-              ?selected=${isViewing}>
-              <span slot="pill" class="status-dot status-dot-approved"
-                aria-label="Enabled"></span>
-              <span slot="actions" class="entity-badge entity-badge-mcp">built-in · ${toolCount} tools</span>
-            </nx-card>
-            ${renderMcpToolPreview(s.id)}
-          </article>
-        `;
-      })}
+      <div class="plugin-grid">
+        ${BUILTIN_MCP_SERVERS.map((s) => {
+          const isViewing = vm.viewingMcpServerId === s.id && !vm.editingMcpKey;
+          const toolCount = BUILTIN_TOOL_DETAILS[s.id]?.length || 0;
+          return html`
+            <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
+              role="button"
+              tabindex="0"
+              aria-label="View tools for ${s.id}"
+              data-testid="mcp-builtin-card"
+              @click=${(e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))}
+              @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))}
+            >
+              <header class="plugin-card-top">
+                <span class="plugin-card-pill">${MCP_ICON}</span>
+                <div class="plugin-card-identity">
+                  <span class="plugin-card-name">${s.id}</span>
+                  <span class="plugin-card-source">${s.description}</span>
+                </div>
+              </header>
+              <footer class="plugin-card-meta">
+                <span class="plugin-card-badge">BUILT-IN</span>
+                <span class="plugin-card-count">${toolCount} tools</span>
+              </footer>
+            </article>
+          `;
+        })}
+      </div>
     ` : nothing}
     <h3 class="section-h">Custom (${filteredCustom.length})</h3>
     ${!filteredCustom.length
       ? html`<div class="empty">No custom MCP servers registered</div>`
-      : filteredCustom.map((row) => {
-        const isApproved = skillRowStatus(row) === STATUS.APPROVED;
-        const isEnabled = isApproved && skillRowEnabled(row);
-        const key = row.key || '';
-        const token = `mcp:${key}`;
-        const isBusy = vm.mcpEnableBusy[token];
-        const isSelected = vm.isEditorOpen
-          && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
-        const { tools: liveTools } = mcpServerToolData(vm, key);
-        const toolCount = liveTools.length;
-        return html`
-          <article
-            role="button"
-            tabindex="0"
-            aria-label="Edit MCP server ${key || '(unnamed)'}"
-            data-testid="mcp-card"
-            data-mcp-key=${key}
-            @click=${(e) => vm.onMcpCardClick(e, () => vm.onEditMcp(row))}
-            @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(row))}
-          >
-            <nx-card heading=${key || '(unnamed)'}
-              interactive
-              subheading=${row.description || row.url || row.value || ''}
-              ?selected=${isSelected}>
-              <span slot="pill"
-                class="status-dot ${isEnabled ? 'status-dot-approved' : 'status-dot-draft'}"
-                aria-label=${isEnabled ? 'Enabled' : 'Disabled'}
-              ></span>
-              <span slot="actions" class="entity-badge entity-badge-mcp">custom${toolCount ? ` · ${toolCount} tools` : ''}</span>
-              <button slot="actions" type="button" class="btn-icon more-btn"
-                aria-label="More actions for ${key}"
-                @click=${(e) => { e.stopPropagation(); vm.onOpenMcpMenu(e, key); }}
-              >⋮</button>
-            </nx-card>
-            <nx-popover placement="auto">
-              <div class="card-menu" role="menu"
-                @click=${(e) => e.stopPropagation()}>
-                ${isApproved ? html`
-                  <button role="menuitem" type="button"
-                    ?disabled=${isBusy}
-                    @click=${() => { vm.onCloseMcpMenu(key); vm.onToggleMcpEnabled(row); }}
-                  >${isEnabled ? 'Disable' : 'Enable'}</button>
-                ` : nothing}
-                <button role="menuitem" type="button"
-                  @click=${() => { vm.onCloseMcpMenu(key); vm.onEditMcp(row); }}
-                >Edit</button>
-                <button role="menuitem" type="button" class="card-menu-delete"
-                  @click=${() => { vm.onCloseMcpMenu(key); vm.onDeleteMcpDirect(row); }}
-                >Delete</button>
-              </div>
-            </nx-popover>
-          </article>
-        `;
-      })}
+      : html`<div class="plugin-grid">
+        ${filteredCustom.map((row) => {
+          const isApproved = skillRowStatus(row) === STATUS.APPROVED;
+          const isEnabled = isApproved && skillRowEnabled(row);
+          const key = row.key || '';
+          const isSelected = vm.isEditorOpen
+            && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
+          const { tools: liveTools } = mcpServerToolData(vm, key);
+          const toolCount = liveTools.length;
+          const transport = row.url ? 'HTTP' : 'stdio';
+          return html`
+            <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
+              role="button"
+              tabindex="0"
+              aria-label="Edit MCP server ${key || '(unnamed)'}"
+              data-testid="mcp-card"
+              data-mcp-key=${key}
+              @click=${(e) => vm.onMcpCardClick(e, () => vm.onEditMcp(row))}
+              @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(row))}
+            >
+              <header class="plugin-card-top">
+                <span class="plugin-card-pill">${MCP_ICON}</span>
+                <div class="plugin-card-identity">
+                  <span class="plugin-card-name">${key || '(unnamed)'}</span>
+                  <span class="plugin-card-source">${row.url || row.value || ''}</span>
+                </div>
+                <span class="plugin-card-badge">${transport}</span>
+              </header>
+              <footer class="plugin-card-meta">
+                <span class="plugin-card-badge">${isEnabled ? 'CONNECTED' : 'DISABLED'}</span>
+                <span class="plugin-card-count">${toolCount} tools</span>
+              </footer>
+            </article>
+          `;
+        })}
+      </div>`}
   `;
 }
 

@@ -85,3 +85,12 @@
   gap: var(--s2-spacing-50);
   flex-shrink: 0;
 }
+
+.card-actions .drill-chevron {
+  color: var(--s2-gray-400);
+  transition: color 0.15s;
+}
+
+:host([interactive]) .card:hover .drill-chevron {
+  color: var(--s2-gray-700);
+}
