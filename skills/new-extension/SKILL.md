@@ -94,3 +94,9 @@ For block extensions, the developer also needs to:
 
 Mention this so the developer knows, but do NOT make changes in other repos
 unless asked.
+
+## References
+
+- [Provider strategy](references/provider-strategy.md) — how `ew-` class prefixes route to this repo via da-nx `loadBlock()`
+- [Block contract](references/block-contract.md) — `decorate(block)` signature, auth, cross-origin imports, CSP, LitElement conventions
+- [Local development](references/local-development.md) — three-server setup, `?da-skills=` override, branch preview testing, CORS
