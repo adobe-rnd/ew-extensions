@@ -69,10 +69,15 @@ http://localhost:3001/apps/skills/skills.html
 
 ## Adding an extension
 
-1. Create a new directory under `apps/{your-extension}/`.
-2. Add an entry point at `tools/{your-extension}.html` that imports the DA App SDK.
-3. Implement your extension component — see `apps/skills/` for a reference implementation.
-4. Update the extensions table above.
+Use the **new-extension** Cursor Agent Skill to scaffold a new extension with the correct structure:
+
+```
+.cursor/skills/new-extension/
+```
+
+The skill creates all boilerplate files (block contract, LitElement component, CSS, standalone HTML, test stubs) and walks you through lint/test wiring and da-live integration.
+
+For manual setup, see `blocks/skills/` (block extension) or `tools/ew-setup/` (tool extension) as reference implementations.
 
 ## Authentication
 
