@@ -254,7 +254,7 @@ export function renderChatDrawer(vm) {
         </div>
         <div class="chat-drawer-body"
           @nx-panel-close=${(e) => { e.stopPropagation(); vm.onToggleChat(); }}>
-          <nx-chat></nx-chat>
+          <nx-chat agent-id=${vm.chatAgentId || nothing}></nx-chat>
         </div>
       ` : nothing}
     </div>

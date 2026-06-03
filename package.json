@@ -11,8 +11,8 @@
   },
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css",
-    "lint:js": "eslint apps/",
-    "lint:css": "stylelint 'apps/**/*.css'",
+    "lint:js": "eslint blocks/",
+    "lint:css": "stylelint 'blocks/**/*.css'",
     "test": "wtr --config ./web-test-runner.config.mjs \"./test/unit/**/*.test.js\" --node-resolve --port=2000",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:all": "playwright test --project=chromium --project=firefox --project=webkit",

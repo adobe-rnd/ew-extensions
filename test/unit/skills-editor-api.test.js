@@ -5,7 +5,7 @@ import {
   skillsRowsToMapAndStatuses,
   markSkillDeleted,
   isSkillRecentlyDeleted,
-} from '../../apps/skills/skills-editor-api.js';
+} from '../../blocks/skills/skills-editor-api.js';
 
 describe('skillRowStatus', () => {
   it('returns "approved" for null/undefined/non-object', () => {

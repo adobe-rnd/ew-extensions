@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { normaliseRowKey, parseSheetBoolean } from '../../../apps/skills/utils/sheet-utils.js';
+import { normaliseRowKey, parseSheetBoolean, toSafeId } from '../../../blocks/skills/utils/sheet-utils.js';
 
 describe('normaliseRowKey', () => {
   it('returns trimmed key from row.key', () => {
@@ -54,5 +54,45 @@ describe('parseSheetBoolean', () => {
     expect(parseSheetBoolean(42)).to.be.undefined;
     expect(parseSheetBoolean(null, false)).to.be.false;
     expect(parseSheetBoolean(undefined)).to.be.undefined;
+  });
+});
+
+describe('toSafeId', () => {
+  it('converts spaces to hyphens and lowercases', () => {
+    expect(toSafeId('My Cool Skill')).to.equal('my-cool-skill');
+  });
+
+  it('converts underscores to hyphens', () => {
+    expect(toSafeId('my_cool_skill')).to.equal('my-cool-skill');
+  });
+
+  it('strips special characters', () => {
+    expect(toSafeId('skill@#$name!')).to.equal('skillname');
+  });
+
+  it('collapses multiple hyphens', () => {
+    expect(toSafeId('skill---name')).to.equal('skill-name');
+    expect(toSafeId('a - - b')).to.equal('a-b');
+  });
+
+  it('trims leading and trailing hyphens', () => {
+    expect(toSafeId('-leading-')).to.equal('leading');
+    expect(toSafeId('  --test--  ')).to.equal('test');
+  });
+
+  it('handles already-valid IDs unchanged', () => {
+    expect(toSafeId('my-valid-id')).to.equal('my-valid-id');
+    expect(toSafeId('skill123')).to.equal('skill123');
+  });
+
+  it('returns empty string for empty/whitespace input', () => {
+    expect(toSafeId('')).to.equal('');
+    expect(toSafeId('   ')).to.equal('');
+    expect(toSafeId(null)).to.equal('');
+    expect(toSafeId(undefined)).to.equal('');
+  });
+
+  it('handles mixed case and special chars', () => {
+    expect(toSafeId('SEO Optimization (v2)')).to.equal('seo-optimization-v2');
   });
 });

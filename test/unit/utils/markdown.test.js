@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { extractTitle, extractToolRefs } from '../../../apps/skills/utils/markdown.js';
+import { extractTitle, extractToolRefs } from '../../../blocks/skills/utils/markdown.js';
 
 describe('extractTitle', () => {
   it('returns first ATX heading text', () => {
