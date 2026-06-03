@@ -67,6 +67,19 @@ const [styles, catalogStyles, editorStyles, toolsStyles] = await Promise.all([
   loadStyle(new URL('./tools.css', import.meta.url).href),
 ]);
 
+const INTERACTIVE_SELECTOR = [
+  'button', '[role="button"]', '[role="menuitem"]',
+  'input', 'select', 'textarea', 'a[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function isEventFromNestedInteractive(e) {
+  const { currentTarget, target } = e || {};
+  if (!(currentTarget instanceof Element) || !(target instanceof Element)) return false;
+  const nested = target.closest(INTERACTIVE_SELECTOR);
+  return Boolean(nested && nested !== currentTarget);
+}
+
 class NxSkillsEditor extends LitElement {
   static properties = {
     _isLoading: { state: true },
@@ -109,7 +122,7 @@ class NxSkillsEditor extends LitElement {
     _isEditorOpen: { state: true },
     _isAgentViewTools: { state: true },
     _isFormDirty: { state: true },
-    _promptSearch: { state: true },
+    _catalogSearch: { state: true },
     _toolsSearch: { state: true },
     _toolsGroupCollapsed: { state: true },
     _showDepTree: { state: true },
@@ -125,14 +138,14 @@ class NxSkillsEditor extends LitElement {
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
 
-  // ─── non-reactive instance fields (simple inits, not LitElement state) ────
+  // ─── non-reactive instance fields ──────────────────────────────────────────
   _loadedKey = null;
 
   _statusTimer = null;
 
-  _dirtyForms = {}; // non-reactive: { [tabId]: snapshot }
+  _dirtyForms = {};
 
-  _editorTriggerSelector = null; // CSS selector for the element that opened the drawer
+  _editorTriggerSelector = null;
 
   _chatLoaded = false;
 
@@ -142,12 +155,68 @@ class NxSkillsEditor extends LitElement {
 
   _mcpToolsLoadInFlight = false;
 
-  /** Count of in-flight operations that want the refresh indicator shown. */
-  _refreshingCount = 0;
-
   _resolveConfirm = null;
 
-  // ─── stable event-handler references (class fields so connect/disconnect are symmetric) ────
+  // ─── reactive state defaults ──────────────────────────────────────────────
+  _isLoading = true;
+
+  _refreshingCount = 0;
+
+  _catalogTab = 'skills';
+
+  _catalogFilter = 'all';
+
+  _skills = {};
+
+  _skillStatuses = {};
+
+  _prompts = [];
+
+  _agents = [];
+
+  _agentRows = [];
+
+  _mcpRows = [];
+
+  _mcpTools = null;
+
+  _configuredMcpServers = {};
+
+  _configuredMcpServerHeaders = {};
+
+  _gateOrg = '';
+
+  _gateSite = '';
+
+  _mcpEnableBusy = {};
+
+  _activeToolRefs = null;
+
+  _toolOverrides = {};
+
+  _memory = null;
+
+  _isEditorOpen = false;
+
+  _isAgentViewTools = false;
+
+  _isFormDirty = false;
+
+  _catalogSearch = '';
+
+  _toolsSearch = '';
+
+  _toolsGroupCollapsed = { DA: false, MCP: false };
+
+  _showDepTree = false;
+
+  _catalogViewMode = 'grid';
+
+  _formPromptTools = [];
+
+  _isChatOpen = false;
+
+  // ─── stable event-handler references ──────────────────────────────────────
   _onSuggestionHandler = () => this._applySuggestion();
 
   _onClearFormHandler = () => this._clearForm();
@@ -159,36 +228,7 @@ class NxSkillsEditor extends LitElement {
   constructor() {
     super();
     this._hash = new HashController(this);
-    this._isLoading = true;
-    this._refreshingCount = 0;
-    this._catalogTab = 'skills';
-    this._catalogFilter = 'all';
-    this._skills = {};
-    this._skillStatuses = {};
-    this._prompts = [];
-    this._agents = [];
-    this._agentRows = [];
-    this._mcpRows = [];
-    this._mcpTools = null;
-    this._configuredMcpServers = {};
-    this._configuredMcpServerHeaders = {};
     this._clearForm();
-    this._gateOrg = '';
-    this._gateSite = '';
-    this._mcpEnableBusy = {};
-    this._activeToolRefs = null;
-    this._toolOverrides = {};
-    this._memory = null;
-    this._isEditorOpen = false;
-    this._isAgentViewTools = false;
-    this._isFormDirty = false;
-    this._promptSearch = '';
-    this._toolsSearch = '';
-    this._toolsGroupCollapsed = { DA: false, MCP: false };
-    this._showDepTree = false;
-    this._catalogViewMode = 'grid';
-    this._formPromptTools = [];
-    this._isChatOpen = false;
   }
 
   get _org() { return this._hash.value?.org; }
@@ -212,6 +252,22 @@ class NxSkillsEditor extends LitElement {
     this._resolveConfirm?.(accepted);
     this._resolveConfirm = null;
     this._confirmDialog = null;
+  }
+
+  _trapFocus(e) {
+    if (e.key !== 'Tab') return;
+    const dialog = e.currentTarget;
+    const focusable = dialog.querySelectorAll('button, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 
   connectedCallback() {
@@ -289,6 +345,13 @@ class NxSkillsEditor extends LitElement {
     }
     if (changed?.has('_catalogTab') && this._catalogTab === 'mcps') {
       this._ensureMcpToolsLoaded();
+    }
+    // Move focus into confirm dialog on open.
+    if (changed?.has('_confirmDialog') && this._confirmDialog) {
+      this.updateComplete.then(() => {
+        const cancel = this.shadowRoot.querySelector('.confirm-btn-cancel');
+        cancel?.focus();
+      });
     }
     // Move focus into the detail view on open; restore it to the trigger on close.
     if (changed?.has('_isEditorOpen')) {
@@ -466,9 +529,7 @@ class NxSkillsEditor extends LitElement {
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
-      const [skillsResult] = await Promise.all([
-        loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles }),
-      ]);
+      const skillsResult = await loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles });
 
       this._skills = skillsResult.map;
       this._skillStatuses = skillsResult.statuses;
@@ -638,8 +699,8 @@ class NxSkillsEditor extends LitElement {
     this._isFormDirty = false;
     this._statusMsg = '';
     this._catalogTab = newTab;
-    this._promptSearch = '';
-    this._catalogFilter = 'all'; // filter is tab-local; reset on every switch
+    this._catalogSearch = '';
+    this._catalogFilter = 'all';
 
     const saved = this._dirtyForms[newTab];
     if (saved) {
@@ -668,8 +729,8 @@ class NxSkillsEditor extends LitElement {
     this._isFormDirty = false;
     this._statusMsg = '';
     this._catalogTab = skillsEditorTab;
-    this._promptSearch = '';
-    this._catalogFilter = 'all'; // filter is tab-local; reset on back/forward
+    this._catalogSearch = '';
+    this._catalogFilter = 'all';
 
     const saved = this._dirtyForms[skillsEditorTab];
     if (saved) {
@@ -1176,42 +1237,16 @@ class NxSkillsEditor extends LitElement {
     this._isEditorOpen = true;
   }
 
-  _isEventFromNestedInteractiveControl(e) {
-    const currentTarget = e?.currentTarget;
-    const target = e?.target;
-    if (!(currentTarget instanceof Element) || !(target instanceof Element)) return false;
-    const INTERACTIVE_SELECTOR = [
-      'button',
-      '[role="button"]',
-      '[role="menuitem"]',
-      'input',
-      'select',
-      'textarea',
-      'a[href]',
-      '[tabindex]:not([tabindex="-1"])',
-    ].join(',');
-    const nestedInteractive = target.closest(INTERACTIVE_SELECTOR);
-    return Boolean(nestedInteractive && nestedInteractive !== currentTarget);
-  }
-
   _onCardClick(e, onActivate) {
-    if (this._isEventFromNestedInteractiveControl(e)) return;
+    if (isEventFromNestedInteractive(e)) return;
     onActivate();
   }
 
   _onCardKeydown(e, onActivate) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    if (this._isEventFromNestedInteractiveControl(e)) return;
+    if (isEventFromNestedInteractive(e)) return;
     e.preventDefault();
     onActivate();
-  }
-
-  _onMcpCardClick(e, onActivate) {
-    this._onCardClick(e, onActivate);
-  }
-
-  _onMcpCardKeydown(e, onActivate) {
-    this._onCardKeydown(e, onActivate);
   }
 
   async _onToggleToolEnabled(serverId, toolName, enabled, onRollback) {
@@ -1356,7 +1391,7 @@ class NxSkillsEditor extends LitElement {
       hasSuggestion: this._hasSuggestion,
       statusMsg: this._statusMsg,
       statusType: this._statusType,
-      promptSearch: this._promptSearch,
+      catalogSearch: this._catalogSearch,
       skills: this._skills,
       skillStatuses: this._skillStatuses,
       prompts: this._prompts,
@@ -1389,7 +1424,7 @@ class NxSkillsEditor extends LitElement {
       mcpAuthHeaderValue: this._mcpAuthHeaderValue,
       memory: this._memory,
       // ── form setters ───────────────────────────────────────────────────────
-      setPromptSearch: (v) => { this._promptSearch = v; },
+      setCatalogSearch: (v) => { this._catalogSearch = v; },
       setFormSkillId: (v) => { this._formSkillId = v; this._markDirty(); },
       setFormSkillBody: (v) => { this._formSkillBody = v; this._markDirty(); },
       setNewAgentId: (v) => { this._newAgentId = v; this._markDirty(); },
@@ -1419,8 +1454,6 @@ class NxSkillsEditor extends LitElement {
       onMarkDirty: () => this._markDirty(),
       onCardClick: (e, fn) => this._onCardClick(e, fn),
       onCardKeydown: (e, fn) => this._onCardKeydown(e, fn),
-      onMcpCardClick: (e, fn) => this._onMcpCardClick(e, fn),
-      onMcpCardKeydown: (e, fn) => this._onMcpCardKeydown(e, fn),
       onEditSkill: (id) => this._onEditSkill(id),
       onDeleteSkillById: (id) => this._onDeleteSkillById(id),
       onOpenSkillMenu: (e, id) => this._openSkillMenu(e, id),
@@ -1509,27 +1542,32 @@ class NxSkillsEditor extends LitElement {
     const vm = this._buildViewModel();
     const dlg = this._confirmDialog;
     return html`<div class="${rootCls}" role="region" aria-label="Skills Editor">
-      ${this._refreshingCount > 0 ? html`
-        <div class="refresh-indicator" role="status" aria-live="polite">
-          <span class="refresh-indicator-label">Auto-refreshing capabilities…</span>
-          <span class="refresh-indicator-track"><span class="refresh-indicator-bar"></span></span>
-        </div>
-      ` : nothing}
       <div class="content-area">
         ${renderChatDrawer(vm)}
         <div class="main-area">
           ${renderTopNav(vm)}
+          ${this._refreshingCount > 0 ? html`
+            <div class="refresh-indicator" role="status" aria-live="polite">
+              <span class="refresh-indicator-label">Auto-refreshing capabilities…</span>
+              <span class="refresh-indicator-track"><span class="refresh-indicator-bar"></span></span>
+            </div>
+          ` : nothing}
           <div class="panels">
             ${renderListCol(vm)}
           </div>
         </div>
       </div>
       ${dlg ? html`
-        <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
+        <div class="confirm-backdrop"
+          @click=${() => this._closeConfirm(false)}
+          @keydown=${(e) => { if (e.key === 'Escape') this._closeConfirm(false); }}
+        >
           <div class="confirm-dialog" role="alertdialog"
+               aria-modal="true"
                aria-labelledby="confirm-title"
                aria-describedby="confirm-desc"
-               @click=${(e) => e.stopPropagation()}>
+               @click=${(e) => e.stopPropagation()}
+               @keydown=${(e) => this._trapFocus(e)}>
             <p id="confirm-title" class="confirm-heading">
               You're about to delete ${dlg.itemType}:
             </p>
