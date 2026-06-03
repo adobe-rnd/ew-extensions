@@ -1,84 +1,84 @@
 <!-- prettier-ignore -->
 <div align="center">
 
-# DA Skills Editor
+# EW Extensions
 
 [![99% Vibe_Coded](https://img.shields.io/badge/99%25-Vibe_Coded-ff69b4?style=for-the-badge&logo=githubcopilot&logoColor=white)](https://github.com/ai-ecoverse/vibe-coded-badge-action)
 
-<img src="./assets/ew-mascot-skills.png" alt="ew skills" align="center" height="120" style="margin-bottom: 20px;" />
+<img src="./assets/ew-mascot-skills.png" alt="ew extensions" align="center" height="120" style="margin-bottom: 20px;" />
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/da-skills/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/da-skills/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/exp-workspace/ew-extensions/main.yaml?style=flat-square&label=CI%20Checks)](https://github.com/exp-workspace/ew-extensions/actions)
 [![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)](https://nodejs.org)
 [![JavaScript](https://img.shields.io/badge/JavaScript-yellow?style=flat-square&logo=javascript&logoColor=white)](https://www.openjs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-white?style=flat-square)](LICENSE)
 
-[Overview](#overview) | [Architecture](#architecture) | [Local development](#local-development) | [File structure](#file-structure) | [Authentication](#authentication) | [Chat](#chat)
+[Overview](#overview) | [Extensions](#extensions) | [Architecture](#architecture) | [Local development](#local-development) | [Adding an extension](#adding-an-extension)
 
 </div>
 
 ## Overview
 
-Standalone DA app for managing skills, agents, MCP servers, prompts, and memory. Built as a [DA App SDK](https://docs.da.live/developers/guides/developing-apps-and-plugins) application and deployed on its own AEM Edge Delivery Services site.
+This repository hosts **extensions** for the Experience Workspace (EW). Each extension is a self-contained [DA App SDK](https://docs.da.live/developers/guides/developing-apps-and-plugins) application deployed on its own AEM Edge Delivery Services site and loaded into the EW shell.
 
-Users access it at `https://da.live/app/{org}/{site}/tools/skills`.
+Extensions add capabilities to EW — editors, panels, tools, and integrations — without modifying the core platform.
+
+## Extensions
+
+| Extension | Path | Entry point | Description |
+|-----------|------|-------------|-------------|
+| **Skills Editor** | `apps/skills/` | `tools/skills.html` | Manage skills, agents, MCP servers, prompts, and memory |
+
+> More extensions coming soon.
 
 ## Architecture
 
-The Skills Editor is a self-contained DA app that follows the standard DA App SDK pattern:
+Every extension follows the same pattern:
 
-1. **`tools/skills.html`** is the app entry point — a standalone HTML page that imports the DA App SDK and bootstraps the editor.
-2. **DA hosts the app** via iframe at `da.live/app/{org}/{site}/tools/skills`. The SDK handles authentication by passing the user's IMS token into the app.
-3. **The editor component** (`nx-skills-editor`) manages all UI and data operations against the DA Admin API.
-4. **Chat** is shimmed into the app via a dynamic import URL, allowing the chat component to live alongside the editor in the same view.
+1. **Block contract** — each extension exports a `decorate(block)` function, loaded by da-nx's `loadBlock` via `providers.ew` routing (triggered by the `ew-` class prefix).
+2. **EW hosts the extension** at `da.live/apps/{extension}#/{org}/{site}`. The page contains a `<div class="ew-{extension}">` that `loadBlock` resolves to this repo.
+3. **Extension component** — a LitElement (or vanilla JS module) that owns its own UI, state, and data operations against the DA Admin API.
 
 ## Local development
 
+To develop locally, run three servers:
+
 ```bash
-# 1. Serve da-skills locally
-cd ~/Projects/DA/da-skills
-aem up
-# or: python3 -m http.server 3001
+# 1. da-live (port 3000)
+cd ~/Projects/DA/da-live && aem up
 
-# 2. Open the app with local override
-# https://da.live/app/{org}/{site}/tools/skills?ref=local
+# 2. da-nx (port 6456)
+cd ~/Projects/DA/da-nx && npm start
+
+# 3. ew-extensions (port 3001)
+cd ~/Projects/DA/da-skills && aem up
 ```
 
-The `?ref=local` parameter tells DA to load the app from `http://localhost:3000` instead of the CDN.
-
-## File structure
+Then navigate to:
 
 ```
-blocks/skills/
-├── skills.js                 # Block contract entry (decorate) + SDK bootstrap
-├── nx-skills-editor.js       # Main LitElement component
-├── skills-editor-api.js      # Data layer (config CRUD, .md I/O, MCP tools)
-├── renderers.js              # Pure render helpers (skills, agents, MCPs, prompts, memory)
-├── constants.js              # Enums, builtin server IDs, tab definitions
-├── catalog.css               # Catalog and card styles
-├── nx-skills-editor.css      # Component layout styles
-├── tools.css                 # Tool selector styles
-├── utils/
-│   ├── da-fetch.js           # Authenticated fetch wrapper (token from DA App SDK)
-│   ├── utils.js              # loadStyle, HashController
-│   ├── sheet-utils.js        # Config sheet row helpers
-│   ├── markdown.js           # Markdown utilities
-│   ├── skill-frontmatter.js  # YAML frontmatter parser
-│   └── skills-channel.js     # BroadcastChannel bridge for chat communication
-└── shared/
-    ├── tabs/                 # Tab bar component
-    ├── card/                 # Reusable card component
-    └── popover/              # Popover / context menu component
+http://localhost:3000/apps/skills?nx=local&nxver=2#/{org}/{site}
 ```
+
+The `?nx=local&nxver=2` params tell da-live to load da-nx from localhost, which in turn resolves `ew-*` blocks to `:3001`.
+
+For isolated extension development (no auth, no da-nx routing):
+
+```
+http://localhost:3001/apps/skills/skills.html
+```
+
+## Adding an extension
+
+1. Create a new directory under `apps/{your-extension}/`.
+2. Add an entry point at `tools/{your-extension}.html` that imports the DA App SDK.
+3. Implement your extension component — see `apps/skills/` for a reference implementation.
+4. Update the extensions table above.
 
 ## Authentication
 
-The DA App SDK handles authentication. When DA loads `tools/skills.html` in an iframe, the SDK passes the user's IMS access token via PostMessage. The app calls `initAuth(token)` to configure all subsequent DA Admin API requests.
+The DA App SDK handles authentication for all extensions. When EW loads an extension in an iframe, the SDK passes the user's IMS access token via PostMessage. Extensions call `initAuth(token)` to configure subsequent DA Admin API requests.
 
-No separate login flow is needed — the user is already authenticated in DA.
-
-## Chat
-
-The chat component is loaded into the Skills Editor via a dynamic import URL (`chatImportUrl`). This allows the chat panel to render alongside the editor within the same app frame, communicating through `skills-channel.js` using BroadcastChannel with sessionStorage and window event fallbacks for compatibility.
+No separate login flow is needed — the user is already authenticated in EW.
 
 ## CI
 
