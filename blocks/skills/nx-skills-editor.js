@@ -29,6 +29,7 @@ import {
   deleteToolOverride,
   skillRowStatus,
   skillRowEnabled,
+  rowHeadersToArray,
   fetchSiteSourceText,
   DA_SKILLS_EDITOR_SUGGESTION_HANDOFF,
   DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT,
@@ -98,8 +99,7 @@ class NxSkillsEditor extends LitElement {
     _mcpKey: { state: true },
     _mcpUrl: { state: true },
     _mcpDescription: { state: true },
-    _mcpAuthHeaderName: { state: true },
-    _mcpAuthHeaderValue: { state: true },
+    _mcpHeaders: { state: true },
     _editingMcpKey: { state: true },
     _viewingMcpServerId: { state: true },
     _mcpEnableBusy: { state: true },
@@ -546,7 +546,9 @@ class NxSkillsEditor extends LitElement {
   _clearForm() {
     Object.entries(FRESH_FORM_STATE).forEach(([key, val]) => {
       const prop = `_${key}`;
-      this[prop] = Array.isArray(val) ? [...val] : val;
+      this[prop] = Array.isArray(val)
+        ? val.map((v) => (v && typeof v === 'object' ? { ...v } : v))
+        : val;
     });
     this._isSaveBusy = false;
     this._statusMsg = '';
@@ -593,7 +595,9 @@ class NxSkillsEditor extends LitElement {
     const snap = { tab: this._catalogTab };
     Object.keys(FRESH_FORM_STATE).forEach((key) => {
       const val = this[`_${key}`];
-      snap[key] = Array.isArray(val) ? [...val] : val;
+      snap[key] = Array.isArray(val)
+        ? val.map((v) => (v && typeof v === 'object' ? { ...v } : v))
+        : val;
     });
     return snap;
   }
@@ -604,7 +608,9 @@ class NxSkillsEditor extends LitElement {
     Object.keys(FRESH_FORM_STATE).forEach((key) => {
       if (key in snapshot) {
         const val = snapshot[key];
-        this[`_${key}`] = Array.isArray(val) ? [...val] : val;
+        this[`_${key}`] = Array.isArray(val)
+          ? val.map((v) => (v && typeof v === 'object' ? { ...v } : v))
+          : val;
       }
     });
     this._isEditorOpen = true;
@@ -1072,6 +1078,18 @@ class NxSkillsEditor extends LitElement {
   // ─── MCP register ─────────────────────────────────────────────────────────
 
   async _onRegisterMcp() {
+    const filledHeaders = this._mcpHeaders.filter((h) => h.name.trim());
+    const namesSeen = new Set();
+    const dupes = [];
+    filledHeaders.forEach((h) => {
+      const lower = h.name.trim().toLowerCase();
+      if (namesSeen.has(lower)) dupes.push(h.name.trim());
+      namesSeen.add(lower);
+    });
+    if (dupes.length) {
+      this._setStatus(`Duplicate header name: ${dupes[0]}`, STATUS_TYPE.ERR);
+      return;
+    }
     this._isSaveBusy = true;
     const isUpdate = Boolean(this._editingMcpKey);
     const result = await registerMcpServer(
@@ -1080,16 +1098,14 @@ class NxSkillsEditor extends LitElement {
       this._mcpKey,
       this._mcpUrl,
       this._mcpDescription,
-      this._mcpAuthHeaderName,
-      this._mcpAuthHeaderValue,
+      this._mcpHeaders,
     );
     if (!result.ok) this._setStatus(result.error || 'Failed', STATUS_TYPE.ERR);
     else {
       this._mcpKey = '';
       this._mcpUrl = '';
       this._mcpDescription = '';
-      this._mcpAuthHeaderName = 'x-api-key';
-      this._mcpAuthHeaderValue = '';
+      this._mcpHeaders = [];
       this._editingMcpKey = null;
       this._clearDirty();
       this._setStatus(isUpdate ? 'MCP server updated' : 'MCP server registered');
@@ -1117,8 +1133,7 @@ class NxSkillsEditor extends LitElement {
     this._mcpKey = '';
     this._mcpUrl = '';
     this._mcpDescription = '';
-    this._mcpAuthHeaderName = 'x-api-key';
-    this._mcpAuthHeaderValue = '';
+    this._mcpHeaders = [];
     this._editingMcpKey = null;
     this._viewingMcpServerId = null;
   }
@@ -1139,8 +1154,7 @@ class NxSkillsEditor extends LitElement {
     this._mcpKey = row.key;
     this._mcpUrl = row.url || row.value || '';
     this._mcpDescription = row.description || '';
-    this._mcpAuthHeaderName = row.authHeaderName || 'x-api-key';
-    this._mcpAuthHeaderValue = row.authHeaderValue || '';
+    this._mcpHeaders = rowHeadersToArray(row);
     this._catalogTab = 'mcps';
     this._isEditorOpen = true;
     this._isFormDirty = false;
@@ -1380,8 +1394,7 @@ class NxSkillsEditor extends LitElement {
       mcpKey: this._mcpKey,
       mcpUrl: this._mcpUrl,
       mcpDescription: this._mcpDescription,
-      mcpAuthHeaderName: this._mcpAuthHeaderName,
-      mcpAuthHeaderValue: this._mcpAuthHeaderValue,
+      mcpHeaders: this._mcpHeaders,
       memory: this._memory,
       // ── form setters ───────────────────────────────────────────────────────
       setPromptSearch: (v) => { this._promptSearch = v; },
@@ -1397,8 +1410,19 @@ class NxSkillsEditor extends LitElement {
       setMcpKey: (v) => { this._mcpKey = v; this._markDirty(); },
       setMcpUrl: (v) => { this._mcpUrl = v; this._markDirty(); },
       setMcpDescription: (v) => { this._mcpDescription = v; this._markDirty(); },
-      setMcpAuthHeaderName: (v) => { this._mcpAuthHeaderName = v; this._markDirty(); },
-      setMcpAuthHeaderValue: (v) => { this._mcpAuthHeaderValue = v; this._markDirty(); },
+      setMcpHeader: (idx, field, value) => {
+        const next = this._mcpHeaders.map((h, i) => (i === idx ? { ...h, [field]: value } : h));
+        this._mcpHeaders = next;
+        this._markDirty();
+      },
+      addMcpHeader: () => {
+        this._mcpHeaders = [...this._mcpHeaders, { name: '', value: '' }];
+        this._markDirty();
+      },
+      removeMcpHeader: (idx) => {
+        this._mcpHeaders = this._mcpHeaders.filter((_, i) => i !== idx);
+        this._markDirty();
+      },
       setToolsSearch: (v) => { this._toolsSearch = v; },
       setToolsGroupCollapsed: (key, isCollapsed) => {
         this._toolsGroupCollapsed = { ...this._toolsGroupCollapsed, [key]: isCollapsed };
