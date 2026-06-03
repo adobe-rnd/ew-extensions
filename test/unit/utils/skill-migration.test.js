@@ -374,10 +374,6 @@ describe('migrateSkillsIfNeeded', () => {
       }
       // list flat .md files — none in this test
       if (req.url.includes('/list/')) return mockResponse({ body: JSON.stringify([]) });
-      // flat .md reads — return 404 (no flat files)
-      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
-        return mockResponse({ status: 404, ok: false });
-      }
       // folder skill.md PUT (write)
       if (req.method === 'PUT' && req.url.includes('/skill.md')) {
         const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
@@ -392,6 +388,10 @@ describe('migrateSkillsIfNeeded', () => {
       if (req.method === 'GET' && req.url.includes('/skill.md')) {
         const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
         return mockResponse({ body: writtenFiles[skillId] || '---\nname: x\n---\n' });
+      }
+      // flat .md reads — return 404 (no flat files); must come after skill.md checks
+      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
+        return mockResponse({ status: 404, ok: false });
       }
       return mockResponse({ status: 404, ok: false });
     };
@@ -434,9 +434,6 @@ describe('migrateSkillsIfNeeded', () => {
         return mockResponse({ status: 200 });
       }
       if (req.url.includes('/list/')) return mockResponse({ body: JSON.stringify([]) });
-      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
-        return mockResponse({ status: 404, ok: false });
-      }
       if (req.method === 'PUT' && req.url.includes('/skill.md')) {
         const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
         if (skillId === 'bad-skill') return mockResponse({ status: 500, ok: false });
@@ -450,6 +447,10 @@ describe('migrateSkillsIfNeeded', () => {
       if (req.method === 'GET' && req.url.includes('/skill.md')) {
         const skillId = req.url.split('/.da/skills/')[1]?.split('/')[0];
         return mockResponse({ body: writtenFiles[skillId] || '---\nname: x\n---\n' });
+      }
+      // flat .md reads — must come after skill.md checks
+      if (req.method === 'GET' && req.url.includes('/.da/skills/') && req.url.endsWith('.md')) {
+        return mockResponse({ status: 404, ok: false });
       }
       return mockResponse({ status: 404, ok: false });
     };
