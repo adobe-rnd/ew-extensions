@@ -35,24 +35,23 @@
   font-size: 1rem;
 }
 
-/* Scrollable content region — flex: 1 fills the space between header and footer */
 .editor-body {
-  flex: 1;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden auto;
   padding: var(--s2-spacing-200);
 }
 
 /* Memory tab: push content to the bottom so the most-recent text is visible first */
 .editor-body-memory {
+  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
 }
 
-/* Sticky action bar pinned to the bottom of the drawer */
 .editor-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

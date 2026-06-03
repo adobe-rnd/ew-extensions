@@ -1,9 +1,4 @@
 :host {
-  --local-purple-bg: color-mix(in srgb, #7c3aed 12%, transparent);
-  --local-purple-fg: #7c3aed;
-  --local-orange-bg: color-mix(in srgb, #ea580c 12%, transparent);
-  --local-orange-fg: #c2410c;
-
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -62,7 +57,7 @@
 }
 
 .empty {
-  padding: var(--s2-spacing-200);
+  padding: var(--s2-spacing-300);
   text-align: center;
   color: var(--s2-gray-600);
   font-size: var(--s2-body-size-s);
@@ -240,6 +235,8 @@
 }
 
 /* ─── list column: fills the entire panels area ──────────────────────────── */
+/* Scroll owner: col-list scrolls catalog-scroll; detail-view scrolls itself.
+   Only one child is rendered at a time so nested scrollbars never appear.    */
 
 .col-list {
   flex: 1;
@@ -254,6 +251,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
   background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
 }
 

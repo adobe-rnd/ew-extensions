@@ -12,6 +12,8 @@ import {
   STATUS_TYPE,
   TAB_ACTIONS,
   TAB_AGENTS,
+  TAB_DESCRIPTIONS,
+  TAB_LABEL_MAP,
   TAB_MARKETPLACE,
   TAB_MCPS,
   TAB_MEMORY,
@@ -110,7 +112,6 @@ function renderSkillCard(vm, id) {
       aria-label="Edit skill ${id}"
       data-testid="skill-card"
       data-skill-id=${id}
-      class="card-accent-skill"
       @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
     >
@@ -201,7 +202,7 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
   const toolsByMcp = groupToolsByMcp(tools);
 
   return html`
-    <article class="agent-card card-accent-agent" role="button" tabindex="0"
+    <article class="agent-card" role="button" tabindex="0"
       aria-label="Open agent ${title}"
       data-testid=${isBuiltin ? 'agent-builtin-card' : 'agent-card'}
       @click=${(e) => vm.onCardClick(e, () => vm.onSelectAgent(agent))}
@@ -296,12 +297,10 @@ export function renderChatDrawer(vm) {
   `;
 }
 
-// ─── back-button label lookup (tab id → display label) ───────────────────────
-const TAB_LABEL_MAP = Object.fromEntries(CATALOG_TABS.map((t) => [t.id, t.label]));
+// TAB_LABEL_MAP and TAB_DESCRIPTIONS are imported from constants.js
 
-/* eslint-disable max-len */
 const BACK_ARROW_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>`;
-/* eslint-enable max-len */
+const SEARCH_ICON = html`<svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>`;
 
 function renderDetailView(vm) {
   const tab = vm.catalogTab;
@@ -356,38 +355,44 @@ function renderDetailView(vm) {
 function renderCatalogView(vm) {
   const { catalogTab: tab } = vm;
   const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
+  const tabLabel = TAB_LABEL_MAP[tab] || '';
+  const tabDesc = TAB_DESCRIPTIONS[tab] || '';
 
   return html`
-    ${TAB_ACTIONS[tab] ? html`
-      <div class="list-header">
-        <div class="list-actions-row">
-          <button type="button" class="new-btn"
-            @click=${() => {
-              const { opener } = TAB_ACTIONS[tab];
-              if (typeof vm[opener] === 'function') vm[opener]();
-            }}
-          >${TAB_ACTIONS[tab].btnLabel}</button>
-        </div>
-      </div>
-    ` : nothing}
-    ${showSearch ? html`
-      <div class="list-search">
-        <input
-          type="search"
-          placeholder="Search…"
-          aria-label="Search list"
-          .value=${vm.promptSearch}
-          @input=${(e) => vm.setPromptSearch(e.target.value)}
-        >
-      </div>
-    ` : nothing}
     <div class="catalog-scroll">
+      <header class="tab-header">
+        <div class="tab-header-row">
+          <div>
+            <h2 class="tab-title">${tabLabel}</h2>
+            ${tabDesc ? html`<p class="tab-description">${tabDesc}</p>` : nothing}
+          </div>
+          ${TAB_ACTIONS[tab] ? html`
+            <button type="button" class="new-btn"
+              @click=${() => {
+                const { opener } = TAB_ACTIONS[tab];
+                if (typeof vm[opener] === 'function') vm[opener]();
+              }}
+            >${TAB_ACTIONS[tab].btnLabel}</button>
+          ` : nothing}
+        </div>
+      </header>
+      ${showSearch ? html`
+        <div class="list-search">
+          ${SEARCH_ICON}
+          <input
+            type="search"
+            placeholder="Search ${tabLabel.toLowerCase()}…"
+            aria-label="Search ${tabLabel.toLowerCase()}"
+            .value=${vm.promptSearch}
+            @input=${(e) => vm.setPromptSearch(e.target.value)}
+          >
+        </div>
+      ` : nothing}
       ${tab === TAB_SKILLS ? renderSkillsCatalog(vm) : nothing}
       ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
       ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
       ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
       ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
-      ${tab === TAB_MEMORY ? nothing : nothing}
     </div>
   `;
 }
@@ -901,7 +906,7 @@ export function renderAgentsCatalog(vm) {
       ${vm.agentRows.length ? html`
         <h3 class="section-h">Config Agents (${vm.agentRows.length})</h3>
         ${vm.agentRows.map((row) => html`
-          <article class="agent-card card-accent-agent" role="listitem" data-testid="agent-config-card">
+          <article class="agent-card" role="listitem" data-testid="agent-config-card">
             <header class="agent-card-header">
               <span class="status-dot status-dot-approved" aria-label="Configured"></span>
               <span class="agent-card-title">${row.key}</span>
@@ -1032,7 +1037,6 @@ export function renderMcpsCatalog(vm) {
             tabindex="0"
             aria-label="View tools for ${s.id}"
             data-testid="mcp-builtin-card"
-            class="card-accent-mcp"
             @click=${(e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))}
             @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))}
           >
@@ -1068,7 +1072,6 @@ export function renderMcpsCatalog(vm) {
             aria-label="Edit MCP server ${key || '(unnamed)'}"
             data-testid="mcp-card"
             data-mcp-key=${key}
-            class="card-accent-mcp"
             @click=${(e) => vm.onMcpCardClick(e, () => vm.onEditMcp(row))}
             @keydown=${(e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(row))}
           >

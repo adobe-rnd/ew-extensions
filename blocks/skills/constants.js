@@ -16,6 +16,16 @@ const CATALOG_TABS = [
   { id: TAB_MEMORY, label: 'Memory' },
 ];
 
+const TAB_LABEL_MAP = Object.fromEntries(CATALOG_TABS.map((t) => [t.id, t.label]));
+
+const TAB_DESCRIPTIONS = {
+  [TAB_PROMPTS]: 'Reusable prompt templates you can send to the assistant.',
+  [TAB_AGENTS]: 'Agent presets with bundled skills and MCP server access.',
+  [TAB_SKILLS]: 'Markdown instructions that guide the assistant\'s behavior.',
+  [TAB_MCPS]: 'Model Context Protocol servers that give the assistant access to external tools.',
+  [TAB_MARKETPLACE]: 'Discover and install community plugins.',
+};
+
 /** Per-tab metadata for the "new" button label and the opener method name. */
 const TAB_ACTIONS = {
   [TAB_SKILLS]: { btnLabel: '+ New Skill', opener: 'openNewSkillEditor' },
@@ -119,6 +129,8 @@ export {
   BUILTIN_TOOL_IDS,
   CATALOG_TABS,
   CATEGORY_OPTIONS,
+  TAB_DESCRIPTIONS,
+  TAB_LABEL_MAP,
   FRESH_FORM_STATE,
   KNOWN_CATEGORY_CLASSES,
   STATUS,
