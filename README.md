@@ -69,15 +69,9 @@ http://localhost:3001/apps/skills/skills.html
 
 ## Adding an extension
 
-Use the **new-extension** Cursor Agent Skill to scaffold a new extension with the correct structure:
+Follow the scaffold guide in `skills/new-extension/` — it covers the file structure, templates, lint/test wiring, and local dev setup for both block and tool extensions.
 
-```
-.cursor/skills/new-extension/
-```
-
-The skill creates all boilerplate files (block contract, LitElement component, CSS, standalone HTML, test stubs) and walks you through lint/test wiring and da-live integration.
-
-For manual setup, see `blocks/skills/` (block extension) or `tools/ew-setup/` (tool extension) as reference implementations.
+For a working reference, see `blocks/skills/` (block extension) or `tools/ew-setup/` (tool extension).
 
 ## Authentication
 
