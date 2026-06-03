@@ -122,6 +122,15 @@ const BUILTIN_TOOL_DETAILS = {
 
 const BUILTIN_TOOL_IDS = Object.values(BUILTIN_TOOL_DETAILS).flat().map((t) => t.name);
 
+/** Max tools shown inline in dependency tree before "N more" truncation. */
+const DEP_TREE_MAX_TOOLS = 6;
+
+/** Minimum tool count before showing the filter input in the tools list. */
+const TOOLS_FILTER_THRESHOLD = 6;
+
+/** Fixed width of the chat drawer sidebar (px). */
+const CHAT_DRAWER_WIDTH = 380;
+
 export {
   BUILTIN_AGENTS,
   BUILTIN_MCP_SERVERS,
@@ -129,6 +138,8 @@ export {
   BUILTIN_TOOL_IDS,
   CATALOG_TABS,
   CATEGORY_OPTIONS,
+  CHAT_DRAWER_WIDTH,
+  DEP_TREE_MAX_TOOLS,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,
@@ -142,4 +153,5 @@ export {
   TAB_MEMORY,
   TAB_PROMPTS,
   TAB_SKILLS,
+  TOOLS_FILTER_THRESHOLD,
 };

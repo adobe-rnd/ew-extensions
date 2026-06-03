@@ -7,6 +7,7 @@ import {
   BUILTIN_TOOL_IDS,
   CATALOG_TABS,
   CATEGORY_OPTIONS,
+  DEP_TREE_MAX_TOOLS,
   KNOWN_CATEGORY_CLASSES,
   STATUS,
   STATUS_TYPE,
@@ -19,6 +20,7 @@ import {
   TAB_MEMORY,
   TAB_PROMPTS,
   TAB_SKILLS,
+  TOOLS_FILTER_THRESHOLD,
 } from './constants.js';
 import {
   skillRowEnabled,
@@ -676,7 +678,7 @@ export function renderMcpToolsList(vm) {
   return html`
     <div class="mcp-tools-section">
       <h4 class="tools-selector-heading">Tools (${tools.length})</h4>
-      ${tools.length > 6 ? html`
+      ${tools.length > TOOLS_FILTER_THRESHOLD ? html`
         <input type="search" class="tools-search-input"
           placeholder="Filter tools…" aria-label="Filter tools"
           .value=${vm.toolsSearch}
@@ -883,16 +885,16 @@ function renderDepTree(vm, agent, isBuiltin) {
             <span class="dep-tree-connector">├─</span>
             <span class="entity-chip">${mcpId}</span>
           </div>
-          ${tools.slice(0, 6).map((t, i) => html`
+          ${tools.slice(0, DEP_TREE_MAX_TOOLS).map((t, i) => html`
             <div class="dep-tree-node dep-tree-indent-2">
-              <span class="dep-tree-connector">${i < Math.min(tools.length, 6) - 1 ? '├─' : '└─'}</span>
+              <span class="dep-tree-connector">${i < Math.min(tools.length, DEP_TREE_MAX_TOOLS) - 1 ? '├─' : '└─'}</span>
               <span class="entity-chip">${t.name}</span>
             </div>
           `)}
-          ${tools.length > 6 ? html`
+          ${tools.length > DEP_TREE_MAX_TOOLS ? html`
             <div class="dep-tree-node dep-tree-indent-2">
               <span class="dep-tree-connector">└─</span>
-              <span class="mcp-tool-inline-desc">+ ${tools.length - 6} more</span>
+              <span class="mcp-tool-inline-desc">+ ${tools.length - DEP_TREE_MAX_TOOLS} more</span>
             </div>
           ` : nothing}
         `;
