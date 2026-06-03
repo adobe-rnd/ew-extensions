@@ -577,7 +577,7 @@ test.describe('Prompts', () => {
     await expect(page.getByLabel('Prompt title')).toBeVisible({ timeout: 5000 });
 
     // The "Associated Tools" heading must not be present inside the open editor
-    const editor = page.locator('.col-editor');
+    const editor = page.locator('.detail-view');
     await expect(editor.getByText('Associated Tools')).not.toBeVisible();
   });
 
@@ -677,12 +677,12 @@ test.describe('Agents', () => {
     await page.getByRole('tab', { name: 'Plugins' }).click();
     await page.getByTestId('agent-builtin-card').first().click();
 
-    // Drawer should open with the agent's tools selector
-    const drawer = page.locator('.col-editor');
-    await expect(drawer).toBeVisible({ timeout: 5000 });
+    // Detail view should open with the agent's tools selector
+    const detail = page.locator('.detail-view');
+    await expect(detail).toBeVisible({ timeout: 5000 });
 
     // At least one tool item should be marked active (agent's tools are pre-selected)
-    await expect(drawer.locator('.tool-item.is-active').first()).toBeVisible({ timeout: 5000 });
+    await expect(detail.locator('.tool-item.is-active').first()).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -720,8 +720,8 @@ test.describe('MCPs', () => {
     await page.getByRole('tab', { name: 'MCPs' }).click();
     await page.getByRole('button', { name: '+ Register MCP' }).click();
 
-    // Drawer opens in "Register MCP Server" mode — no editing label
-    await expect(page.locator('.col-editor')).toBeVisible({ timeout: 5000 });
+    // Detail view opens in "Register MCP Server" mode — no editing label
+    await expect(page.locator('.detail-view')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.editor-title')).toContainText('Register MCP Server');
     await expect(page.getByLabel('MCP server id')).toBeVisible();
     await expect(page.getByLabel('MCP server URL')).toBeVisible();
@@ -802,7 +802,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await builtinCard.focus();
     await page.keyboard.press('Enter');
 
-    await expect(page.locator('.col-editor')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.detail-view')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.mcp-tools-section')).toBeVisible({ timeout: 5000 });
   });
 
@@ -818,7 +818,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await builtinCard.focus();
     await page.keyboard.press('Space');
 
-    await expect(page.locator('.col-editor')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.detail-view')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.mcp-tools-section')).toBeVisible({ timeout: 5000 });
   });
 
@@ -848,7 +848,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
 
     // Menu opens, but editor should still be closed.
     await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.col-editor')).not.toBeVisible();
+    await expect(page.locator('.detail-view')).not.toBeVisible();
   });
 
   test('MCP menu supports keyboard navigation and Enter activation', async ({ page }) => {
@@ -940,7 +940,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
 
     await agentCard.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('.col-editor')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.detail-view')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.tool-item.is-active').first()).toBeVisible({ timeout: 5000 });
   });
 

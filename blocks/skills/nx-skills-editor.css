@@ -224,7 +224,7 @@
   flex-shrink: 0;
 }
 
-/* ─── panels row (catalog list + editor drawer side by side) ─────────────── */
+/* ─── panels area (single column: catalog list / detail view) ────────────── */
 
 .panels {
   display: flex;
@@ -239,40 +239,50 @@
   flex-direction: column;
 }
 
-/* ─── list column: fills 100% until the drawer opens ───────────────────────── */
+/* ─── list column: fills the entire panels area ──────────────────────────── */
 
 .col-list {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--s2-gray-200);
 }
 
-/* ─── editor drawer: collapsed (zero width) by default ─────────────────────── */
+/* ─── detail view (drill-down replaces catalog list) ─────────────────────── */
 
-.col-editor {
-  flex: 0 0 62%;
-  max-width: 0;
-  overflow: hidden;
-  display: flex;
-  transition: max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Drawer slides in when is-drawer-open is on the root */
-.root.is-drawer-open .col-editor {
-  max-width: 62%;
-}
-
-/* Inner content fills the drawer so it never reflows during the slide */
-.col-editor-inner {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
+.detail-view {
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--s2-gray-200);
+  flex: 1;
+  min-height: 0;
   background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+}
+
+.detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s2-spacing-100) var(--s2-spacing-200);
+  border: none;
+  background: none;
+  color: var(--s2-gray-600);
+  font-family: inherit;
+  font-size: var(--s2-body-size-xs);
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.detail-back-btn:hover {
+  color: var(--s2-gray-900);
+}
+
+.detail-back-btn:focus-visible {
+  outline: 2px solid var(--s2-blue-900);
+  outline-offset: -2px;
+}
+
+.detail-back-btn svg {
+  flex-shrink: 0;
 }
 
 /* ─── chat drawer: collapsed by default, slides in from the left ─────────── */
@@ -294,11 +304,6 @@
 .chat-drawer nx-chat {
   flex: 1;
   min-height: 0;
-}
-
-/* When both drawers are open, shrink the editor so everything fits */
-.root.is-drawer-open.is-chat-open .col-editor {
-  max-width: 45%;
 }
 
 /* ─── keyframes ──────────────────────────────────────────────────────────────── */
@@ -415,34 +420,6 @@
   .content-area {
     flex-direction: column;
     overflow: hidden;
-  }
-
-  .panels {
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .col-list {
-    border-right: none;
-    border-bottom: 1px solid var(--s2-gray-200);
-    max-height: 50vh;
-  }
-
-  .col-editor {
-    flex: 0 0 100%;
-    max-width: unset;
-    max-height: 0;
-    transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .root.is-drawer-open .col-editor {
-    max-width: unset;
-    max-height: 50vh;
-  }
-
-  .col-editor-inner {
-    border-left: none;
-    border-top: 1px solid var(--s2-gray-200);
   }
 
   .chat-drawer {

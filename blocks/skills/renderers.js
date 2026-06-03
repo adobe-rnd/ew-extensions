@@ -296,48 +296,14 @@ export function renderChatDrawer(vm) {
   `;
 }
 
-export function renderListCol(vm) {
-  const { catalogTab: tab } = vm;
-  const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
+// ─── back-button label lookup (tab id → display label) ───────────────────────
+const TAB_LABEL_MAP = Object.fromEntries(CATALOG_TABS.map((t) => [t.id, t.label]));
 
-  return html`
-    <div class="col col-list" role="region" aria-label="Catalog">
-      ${TAB_ACTIONS[tab] ? html`
-        <div class="list-header">
-          <div class="list-actions-row">
-            <button type="button" class="new-btn"
-              @click=${() => {
-                const { opener } = TAB_ACTIONS[tab];
-                if (typeof vm[opener] === 'function') vm[opener]();
-              }}
-            >${TAB_ACTIONS[tab].btnLabel}</button>
-          </div>
-        </div>
-      ` : nothing}
-      ${showSearch ? html`
-        <div class="list-search">
-          <input
-            type="search"
-            placeholder="Search…"
-            aria-label="Search list"
-            .value=${vm.promptSearch}
-            @input=${(e) => vm.setPromptSearch(e.target.value)}
-          >
-        </div>
-      ` : nothing}
-      <div class="catalog-scroll">
-        ${tab === TAB_SKILLS ? renderSkillsCatalog(vm) : nothing}
-        ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
-        ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
-        ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
-        ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
-        ${tab === TAB_MEMORY ? html`<div class="empty">Memory is shown in the panel →</div>` : nothing}
-      </div>
-    </div>
-  `;
-}
+/* eslint-disable max-len */
+const BACK_ARROW_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>`;
+/* eslint-enable max-len */
 
-export function renderEditorPanel(vm) {
+function renderDetailView(vm) {
   const tab = vm.catalogTab;
   const isSkill = tab === TAB_SKILLS;
   const isPrompt = tab === TAB_PROMPTS;
@@ -346,45 +312,94 @@ export function renderEditorPanel(vm) {
   const isMemory = tab === TAB_MEMORY;
 
   const title = editorTitle(vm, tab);
+  const showBack = tab !== TAB_MEMORY;
 
   return html`
-    <div class="col-editor" aria-hidden=${vm.isEditorOpen ? 'false' : 'true'}
-      ?inert=${!vm.isEditorOpen}>
-      <div class="col-editor-inner">
-        ${vm.isEditorOpen ? html`
-          <div class="editor-header">
-            <h3 class="editor-title">${title}</h3>
-            <button type="button" class="btn-icon close-btn" aria-label="Close"
-              @click=${() => vm.onCloseEditor()}
-            >✕</button>
-          </div>
-          ${vm.isFormDirty ? html`
-            <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
-          ` : nothing}
-          <div class="editor-body ${isMemory ? 'editor-body-memory' : ''}">
-            ${isSkill ? renderSkillForm(vm) : nothing}
-            ${isAgent && vm.isAgentViewTools ? renderAssociatedToolsSelector(vm) : nothing}
-            ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
-            ${isPrompt ? renderPromptForm(vm) : nothing}
-            ${isMcp && (vm.editingMcpKey || !vm.viewingMcpServerId)
-              ? renderMcpForm(vm) : nothing}
-            ${isMcp && vm.viewingMcpServerId && !vm.editingMcpKey
-              ? renderMcpServerInfo(vm) : nothing}
-            ${isMcp && (vm.viewingMcpServerId || vm.editingMcpKey)
-              ? renderMcpToolsList(vm) : nothing}
-            ${isMemory ? html`
-              <p class="form-hint">.da/agent/memory.md</p>
-              ${renderMemoryContent(vm)}
-            ` : nothing}
-          </div>
-          ${(isSkill || (isAgent && !vm.isAgentViewTools) || isPrompt
-            || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
-            <div class="editor-footer">
-              ${renderEditorFooter(vm, tab)}
-            </div>
-          ` : nothing}
+    <div class="detail-view">
+      ${showBack ? html`
+        <button type="button" class="detail-back-btn"
+          @click=${() => vm.onCloseEditor()}
+        >${BACK_ARROW_ICON}<span>Back to ${TAB_LABEL_MAP[tab] || 'List'}</span></button>
+      ` : nothing}
+      <div class="editor-header">
+        <h3 class="editor-title">${title}</h3>
+      </div>
+      ${vm.isFormDirty ? html`
+        <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
+      ` : nothing}
+      <div class="editor-body ${isMemory ? 'editor-body-memory' : ''}">
+        ${isSkill ? renderSkillForm(vm) : nothing}
+        ${isAgent && vm.isAgentViewTools ? renderAssociatedToolsSelector(vm) : nothing}
+        ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
+        ${isPrompt ? renderPromptForm(vm) : nothing}
+        ${isMcp && (vm.editingMcpKey || !vm.viewingMcpServerId)
+          ? renderMcpForm(vm) : nothing}
+        ${isMcp && vm.viewingMcpServerId && !vm.editingMcpKey
+          ? renderMcpServerInfo(vm) : nothing}
+        ${isMcp && (vm.viewingMcpServerId || vm.editingMcpKey)
+          ? renderMcpToolsList(vm) : nothing}
+        ${isMemory ? html`
+          <p class="form-hint">.da/agent/memory.md</p>
+          ${renderMemoryContent(vm)}
         ` : nothing}
       </div>
+      ${(isSkill || (isAgent && !vm.isAgentViewTools) || isPrompt
+        || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
+        <div class="editor-footer">
+          ${renderEditorFooter(vm, tab)}
+        </div>
+      ` : nothing}
+    </div>
+  `;
+}
+
+function renderCatalogView(vm) {
+  const { catalogTab: tab } = vm;
+  const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
+
+  return html`
+    ${TAB_ACTIONS[tab] ? html`
+      <div class="list-header">
+        <div class="list-actions-row">
+          <button type="button" class="new-btn"
+            @click=${() => {
+              const { opener } = TAB_ACTIONS[tab];
+              if (typeof vm[opener] === 'function') vm[opener]();
+            }}
+          >${TAB_ACTIONS[tab].btnLabel}</button>
+        </div>
+      </div>
+    ` : nothing}
+    ${showSearch ? html`
+      <div class="list-search">
+        <input
+          type="search"
+          placeholder="Search…"
+          aria-label="Search list"
+          .value=${vm.promptSearch}
+          @input=${(e) => vm.setPromptSearch(e.target.value)}
+        >
+      </div>
+    ` : nothing}
+    <div class="catalog-scroll">
+      ${tab === TAB_SKILLS ? renderSkillsCatalog(vm) : nothing}
+      ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
+      ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
+      ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
+      ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
+      ${tab === TAB_MEMORY ? nothing : nothing}
+    </div>
+  `;
+}
+
+export function renderListCol(vm) {
+  const isMemoryDirect = vm.catalogTab === TAB_MEMORY;
+
+  return html`
+    <div class="col col-list" role="region" aria-label="Catalog">
+      ${vm.isEditorOpen || isMemoryDirect
+        ? renderDetailView(vm)
+        : renderCatalogView(vm)}
     </div>
   `;
 }

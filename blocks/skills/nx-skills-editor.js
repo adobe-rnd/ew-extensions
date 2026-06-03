@@ -50,7 +50,6 @@ import {
   renderTopNav,
   renderChatDrawer,
   renderListCol,
-  renderEditorPanel,
 } from './renderers.js';
 import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
 import {
@@ -289,19 +288,21 @@ class NxSkillsEditor extends LitElement {
     if (changed?.has('_catalogTab') && this._catalogTab === 'mcps') {
       this._ensureMcpToolsLoaded();
     }
-    // Move focus into the drawer on open; restore it to the trigger on close.
+    // Move focus into the detail view on open; restore it to the trigger on close.
     if (changed?.has('_isEditorOpen')) {
       if (this._isEditorOpen) {
         this.updateComplete.then(() => {
           const firstFocusable = this.shadowRoot.querySelector(
-            '.col-editor input:not([disabled]), .col-editor textarea:not([disabled]), .col-editor button:not([disabled])',
+            '.detail-view input:not([disabled]), .detail-view textarea:not([disabled]), .detail-view button:not([disabled])',
           );
           firstFocusable?.focus();
         });
       } else if (this._editorTriggerSelector) {
-        const trigger = this.shadowRoot.querySelector(this._editorTriggerSelector);
-        trigger?.focus();
-        this._editorTriggerSelector = null;
+        this.updateComplete.then(() => {
+          const trigger = this.shadowRoot.querySelector(this._editorTriggerSelector);
+          trigger?.focus();
+          this._editorTriggerSelector = null;
+        });
       }
     }
     // Persist navigation state when structural nav properties change.
@@ -1498,7 +1499,6 @@ class NxSkillsEditor extends LitElement {
     }
     const rootCls = [
       'root',
-      this._isEditorOpen ? 'is-drawer-open' : '',
       this._isChatOpen ? 'is-chat-open' : '',
     ].filter(Boolean).join(' ');
 
@@ -1517,7 +1517,6 @@ class NxSkillsEditor extends LitElement {
           ${renderTopNav(vm)}
           <div class="panels">
             ${renderListCol(vm)}
-            ${renderEditorPanel(vm)}
           </div>
         </div>
       </div>
