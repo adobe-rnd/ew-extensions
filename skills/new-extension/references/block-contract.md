@@ -81,7 +81,7 @@ da-live uses `strict-dynamic` CSP with a nonce. Cross-origin ew-extensions modul
 
 ## LitElement conventions
 
-- Import Lit from the `da-lit` import map: `import { LitElement, html, css } from 'da-lit'`
-- Use `createRenderRoot() { return this; }` to render into the light DOM (consistent with da-nx patterns)
-- Load co-located CSS via `<link>` elements (see `templates.md` for the pattern)
+- Import Lit from the `da-lit` import map: `import { LitElement, html, nothing } from 'da-lit'`
+- **Shadow DOM** — block components use LitElement's default shadow DOM (do NOT override `createRenderRoot`). Tool extensions use light DOM (`createRenderRoot() { return this; }`) instead.
+- **CSS loading** — use `loadStyle(import.meta.url)` (inlined from da-nx) which returns a `CSSStyleSheet`, then apply via `this.shadowRoot.adoptedStyleSheets = [styles]` in `connectedCallback`. See `templates.md` for the full pattern.
 - Custom element tags use `nx-{name}` prefix for blocks (e.g. `nx-skills-editor`)

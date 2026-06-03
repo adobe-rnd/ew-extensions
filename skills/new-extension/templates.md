@@ -23,12 +23,47 @@ export default function decorate(block) {
 }
 ```
 
-### `blocks/__NAME__/__TAG__.js` — Main LitElement
+### `blocks/__NAME__/utils/utils.js` — loadStyle utility
+
+Inlined from `da-nx/nx2/utils/utils.js`. Loads CSS as `CSSStyleSheet` objects
+for use with `adoptedStyleSheets`.
 
 ```js
-import { LitElement, html, css } from 'da-lit';
+export const loadStyle = (() => {
+  const cache = {};
 
-const STYLES = new URL('./__TAG__.css', import.meta.url);
+  return (supplied) => {
+    const path = supplied.replace('.js', '.css');
+
+    try {
+      cache[path] ??= import(path, { with: { type: 'css' } })
+        .then(({ default: sheet }) => sheet);
+    } catch {
+      cache[path] ??= new Promise((resolve) => {
+        (async () => {
+          const resp = await fetch(path);
+          const text = await resp.text();
+          const sheet = new CSSStyleSheet();
+          sheet.path = path;
+          sheet.replaceSync(text);
+          resolve(sheet);
+        })();
+      });
+    }
+    return cache[path];
+  };
+})();
+```
+
+### `blocks/__NAME__/__TAG__.js` — Main LitElement
+
+Uses shadow DOM (LitElement default) with `adoptedStyleSheets` for scoped CSS.
+
+```js
+import { LitElement, html, nothing } from 'da-lit';
+import { loadStyle } from './utils/utils.js';
+
+const styles = await loadStyle(import.meta.url);
 
 class __CLASS__ extends LitElement {
   static properties = {
@@ -40,18 +75,9 @@ class __CLASS__ extends LitElement {
     this._ready = false;
   }
 
-  createRenderRoot() { return this; }
-
   connectedCallback() {
     super.connectedCallback();
-    this._loadStyles();
-  }
-
-  async _loadStyles() {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = STYLES.href;
-    document.head.append(link);
+    this.shadowRoot.adoptedStyleSheets = [styles];
     this._ready = true;
   }
 
@@ -69,19 +95,13 @@ class __CLASS__ extends LitElement {
 customElements.define('__TAG__', __CLASS__);
 ```
 
-### `blocks/__NAME__/__TAG__.css` — Component styles
+### `blocks/__NAME__/__TAG__.css` — Component styles (shadow DOM scoped)
 
 ```css
 .__NAME__-container {
   padding: 24px;
   font-family: adobe-clean, 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
 }
-```
-
-### `blocks/__NAME__/__NAME__.css` — Block-level styles (optional)
-
-```css
-/* Block-level layout — applied by da-nx loadBlock */
 ```
 
 ### `blocks/__NAME__/__NAME__.html` — Standalone dev page

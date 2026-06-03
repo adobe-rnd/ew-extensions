@@ -33,9 +33,10 @@ Use AskQuestion to collect:
 blocks/{name}/
 ├── {name}.js          # Block contract entry point
 ├── {name}.html        # Standalone HTML for local dev / testing
-├── {name}.css         # Block-level styles (optional, loaded by loadStyle)
-├── nx-{name}.js       # Main LitElement custom element
-└── nx-{name}.css      # Component styles
+├── nx-{name}.js       # Main LitElement (shadow DOM + adoptedStyleSheets)
+├── nx-{name}.css      # Component styles (scoped via adoptedStyleSheets)
+└── utils/
+    └── utils.js       # loadStyle utility (inlined from da-nx)
 ```
 
 ### Tool extension: `tools/{name}/`
