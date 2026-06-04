@@ -6,7 +6,7 @@ const CHANNEL_NAME = 'da-drafts-preview';
 
 async function livePreviewLogin(org, repo, token) {
   try {
-    await fetch(`https://main--${repo}--${org}.aem.page/gimme_cookie`, {
+    await fetch(`https://main--${repo}--${org}.preview.da.live/gimme_cookie`, {
       credentials: 'include',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -58,7 +58,7 @@ class DraftsPreviewApp extends LitElement {
       if (token && project?.org && project?.repo) {
         livePreviewLogin(project.org, project.repo, token);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   disconnectedCallback() {
@@ -71,7 +71,7 @@ class DraftsPreviewApp extends LitElement {
     const prefix = `/${this._org}/${this._site}`;
     const rel = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path;
     const withoutExt = item.ext ? rel.slice(0, -(item.ext.length + 1)) : rel;
-    return `https://main--${this._site}--${this._org}.aem.page${withoutExt}`;
+    return `https://main--${this._site}--${this._org}.preview.da.live${withoutExt}`;
   }
 
   _openInCanvas(item) {
