@@ -280,6 +280,12 @@ class NerveCenterApp extends LitElement {
     return html`
       ${pending.map((obs) => html`
         <div class="card observation-item">
+          <div class="obs-meta">
+            <span class="badge badge--${obs.status?.toLowerCase()}">${obs.status}</span>
+            ${obs.priority ? html`<span class="badge badge--priority--${obs.priority?.toLowerCase()}">${obs.priority}</span>` : nothing}
+            ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
+          </div>
+
           <div class="obs-header">
             <p class="obs-name">${obs.name}</p>
             <button class="obs-complete-btn" @click=${() => this._toggleComplete(obs.id)}>
@@ -287,13 +293,12 @@ class NerveCenterApp extends LitElement {
             </button>
           </div>
           ${obs.description ? html`<p class="obs-description">${this._renderWithLinks(obs.description)}</p>` : nothing}
-          <div class="obs-meta">
-            <span class="badge">${obs.status}</span>
-            ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
-          </div>
           ${obs.confidence ? html`
-            <div class="confidence-bar">
-              <div class="confidence-fill confidence-fill--${obs.confidence}"></div>
+            <div class="confidence-wrap">
+              <span class="confidence-label">Confidence</span>
+              <div class="confidence-bar">
+                <div class="confidence-fill confidence-fill--${obs.confidence}"></div>
+              </div>
             </div>
           ` : nothing}
           ${this._renderDrafts(obs.id)}
