@@ -27,7 +27,7 @@
 /* ─── MCP tool inline description (used in dependency tree) ────────────────── */
 
 .mcp-tool-inline-desc {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -55,7 +55,7 @@
   padding: var(--s2-spacing-75) var(--s2-spacing-100);
   border: 1px solid color-mix(in srgb, var(--s2-gray-200) 60%, transparent);
   border-radius: var(--s2-corner-radius-200);
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+  background: transparent;
   font-size: var(--s2-body-size-xs);
 }
 
@@ -78,17 +78,17 @@
 
 /* ─── tab header (title + description above the list) ──────────────────────── */
 
-.tab-header { margin-bottom: 16px; }
+.tab-header { margin-bottom: var(--s2-spacing-300); }
 
 .tab-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--s2-spacing-300);
 }
 
 .tab-title {
-  font-size: 18px;
+  font-size: var(--s2-body-size-l);
   font-weight: 600;
   color: var(--s2-gray-900);
   margin: 0;
@@ -96,7 +96,7 @@
 }
 
 .tab-description {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-600);
   margin: 4px 0 0;
   line-height: 1.4;
@@ -106,26 +106,43 @@
   flex-shrink: 0;
   padding: 6px 14px;
   border: 1px dashed var(--s2-gray-400);
-  border-radius: 8px;
+  border-radius: var(--s2-corner-radius-500);
   background: none;
   color: var(--s2-gray-600);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
-.new-btn:hover {
+.new-btn:hover:not(:disabled) {
   border-color: var(--s2-gray-900);
   color: var(--s2-gray-900);
   background: light-dark(var(--s2-gray-100), color-mix(in srgb, var(--s2-gray-200) 30%, transparent));
+}
+
+.new-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.new-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.new-btn-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ─── list search (with icon) ──────────────────────────────────────────────── */
 
 .list-search {
   position: relative;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2-spacing-300);
 }
 
 .list-search .search-icon {
@@ -141,11 +158,11 @@
   width: 100%;
   padding: 10px 12px 10px 34px;
   border: 1px solid var(--s2-gray-300);
-  border-radius: 8px;
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-100));
+  border-radius: var(--s2-corner-radius-500);
+  background: transparent;
   color: var(--s2-gray-900);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--s2-body-size-s);
   box-sizing: border-box;
   outline: none;
   transition: border-color 0.15s;
@@ -158,16 +175,17 @@
 .catalog-scroll {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 24px;
+  gap: var(--s2-spacing-100);
+  padding: var(--s2-spacing-400);
 }
 
 .catalog-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--s2-spacing-75);
+  justify-content: space-between;
+  gap: var(--s2-spacing-200);
   flex-wrap: wrap;
-  padding: var(--s2-spacing-100) 0 var(--s2-spacing-50);
+  padding: var(--s2-spacing-100) 0 var(--s2-spacing-200);
 }
 
 .filter-chip {
@@ -175,11 +193,11 @@
   align-items: center;
   padding: 4px 10px;
   border: 1px solid var(--s2-gray-300);
-  border-radius: 8px;
+  border-radius: var(--s2-corner-radius-500);
   background: none;
   color: var(--s2-gray-700);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   cursor: pointer;
   outline: none;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -195,14 +213,19 @@
 
 /* ─── prompt rows ─────────────────────────────────────────────────────────────── */
 
+.prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-100);
+}
+
 .prompt-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--s2-spacing-200);
   padding: 14px 16px;
-  border: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--s2-gray-200) 40%, transparent);
-  border-radius: 0;
+  border: 1px solid light-dark(var(--s2-gray-200), var(--s2-gray-100));
+  border-radius: var(--s2-corner-radius-200);
   background: transparent;
   cursor: pointer;
   transition: background 0.15s;
@@ -213,10 +236,12 @@
     color-mix(in srgb, var(--s2-gray-100) 50%, transparent),
     color-mix(in srgb, var(--s2-gray-75) 50%, transparent)
   );
+  border-color: light-dark(var(--s2-gray-300), var(--s2-gray-200));
 }
 
 .prompt-row.is-selected {
   background: light-dark(var(--s2-gray-100), var(--s2-gray-75));
+  border-color: light-dark(var(--s2-gray-300), var(--s2-gray-200));
 }
 
 .prompt-row-pill {
@@ -242,12 +267,12 @@
 .prompt-row-title-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--s2-spacing-100);
   min-width: 0;
 }
 
 .prompt-row-title {
-  font-size: 14px;
+  font-size: var(--s2-body-size-s);
   font-weight: 500;
   color: var(--s2-gray-900);
   overflow: hidden;
@@ -256,7 +281,7 @@
 }
 
 .prompt-row-desc {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
   line-height: 1.4;
   overflow: hidden;
@@ -281,12 +306,18 @@
 
 .section-h,
 .tools-selector-heading {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   font-weight: 600;
   color: var(--s2-gray-600);
 }
 
-.section-h { margin: 24px 0 12px; }
+.section-h { margin: var(--s2-spacing-400) 0 var(--s2-spacing-200); }
+
+.section-h-count {
+  font-weight: 400;
+  color: var(--s2-gray-500);
+  margin-left: 4px;
+}
 .tools-selector-heading { margin: 0; }
 
 /* ─── plugin card grid (agents tab — matches AO's Plugins layout) ──────────── */
@@ -294,14 +325,14 @@
 .plugin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  gap: var(--s2-spacing-200);
 }
 
 .plugin-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: var(--s2-spacing-100);
+  padding: var(--s2-spacing-300);
   border: 1px solid color-mix(in srgb, var(--s2-gray-200) 60%, transparent);
   border-radius: 12px;
   background: transparent;
@@ -344,7 +375,7 @@
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 8px;
+  border-radius: var(--s2-corner-radius-500);
   background: var(--s2-gray-200);
   color: var(--s2-gray-600);
 }
@@ -357,7 +388,7 @@
 }
 
 .plugin-card-name {
-  font-size: 14px;
+  font-size: var(--s2-body-size-s);
   font-weight: 500;
   color: var(--s2-gray-900);
   overflow: hidden;
@@ -366,13 +397,13 @@
 }
 
 .plugin-card-source {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
 }
 
 .plugin-card-desc {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-600);
   line-height: 1.4;
   display: -webkit-box;
@@ -384,7 +415,7 @@
 .plugin-card-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s2-spacing-100);
   flex-wrap: wrap;
   margin-top: auto;
   padding-top: 4px;
@@ -392,34 +423,74 @@
 
 .plugin-card-badge {
   display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--s2-corner-radius-100);
+  font-size: var(--s2-body-size-xxs);
   font-weight: 600;
   letter-spacing: 0.03em;
   background: var(--s2-gray-200);
   color: var(--s2-gray-700);
 }
 
+.plugin-card-badge.is-builtin {
+  background: light-dark(var(--s2-gray-100), var(--s2-gray-200));
+  color: var(--s2-gray-500);
+  font-weight: 500;
+}
+
 .plugin-card-count {
-  font-size: 11px;
+  font-size: var(--s2-body-size-xxs);
   color: var(--s2-gray-500);
 }
 
 .plugin-card-action {
   margin-left: auto;
-  padding: 0;
-  border: none;
+  padding: 2px 8px;
+  border: 1px solid var(--s2-gray-300);
+  border-radius: var(--s2-corner-radius-100);
   background: none;
   font-family: inherit;
-  font-size: 11px;
-  color: var(--s2-gray-500);
+  font-size: var(--s2-body-size-xxs);
+  color: var(--s2-gray-600);
   cursor: pointer;
-  transition: color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
-.plugin-card-action:hover {
-  color: var(--s2-red-700);
+.plugin-card-action.is-uninstall:hover {
+  border-color: light-dark(var(--s2-red-400), var(--s2-red-600));
+  color: light-dark(var(--s2-red-900), var(--s2-red-700));
+  background: light-dark(var(--s2-red-100), color-mix(in srgb, var(--s2-red-600) 10%, transparent));
+}
+
+/* row-level badge & action for list view */
+.plugin-row-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--s2-corner-radius-100);
+  font-size: var(--s2-body-size-xxs);
+  font-weight: 500;
+  background: light-dark(var(--s2-gray-100), var(--s2-gray-200));
+  color: var(--s2-gray-500);
+}
+
+.plugin-row-action {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--s2-gray-300);
+  border-radius: var(--s2-corner-radius-100);
+  background: none;
+  font-family: inherit;
+  font-size: var(--s2-body-size-xxs);
+  color: var(--s2-gray-600);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.plugin-row-action.is-uninstall:hover {
+  border-color: light-dark(var(--s2-red-400), var(--s2-red-600));
+  color: light-dark(var(--s2-red-900), var(--s2-red-700));
+  background: light-dark(var(--s2-red-100), color-mix(in srgb, var(--s2-red-600) 10%, transparent));
 }
 
 
@@ -487,23 +558,69 @@
   color: var(--s2-gray-900);
 }
 
+/* ─── filter pills (AO-style chip bar) ─────────────────────────────────────── */
+
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--s2-spacing-100);
+  margin-bottom: var(--s2-spacing-300);
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid light-dark(var(--s2-gray-200), var(--s2-gray-100));
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--s2-body-size-xs);
+  color: var(--s2-gray-600);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filter-pill:hover {
+  border-color: light-dark(var(--s2-gray-400), var(--s2-gray-300));
+  color: var(--s2-gray-800);
+}
+
+.filter-pill.is-active {
+  background: var(--s2-gray-200);
+  border-color: var(--s2-gray-300);
+  color: var(--s2-gray-900);
+  font-weight: 500;
+}
+
+.filter-pill-count {
+  font-size: var(--s2-body-size-xxs);
+  color: var(--s2-gray-500);
+}
+
+.filter-pill.is-active .filter-pill-count {
+  color: var(--s2-gray-700);
+}
+
 /* ─── catalog list rows (list-mode alternative to plugin-grid) ─────────────── */
 
 .catalog-list {
   display: flex;
   flex-direction: column;
+  gap: var(--s2-spacing-100);
 }
 
 .catalog-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--s2-spacing-200);
   padding: 14px 16px;
-  border: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--s2-gray-200) 40%, transparent);
+  border: 1px solid light-dark(var(--s2-gray-200), var(--s2-gray-100));
+  border-radius: var(--s2-corner-radius-200);
   background: transparent;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .catalog-row:hover {
@@ -511,10 +628,12 @@
     color-mix(in srgb, var(--s2-gray-100) 50%, transparent),
     color-mix(in srgb, var(--s2-gray-75) 50%, transparent)
   );
+  border-color: light-dark(var(--s2-gray-300), var(--s2-gray-200));
 }
 
 .catalog-row.is-selected {
   background: light-dark(var(--s2-gray-100), var(--s2-gray-75));
+  border-color: light-dark(var(--s2-gray-300), var(--s2-gray-200));
 }
 
 .catalog-row-pill {
@@ -540,12 +659,12 @@
 .catalog-row-title-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--s2-spacing-100);
   min-width: 0;
 }
 
 .catalog-row-name {
-  font-size: 14px;
+  font-size: var(--s2-body-size-s);
   font-weight: 500;
   color: var(--s2-gray-900);
   overflow: hidden;
@@ -554,14 +673,14 @@
 }
 
 .catalog-row-meta {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .catalog-row-desc {
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
   line-height: 1.4;
   overflow: hidden;

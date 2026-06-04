@@ -1,5 +1,6 @@
 import { html, nothing } from 'da-lit';
 import { extractTitle } from './utils/markdown.js';
+import { parseFrontmatter } from './utils/skill-frontmatter.js';
 import {
   BUILTIN_AGENTS,
   BUILTIN_MCP_SERVERS,
@@ -43,6 +44,10 @@ const TAB_ICON_MAP = {
   [TAB_MEMORY]: html`<svg viewBox="0 0 20 20" fill="none"><g clip-path="url(#ew-mem)"><path d="M6.65918 1.02734C7.1404 0.898469 7.64517 0.882385 8.13379 0.979492C8.62271 1.07675 9.08303 1.2854 9.47852 1.58887C9.67116 1.73671 9.84587 1.90522 10 2.09082C10.154 1.90536 10.329 1.73663 10.5215 1.58887C10.9169 1.28547 11.3774 1.07679 11.8662 0.979492C12.3548 0.882336 12.8596 0.898508 13.3408 1.02734C13.8223 1.15635 14.2678 1.39501 14.6426 1.72363C15.0174 2.05234 15.3122 2.46325 15.5029 2.92383C15.6092 3.18058 15.681 3.44909 15.7188 3.72266C16.1152 3.8856 16.4853 4.10951 16.8135 4.38867C17.2853 4.79007 17.6598 5.29389 17.9082 5.86133C18.1566 6.42864 18.2731 7.04529 18.248 7.66406C18.2308 8.0879 18.1449 8.50501 18 8.90137C18.3235 9.25235 18.5874 9.65761 18.7725 10.1045C19.1163 10.9348 19.1769 11.8555 18.9443 12.7236C18.7117 13.5918 18.1984 14.3591 17.4854 14.9062C17.4627 14.9236 17.438 14.9382 17.415 14.9551C17.4189 15.3498 17.3674 15.744 17.2578 16.125C17.1035 16.6613 16.841 17.1609 16.4863 17.5918C16.1317 18.0226 15.6919 18.3764 15.1953 18.6309C14.6989 18.8851 14.1552 19.0351 13.5986 19.0713C13.0418 19.1074 12.4824 19.0289 11.957 18.8408C11.4319 18.6527 10.9502 18.3587 10.543 17.9775C10.3411 17.7886 10.1589 17.58 10 17.3555C9.84116 17.5799 9.65975 17.7886 9.45801 17.9775C9.0507 18.3589 8.5692 18.6527 8.04395 18.8408C7.51874 19.0289 6.96 19.1073 6.40332 19.0713C5.84655 19.0352 5.30227 18.8852 4.80566 18.6309C4.30904 18.3764 3.86933 18.0226 3.51465 17.5918C3.16 17.161 2.89746 16.6613 2.74316 16.125C2.63361 15.744 2.58114 15.3498 2.58496 14.9551C2.56199 14.9382 2.5373 14.9236 2.51465 14.9062C1.80165 14.3591 1.28835 13.5917 1.05566 12.7236C0.823129 11.8556 0.883709 10.9348 1.22754 10.1045C1.41263 9.65761 1.67546 9.2514 1.99902 8.90039C1.85418 8.50449 1.77012 8.08735 1.75293 7.66406C1.72793 7.04532 1.84443 6.42861 2.09277 5.86133C2.34124 5.29395 2.71572 4.79002 3.1875 4.38867C3.51558 4.10964 3.88506 3.88552 4.28125 3.72266C4.31898 3.44916 4.39085 3.18053 4.49707 2.92383C4.68776 2.46342 4.98282 2.05228 5.35742 1.72363C5.73208 1.3951 6.17788 1.15638 6.65918 1.02734ZM7.8418 2.4502C7.57861 2.39789 7.30606 2.40711 7.04688 2.47656C6.78782 2.54608 6.54736 2.67471 6.3457 2.85156C6.14429 3.02842 5.9854 3.24943 5.88281 3.49707C5.78027 3.74486 5.7364 4.01364 5.75391 4.28125C5.77152 4.54894 5.85025 4.80966 5.98438 5.04199C6.1914 5.40067 6.06861 5.8593 5.70996 6.06641C5.35136 6.27313 4.89262 6.15045 4.68555 5.79199C4.59662 5.63798 4.5213 5.47695 4.45898 5.31152C4.35416 5.37728 4.25392 5.45068 4.15918 5.53125C3.86083 5.7851 3.62396 6.10407 3.4668 6.46289C3.3097 6.82177 3.23614 7.21208 3.25195 7.60352C3.25785 7.74859 3.27575 7.8929 3.30566 8.03418C3.57434 8.02462 3.83973 8.15646 3.9834 8.40527C4.18997 8.76372 4.06709 9.22252 3.70898 9.42969C3.21653 9.71404 2.83088 10.1533 2.61328 10.6787C2.39585 11.204 2.35774 11.7868 2.50488 12.3359C2.65215 12.8849 2.97677 13.3707 3.42773 13.7168C3.87871 14.0626 4.43167 14.2499 5 14.25C5.41393 14.2502 5.74985 14.5861 5.75 15C5.74984 15.414 5.41394 15.7498 5 15.75C4.72035 15.75 4.44354 15.7172 4.17285 15.6611C4.17721 15.6775 4.17988 15.6946 4.18457 15.7109C4.2822 16.0501 4.44852 16.3662 4.67285 16.6387C4.89718 16.9111 5.17521 17.135 5.48926 17.2959C5.8034 17.4568 6.1478 17.5514 6.5 17.5742C6.85221 17.597 7.2058 17.5477 7.53809 17.4287C7.87027 17.3097 8.175 17.1239 8.43262 16.8828C8.69032 16.6415 8.89648 16.3492 9.03711 16.0254C9.17648 15.7043 9.24841 15.3578 9.25 15.0078V10.7236C8.80212 11.1015 8.27906 11.3864 7.70996 11.5527C7.31262 11.6686 6.89652 11.4412 6.78027 11.0439C6.66416 10.6465 6.89266 10.2296 7.29004 10.1133C7.85519 9.94797 8.35175 9.60386 8.70508 9.13281C9.05837 8.66171 9.24955 8.08885 9.25 7.5V4.16699C9.25 3.89864 9.18799 3.63327 9.06934 3.39258C8.95062 3.15201 8.77826 2.94163 8.56543 2.77832C8.35258 2.61503 8.1049 2.50258 7.8418 2.4502ZM12.9531 2.47656C12.6939 2.40715 12.4214 2.39784 12.1582 2.4502C11.8952 2.50262 11.6473 2.6151 11.4346 2.77832C11.2219 2.94159 11.0493 3.15218 10.9307 3.39258C10.8121 3.63319 10.75 3.89876 10.75 4.16699V7.5C10.7505 8.08878 10.9417 8.66174 11.2949 9.13281C11.6482 9.60384 12.1449 9.94792 12.71 10.1133C13.1075 10.2295 13.3359 10.6464 13.2197 11.0439C13.1034 11.4413 12.6874 11.6687 12.29 11.5527C11.7209 11.3863 11.1979 11.1016 10.75 10.7236V14.9834C10.7501 14.9885 10.751 14.9939 10.751 14.999C10.7514 15.3521 10.8242 15.7016 10.9648 16.0254C11.1055 16.3492 11.3107 16.6416 11.5684 16.8828C11.826 17.1239 12.1307 17.3097 12.4629 17.4287C12.7951 17.5476 13.1489 17.597 13.501 17.5742C13.8531 17.5513 14.1976 17.4568 14.5117 17.2959C14.8258 17.135 15.1038 16.9111 15.3281 16.6387C15.5524 16.3661 15.7188 16.0501 15.8164 15.7109C15.8211 15.6946 15.8228 15.6775 15.8271 15.6611C15.5564 15.7172 15.2797 15.75 15 15.75C14.586 15.7499 14.2501 15.414 14.25 15C14.2501 14.586 14.586 14.2502 15 14.25C15.5684 14.25 16.1212 14.0627 16.5723 13.7168C17.0232 13.3707 17.3479 12.885 17.4951 12.3359C17.6423 11.7868 17.6042 11.204 17.3867 10.6787C17.1692 10.1534 16.7843 9.71405 16.292 9.42969C15.9335 9.22258 15.8107 8.76391 16.0176 8.40527C16.1611 8.15688 16.4254 8.02506 16.6934 8.03418C16.7233 7.8928 16.7431 7.7487 16.749 7.60352C16.7648 7.21203 16.6913 6.82181 16.5342 6.46289C16.377 6.10393 16.1403 5.78518 15.8418 5.53125C15.7469 5.4505 15.646 5.37742 15.541 5.31152C15.4787 5.47686 15.4033 5.63806 15.3145 5.79199C15.1072 6.15034 14.6486 6.27344 14.29 6.06641C13.9316 5.85933 13.8089 5.40058 14.0156 5.04199C14.1497 4.80968 14.2285 4.54892 14.2461 4.28125C14.2636 4.01354 14.2198 3.74494 14.1172 3.49707C14.0145 3.24926 13.8559 3.02848 13.6543 2.85156C13.4525 2.67462 13.2123 2.54605 12.9531 2.47656Z" fill="currentColor"/></g><defs><clipPath id="ew-mem"><rect width="20" height="20" fill="white"/></clipPath></defs></svg>`,
 };
 /* eslint-enable max-len */
+
+const ACTION_ICONS = {
+  storefront: html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.5V14h12V6.5"/><path d="M1 3h14v3.5H1z"/><path d="M6.5 10h3v4h-3z"/></svg>`,
+};
 
 // ─── private helpers ──────────────────────────────────────────────────────────
 
@@ -99,6 +104,10 @@ function agentsUsingSkill(vm, skillId) {
   return result;
 }
 
+function isPluginSkill(skillId) {
+  return BUILTIN_AGENTS.some((a) => a.skills?.includes(skillId));
+}
+
 // ─── shared icon constants (used in catalog cards and detail views) ───────────
 const DRILL_CHEVRON = html`<svg class="drill-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>`;
 const PROMPT_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`;
@@ -130,20 +139,20 @@ function renderSkillCard(vm, id) {
   const body = vm.skills[id] || '';
   const title = extractTitle(body);
   const status = vm.skillStatuses[id] || STATUS.APPROVED;
-  const isEditing = vm.isFormEdit && vm.formSkillId === id;
+  const isViewing = vm.viewingSkillId === id;
   const isDraft = status === STATUS.DRAFT;
   const usedBy = agentsUsingSkill(vm, id);
   const lineCount = body.split('\n').length;
 
   return html`
-    <article class="plugin-card ${isEditing ? 'is-selected' : ''}"
+    <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
       role="button"
       tabindex="0"
-      aria-label="Edit skill ${id}"
+      aria-label="View skill ${id}"
       data-testid="skill-card"
       data-skill-id=${id}
-      @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
-      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
+      @click=${(e) => vm.onCardClick(e, () => vm.onViewSkill(id))}
+      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onViewSkill(id))}
     >
       <header class="plugin-card-top">
         <span class="plugin-card-pill">${SKILL_ICON}</span>
@@ -166,17 +175,17 @@ function renderSkillCard(vm, id) {
 function renderSkillRow(vm, id) {
   const body = vm.skills[id] || '';
   const title = extractTitle(body);
-  const isEditing = vm.isFormEdit && vm.formSkillId === id;
+  const isViewing = vm.viewingSkillId === id;
   const usedBy = agentsUsingSkill(vm, id);
 
   return html`
-    <div class="catalog-row ${isEditing ? 'is-selected' : ''}" role="button"
+    <div class="catalog-row ${isViewing ? 'is-selected' : ''}" role="button"
       tabindex="0"
-      aria-label="Edit skill ${id}"
+      aria-label="View skill ${id}"
       data-testid="skill-card"
       data-skill-id=${id}
-      @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
-      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
+      @click=${(e) => vm.onCardClick(e, () => vm.onViewSkill(id))}
+      @keydown=${(e) => vm.onCardKeydown(e, () => vm.onViewSkill(id))}
     >
       <span class="catalog-row-pill">${SKILL_ICON}</span>
       <div class="catalog-row-body">
@@ -189,6 +198,63 @@ function renderSkillRow(vm, id) {
         ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
       ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+// ─── Skill detail drill-down (AO-style) ──────────────────────────────────────
+
+const FILE_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6L9 2z"/><path d="M9 2v4h4"/></svg>`;
+
+function renderSkillDetail(vm) {
+  const id = vm.viewingSkillId;
+  const body = vm.skills[id] || '';
+  const fm = parseFrontmatter(body);
+  const name = fm?.fields?.name || id;
+  const description = fm?.fields?.description || extractTitle(body) || '';
+  const status = vm.skillStatuses[id] || STATUS.APPROVED;
+  const isDraft = status === STATUS.DRAFT;
+  const usedBy = agentsUsingSkill(vm, id);
+  const readOnly = isPluginSkill(id);
+  const pluginName = usedBy.length ? usedBy[0] : null;
+  const origin = readOnly ? 'built-in' : 'user-created';
+
+  return html`
+    <div class="skill-detail">
+      <header class="skill-detail-header">
+        <div class="skill-detail-identity">
+          <span class="skill-detail-icon">${TAB_ICON_MAP[TAB_SKILLS]}</span>
+          <div>
+            <span class="skill-detail-name">${name}</span>
+            <span class="skill-detail-sub">
+              ${pluginName ? html`${PLUGIN_ICON} Plugin: ${pluginName}` : html`${origin}`}
+            </span>
+          </div>
+        </div>
+        ${!readOnly ? html`
+          <div class="skill-detail-actions">
+            <button type="button" class="skill-detail-action-btn"
+              @click=${() => vm.onChangeSkillStatus(id, isDraft ? STATUS.APPROVED : STATUS.DRAFT)}
+            >${isDraft ? 'Approve' : 'Move to Draft'}</button>
+            <button type="button" class="skill-detail-action-btn"
+              @click=${() => vm.onEditSkill(id)}
+            >Edit</button>
+            <button type="button" class="skill-detail-action-btn is-negative"
+              @click=${() => vm.onDeleteSkillById(id)}
+            >Delete</button>
+          </div>
+        ` : nothing}
+      </header>
+
+      <span class="skill-detail-badge ${isDraft ? 'is-draft' : ''}">${readOnly ? 'BUILT-IN' : (isDraft ? 'DRAFT' : 'APPROVED')}</span>
+
+      <div class="skill-detail-description">
+        ${description || 'No description provided.'}
+      </div>
+
+      <button type="button" class="skill-detail-view-md"
+        @click=${() => vm.onOpenSkillMdModal()}
+      >${FILE_ICON} View SKILL.md</button>
     </div>
   `;
 }
@@ -228,15 +294,16 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
       </header>
       ${description ? html`<p class="plugin-card-desc">${description}</p>` : nothing}
       <footer class="plugin-card-meta">
-        <span class="plugin-card-badge">${isBuiltin ? 'BUILT-IN' : 'CUSTOM'}</span>
         ${skillCount ? html`<span class="plugin-card-count">${skillCount} Skill${skillCount > 1 ? 's' : ''}</span>` : nothing}
         ${mcpCount ? html`<span class="plugin-card-count">${mcpCount} MCP${mcpCount > 1 ? 's' : ''}</span>` : nothing}
-        ${!isBuiltin ? html`
-          <button type="button" class="plugin-card-action"
-            aria-label="Delete agent ${title}"
+        ${isBuiltin ? html`
+          <span class="plugin-card-badge is-builtin">Built-in</span>
+        ` : html`
+          <button type="button" class="plugin-card-action is-uninstall"
+            aria-label="Uninstall agent ${title}"
             @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-          >× Delete</button>
-        ` : nothing}
+          >Uninstall</button>
+        `}
       </footer>
     </article>
   `;
@@ -245,6 +312,9 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
 function renderAgentRow(vm, agent, isBuiltin = false) {
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
   const description = agent.description || agent.preset?.description || '';
+  const source = isBuiltin ? 'built-in' : 'custom';
+  const skills = agentSkillIds(agent);
+  const skillCount = skills.length;
 
   return html`
     <div class="catalog-row" role="button" tabindex="0"
@@ -257,11 +327,78 @@ function renderAgentRow(vm, agent, isBuiltin = false) {
       <div class="catalog-row-body">
         <div class="catalog-row-title-line">
           <span class="catalog-row-name">${title}</span>
-          <span class="catalog-row-meta">${isBuiltin ? 'built-in' : 'custom'}</span>
+          <span class="catalog-row-meta">${source}</span>
+          ${skillCount ? html`<span class="catalog-row-meta">${skillCount} Skill${skillCount > 1 ? 's' : ''}</span>` : nothing}
         </div>
         ${description ? html`<span class="catalog-row-desc">${description}</span>` : nothing}
       </div>
+      ${isBuiltin ? nothing : html`
+        <button type="button" class="plugin-row-action is-uninstall"
+          aria-label="Uninstall agent ${title}"
+          @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
+        >× Uninstall</button>
+      `}
       ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+// ─── Plugin detail drill-down (AO-style) ─────────────────────────────────────
+
+function renderPluginDetail(vm) {
+  const agent = [...BUILTIN_AGENTS, ...(vm.agents || [])].find(
+    (a) => a.id === vm.selectedAgentId,
+  );
+  if (!agent) return nothing;
+
+  const isBuiltin = BUILTIN_AGENTS.some((a) => a.id === agent.id);
+  const title = agent.label || agent.name || agent.preset?.name || agent.id;
+  const source = isBuiltin ? 'built-in' : 'custom';
+  const description = agent.description || agent.preset?.description || '';
+  const skillIds = agentSkillIds(agent);
+  const isGrid = vm.catalogViewMode === 'grid';
+
+  return html`
+    <div class="skill-detail">
+      <header class="skill-detail-header">
+        <div class="skill-detail-identity">
+          <span class="skill-detail-icon">${PLUGIN_ICON}</span>
+          <div>
+            <span class="skill-detail-name">${title}</span>
+            <span class="skill-detail-sub">${source}</span>
+          </div>
+        </div>
+        ${!isBuiltin ? html`
+          <div class="skill-detail-actions">
+            <button type="button" class="skill-detail-action-btn is-negative"
+              @click=${() => vm.onDeleteAgent(agent)}
+            >Uninstall</button>
+          </div>
+        ` : nothing}
+      </header>
+
+      ${description ? html`
+        <div class="skill-detail-description">${description}</div>
+      ` : nothing}
+
+      ${skillIds.length ? html`
+        <div class="plugin-detail-skills">
+          <div class="plugin-detail-skills-header">
+            <span class="skill-detail-section-label">Skills ${skillIds.length}</span>
+            ${renderViewToggle(vm)}
+          </div>
+          ${isGrid ? html`
+            <div class="plugin-grid">${skillIds.map((id) => renderSkillCard(vm, id))}</div>
+          ` : html`
+            <div class="catalog-list">${skillIds.map((id) => renderSkillRow(vm, id))}</div>
+          `}
+        </div>
+      ` : nothing}
+
+      <div class="plugin-detail-skills">
+        <span class="skill-detail-section-label">Dependencies</span>
+        ${renderDepTree(vm, agent, isBuiltin)}
+      </div>
     </div>
   `;
 }
@@ -320,15 +457,42 @@ function renderDetailView(vm) {
   const isAgent = tab === TAB_AGENTS;
   const isMemory = tab === TAB_MEMORY;
 
+  const skillDrillDown = isSkill && vm.viewingSkillId && !vm.isFormEdit;
+  if (skillDrillDown) {
+    return html`
+      <div class="detail-view">
+        <button type="button" class="detail-back-btn"
+          @click=${() => vm.onCloseEditor()}
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Skills'}</span></button>
+        ${renderSkillDetail(vm)}
+      </div>
+    `;
+  }
+
+  const pluginDrillDown = isAgent && vm.isAgentViewTools && vm.selectedAgentId;
+  if (pluginDrillDown) {
+    return html`
+      <div class="detail-view">
+        <button type="button" class="detail-back-btn"
+          @click=${() => vm.onCloseEditor()}
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Plugins'}</span></button>
+        ${renderPluginDetail(vm)}
+      </div>
+    `;
+  }
+
   const title = editorTitle(vm, tab);
   const showBack = tab !== TAB_MEMORY;
+  const backLabel = (isSkill && vm.viewingSkillId)
+    ? vm.viewingSkillId
+    : (TAB_LABEL_MAP[tab] || 'List');
 
   return html`
     <div class="detail-view">
       ${showBack ? html`
         <button type="button" class="detail-back-btn"
           @click=${() => vm.onCloseEditor()}
-        >${BACK_ARROW_ICON}<span>Back to ${TAB_LABEL_MAP[tab] || 'List'}</span></button>
+        >${BACK_ARROW_ICON}<span>${backLabel}</span></button>
       ` : nothing}
       <div class="editor-header">
         <h3 class="editor-title">${title}</h3>
@@ -338,7 +502,6 @@ function renderDetailView(vm) {
       ` : nothing}
       <div class="editor-body ${isMemory ? 'editor-body-memory' : ''}">
         ${isSkill ? renderSkillForm(vm) : nothing}
-        ${isAgent && vm.isAgentViewTools ? renderAssociatedToolsSelector(vm) : nothing}
         ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
         ${isPrompt ? renderPromptForm(vm) : nothing}
         ${isMcp && (vm.editingMcpKey || !vm.viewingMcpServerId)
@@ -378,11 +541,12 @@ function renderCatalogView(vm) {
           </div>
           ${TAB_ACTIONS[tab] ? html`
             <button type="button" class="new-btn"
+              ?disabled=${TAB_ACTIONS[tab].disabled}
               @click=${() => {
                 const { opener } = TAB_ACTIONS[tab];
-                if (typeof vm[opener] === 'function') vm[opener]();
+                if (opener && typeof vm[opener] === 'function') vm[opener]();
               }}
-            >${TAB_ACTIONS[tab].btnLabel}</button>
+            >${ACTION_ICONS[TAB_ACTIONS[tab].icon] ? html`<span class="new-btn-icon">${ACTION_ICONS[TAB_ACTIONS[tab].icon]}</span>` : nothing}${TAB_ACTIONS[tab].btnLabel}</button>
           ` : nothing}
         </div>
       </header>
@@ -726,6 +890,11 @@ export function renderEditorFooter(vm, tab) {
   ` : nothing;
 
   if (isSkill) {
+    const curStatus = vm.isFormEdit
+      ? (vm.skillStatuses[vm.formSkillId] || STATUS.DRAFT)
+      : STATUS.DRAFT;
+    const isDraft = curStatus === STATUS.DRAFT;
+
     return html`
       <div class="editor-actions" role="toolbar" aria-label="Skill actions">
         ${vm.isFormEdit || vm.hasSuggestion ? html`
@@ -734,14 +903,16 @@ export function renderEditorFooter(vm, tab) {
             @click=${() => vm.onDismissForm()}
           >Dismiss</button>
         ` : nothing}
-        <button type="button" data-variant="secondary"
-          ?disabled=${vm.isSaveBusy}
-          @click=${() => vm.onSaveSkill(STATUS.DRAFT)}
-        >Save Draft</button>
         <button type="button" data-variant="accent"
           ?disabled=${vm.isSaveBusy}
-          @click=${() => vm.onSaveSkill(STATUS.APPROVED)}
+          @click=${() => vm.onSaveSkill(curStatus)}
         >Save</button>
+        ${vm.isFormEdit ? html`
+          <button type="button" data-variant="secondary"
+            ?disabled=${vm.isSaveBusy}
+            @click=${() => vm.onSaveSkill(isDraft ? STATUS.APPROVED : STATUS.DRAFT)}
+          >${isDraft ? 'Approve' : 'Move to Draft'}</button>
+        ` : nothing}
         ${vm.isFormEdit ? html`
           <button type="button" data-variant="negative"
             ?disabled=${vm.isSaveBusy}
@@ -766,16 +937,25 @@ export function renderEditorFooter(vm, tab) {
   }
 
   if (isPrompt) {
+    const pStatus = String(
+      vm.isFormPromptEdit
+        ? (vm.prompts.find((p) => p.title === vm.formPromptTitle)?.status ?? '').trim().toLowerCase()
+        : '',
+    );
+    const pIsDraft = !pStatus || pStatus === STATUS.DRAFT;
+
     return html`
       <div class="editor-actions" role="toolbar" aria-label="Prompt actions">
-        <button type="button" data-variant="secondary"
-          ?disabled=${vm.isSaveBusy}
-          @click=${() => vm.onSavePrompt(STATUS.DRAFT)}
-        >Save Draft</button>
         <button type="button" data-variant="accent"
           ?disabled=${vm.isSaveBusy}
-          @click=${() => vm.onSavePrompt(STATUS.APPROVED)}
+          @click=${() => vm.onSavePrompt(pIsDraft ? STATUS.DRAFT : STATUS.APPROVED)}
         >Save</button>
+        ${vm.isFormPromptEdit ? html`
+          <button type="button" data-variant="secondary"
+            ?disabled=${vm.isSaveBusy}
+            @click=${() => vm.onSavePrompt(pIsDraft ? STATUS.APPROVED : STATUS.DRAFT)}
+          >${pIsDraft ? 'Approve' : 'Move to Draft'}</button>
+        ` : nothing}
         <button type="button" data-variant="secondary"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => {
@@ -900,39 +1080,47 @@ function renderDepTree(vm, agent, isBuiltin) {
 }
 
 export function renderAgentsCatalog(vm) {
-  const showTree = vm.showDepTree;
   const isGrid = vm.catalogViewMode === 'grid';
+  const filter = vm.agentFilter || 'all';
+  const builtinCount = BUILTIN_AGENTS.length;
+  const customCount = vm.agents.length;
+  const totalCount = builtinCount + customCount;
+
+  const builtinTagged = BUILTIN_AGENTS.map((a) => ({ agent: a, builtin: true }));
+  const customTagged = vm.agents.map((a) => ({ agent: a, builtin: false }));
+  const allAgents = [...builtinTagged, ...customTagged];
+
+  const filtered = filter === 'builtin'
+    ? builtinTagged
+    : filter === 'custom'
+      ? customTagged
+      : allAgents;
 
   return html`
+    <h3 class="section-h">Installed <span class="section-h-count">${totalCount}</span></h3>
     <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
-      <div class="dep-tree-toggle">
-        <label>
-          <input type="checkbox"
-            .checked=${showTree || false}
-            @change=${(e) => vm.setShowDepTree(e.target.checked)}
-          >
-          <span class="dep-tree-toggle-label">Dependency view</span>
-        </label>
+      <div class="filter-pills" role="tablist" aria-label="Filter plugins">
+        <button type="button" class="filter-pill ${filter === 'all' ? 'is-active' : ''}"
+          role="tab" aria-selected=${filter === 'all'}
+          @click=${() => vm.onSetAgentFilter('all')}
+        >All <span class="filter-pill-count">${totalCount}</span></button>
+        <button type="button" class="filter-pill ${filter === 'builtin' ? 'is-active' : ''}"
+          role="tab" aria-selected=${filter === 'builtin'}
+          @click=${() => vm.onSetAgentFilter('builtin')}
+        >Built-in <span class="filter-pill-count">${builtinCount}</span></button>
+        ${customCount ? html`
+          <button type="button" class="filter-pill ${filter === 'custom' ? 'is-active' : ''}"
+            role="tab" aria-selected=${filter === 'custom'}
+            @click=${() => vm.onSetAgentFilter('custom')}
+          >Custom <span class="filter-pill-count">${customCount}</span></button>
+        ` : nothing}
       </div>
       ${renderViewToggle(vm)}
     </div>
 
-    ${showTree ? html`
-      <h3 class="section-h">Agent dependency trees</h3>
-      ${BUILTIN_AGENTS.map((agent) => renderDepTree(vm, agent, true))}
-      ${vm.agents.map((agent) => renderDepTree(vm, agent, false))}
-    ` : html`
-      <h3 class="section-h">Built-in (${BUILTIN_AGENTS.length})</h3>
-      ${isGrid
-        ? html`<div class="plugin-grid">${BUILTIN_AGENTS.map((a) => renderAgentCard(vm, a, true))}</div>`
-        : html`<div class="catalog-list">${BUILTIN_AGENTS.map((a) => renderAgentRow(vm, a, true))}</div>`}
-      ${vm.agents.length ? html`
-        <h3 class="section-h">Custom (${vm.agents.length})</h3>
-        ${isGrid
-          ? html`<div class="plugin-grid">${vm.agents.map((a) => renderAgentCard(vm, a, false))}</div>`
-          : html`<div class="catalog-list">${vm.agents.map((a) => renderAgentRow(vm, a, false))}</div>`}
-      ` : nothing}
-    `}
+    ${isGrid
+      ? html`<div class="plugin-grid">${filtered.map(({ agent, builtin }) => renderAgentCard(vm, agent, builtin))}</div>`
+      : html`<div class="catalog-list">${filtered.map(({ agent, builtin }) => renderAgentRow(vm, agent, builtin))}</div>`}
   `;
 }
 
@@ -948,7 +1136,7 @@ export function renderPromptsCatalog(vm) {
   }
 
   return html`
-    <div role="list" aria-label="Prompts">
+    <div class="prompt-list" role="list" aria-label="Prompts">
       ${prompts.map((row) => {
         const title = row.title || '';
         const isSelected = vm.isEditorOpen && vm.isFormPromptEdit
@@ -1093,5 +1281,5 @@ export function renderMemoryContent(vm) {
   if (vm.memory === '') {
     return html`<div class="empty">No project memory yet. The DA agent writes here as it learns about your site.</div>`;
   }
-  return html`<pre class="memory-content">${vm.memory}</pre>`;
+  return html`<div class="memory-monaco-host" data-memory-content=${vm.memory}></div>`;
 }

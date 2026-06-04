@@ -6,7 +6,7 @@
 .tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s2-spacing-75);
   padding: 0 var(--s2-spacing-100);
 }
 
@@ -42,6 +42,12 @@
 .tab.is-active {
   color: light-dark(#fff, #1a1a1a);
   background: light-dark(#1a1a1a, #fff);
+}
+
+.tab.is-disabled {
+  color: var(--s2-gray-400);
+  cursor: default;
+  pointer-events: none;
 }
 
 /* ─── tab icon (inline SVG passed via item.icon) ──────────────────────────── */

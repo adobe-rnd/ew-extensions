@@ -19,42 +19,6 @@
   font-size: var(--s2-body-size-s);
 }
 
-.refresh-indicator {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  pointer-events: none;
-}
-
-.refresh-indicator-label {
-  align-self: flex-end;
-  padding: 2px var(--s2-spacing-100);
-  margin: var(--s2-spacing-50) var(--s2-spacing-100) 0 0;
-  border-radius: 999px;
-  background: light-dark(var(--s2-blue-100), color-mix(in srgb, var(--s2-blue-900) 18%, transparent));
-  color: var(--s2-blue-900);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.refresh-indicator-track {
-  display: block;
-  width: 100%;
-  height: 2px;
-  background: light-dark(var(--s2-gray-200), var(--s2-gray-300));
-  overflow: hidden;
-}
-
-.refresh-indicator-bar {
-  display: block;
-  width: 35%;
-  height: 100%;
-  background: var(--s2-blue-900);
-  animation: refresh-progress 1.1s ease-in-out infinite;
-}
 
 .empty {
   padding: var(--s2-spacing-300);
@@ -100,7 +64,7 @@
 }
 
 .gate-form {
-  gap: var(--s2-spacing-150);
+  gap: var(--s2-spacing-200);
 }
 
 .gate-label {
@@ -252,7 +216,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
+  background: transparent;
 }
 
 .detail-back-btn {
@@ -302,13 +266,6 @@
 .chat-drawer nx-chat {
   flex: 1;
   min-height: 0;
-}
-
-/* ─── keyframes ──────────────────────────────────────────────────────────────── */
-
-@keyframes refresh-progress {
-  0%   { transform: translateX(-120%); }
-  100% { transform: translateX(340%); }
 }
 
 /* ─── confirm dialog ──────────────────────────────────────────────────────────── */

@@ -12,7 +12,7 @@ const CATALOG_TABS = [
   { id: TAB_AGENTS, label: 'Plugins' },
   { id: TAB_SKILLS, label: 'Skills' },
   { id: TAB_MCPS, label: 'MCPs' },
-  { id: TAB_MARKETPLACE, label: 'Marketplace' },
+  { id: TAB_MARKETPLACE, label: 'Marketplace', disabled: true },
   { id: TAB_MEMORY, label: 'Memory' },
 ];
 
@@ -23,13 +23,13 @@ const TAB_DESCRIPTIONS = {
   [TAB_AGENTS]: 'Agent presets with bundled skills and MCP server access.',
   [TAB_SKILLS]: 'Markdown instructions that guide the assistant\'s behavior.',
   [TAB_MCPS]: 'Model Context Protocol servers that give the assistant access to external tools.',
-  [TAB_MARKETPLACE]: 'Discover and install community plugins.',
+  [TAB_MARKETPLACE]: 'Discover and install 1st and 3rd party plugins.',
 };
 
 /** Per-tab metadata for the "new" button label and the opener method name. */
 const TAB_ACTIONS = {
   [TAB_SKILLS]: { btnLabel: '+ New Skill', opener: 'openNewSkillEditor' },
-  [TAB_AGENTS]: { btnLabel: '+ New Agent', opener: 'openNewAgentEditor' },
+  [TAB_AGENTS]: { btnLabel: 'Browse Marketplace', disabled: true, icon: 'storefront' },
   [TAB_PROMPTS]: { btnLabel: '+ New Prompt', opener: 'openNewEditor' },
   [TAB_MCPS]: { btnLabel: '+ Register MCP', opener: 'openNewMcpEditor' },
 };
@@ -122,13 +122,21 @@ const BUILTIN_TOOL_DETAILS = {
 
 const BUILTIN_TOOL_IDS = Object.values(BUILTIN_TOOL_DETAILS).flat().map((t) => t.name);
 
+const DEP_TREE_MAX_TOOLS = 6;
+const TOOLS_FILTER_THRESHOLD = 6;
+const CHAT_DRAWER_WIDTH = 380;
+const AGENT_USAGE_ICON = '\u26A1';
+
 export {
+  AGENT_USAGE_ICON,
   BUILTIN_AGENTS,
   BUILTIN_MCP_SERVERS,
   BUILTIN_TOOL_DETAILS,
   BUILTIN_TOOL_IDS,
   CATALOG_TABS,
   CATEGORY_OPTIONS,
+  CHAT_DRAWER_WIDTH,
+  DEP_TREE_MAX_TOOLS,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,
@@ -142,4 +150,5 @@ export {
   TAB_MEMORY,
   TAB_PROMPTS,
   TAB_SKILLS,
+  TOOLS_FILTER_THRESHOLD,
 };

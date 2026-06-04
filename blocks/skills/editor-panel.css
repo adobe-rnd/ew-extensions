@@ -7,7 +7,7 @@
   justify-content: space-between;
   padding: var(--s2-spacing-100) var(--s2-spacing-200);
   border-bottom: 1px solid var(--s2-gray-200);
-  min-height: 48px;
+  min-height: var(--s2-spacing-700);
   background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
 }
 
@@ -56,9 +56,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--s2-spacing-75);
-  padding: var(--s2-spacing-150) var(--s2-spacing-200);
+  padding: var(--s2-spacing-100) var(--s2-spacing-200);
   border-top: 1px solid var(--s2-gray-200);
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-50));
 }
 
 /* ─── form ────────────────────────────────────────────────────────────────────── */
@@ -75,7 +74,7 @@
   padding: var(--s2-spacing-100);
   border: 1px solid var(--s2-gray-300);
   border-radius: var(--s2-corner-radius-200);
-  background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
+  background: transparent;
   color: var(--s2-gray-900);
   font-family: inherit;
   font-size: var(--s2-body-size-s);
@@ -154,12 +153,12 @@
 }
 
 .editor-actions button[data-variant="accent"] {
-  background: var(--s2-blue-900);
-  color: #fff;
+  background: var(--s2-gray-200);
+  color: var(--s2-gray-900);
 }
 
 .editor-actions button[data-variant="accent"]:hover:not(:disabled) {
-  background: var(--s2-blue-1000);
+  background: var(--s2-gray-300);
 }
 
 .editor-actions button[data-variant="secondary"] {
@@ -172,12 +171,13 @@
 }
 
 .editor-actions button[data-variant="negative"] {
-  background: var(--s2-red-900);
-  color: #fff;
+  background: transparent;
+  color: light-dark(var(--s2-red-900), var(--s2-red-700));
+  border: 1px solid light-dark(var(--s2-red-400), var(--s2-red-600));
 }
 
 .editor-actions button[data-variant="negative"]:hover:not(:disabled) {
-  background: var(--s2-red-1000);
+  background: light-dark(var(--s2-red-100), color-mix(in srgb, var(--s2-red-600) 15%, transparent));
 }
 
 /* ─── status messages ───────────────────────────────────────────────────────── */
@@ -238,4 +238,260 @@
 
 @keyframes suggestion-rotate {
   to { --suggestion-angle: 360deg; }
+}
+
+/* ─── skill detail drill-down (AO-style) ─────────────────────────────────────── */
+
+.skill-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-300);
+  padding: var(--s2-spacing-400);
+}
+
+.skill-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2-spacing-200);
+}
+
+.skill-detail-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--s2-spacing-200);
+}
+
+.skill-detail-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--s2-gray-600);
+}
+
+.skill-detail-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.skill-detail-name {
+  display: block;
+  font-size: var(--s2-body-size-l);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-900);
+  line-height: 1.3;
+}
+
+.skill-detail-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: var(--s2-body-size-xs);
+  color: var(--s2-gray-500);
+}
+
+.skill-detail-sub svg {
+  width: 12px;
+  height: 12px;
+}
+
+.skill-detail-actions {
+  display: flex;
+  gap: var(--s2-spacing-75);
+  flex-shrink: 0;
+}
+
+.skill-detail-action-btn {
+  all: unset;
+  cursor: pointer;
+  padding: var(--s2-spacing-50) var(--s2-spacing-200);
+  border: 1px solid light-dark(var(--s2-gray-300), var(--s2-gray-200));
+  border-radius: var(--s2-corner-radius-100);
+  font-size: var(--s2-body-size-s);
+  color: var(--s2-gray-800);
+  border: 1px solid var(--s2-gray-300);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.skill-detail-action-btn:hover {
+  background: var(--s2-gray-100);
+  border-color: var(--s2-gray-400);
+}
+
+.skill-detail-action-btn.is-negative {
+  color: light-dark(var(--s2-red-900), var(--s2-red-700));
+  border-color: light-dark(var(--s2-red-400), var(--s2-red-600));
+}
+
+.skill-detail-action-btn.is-negative:hover {
+  background: light-dark(var(--s2-red-100), color-mix(in srgb, var(--s2-red-600) 15%, transparent));
+}
+
+.skill-detail-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--s2-body-size-xxs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  background: light-dark(var(--s2-green-100), color-mix(in srgb, var(--s2-green-600) 20%, transparent));
+  color: light-dark(var(--s2-green-900), var(--s2-green-600));
+  border: 1px solid light-dark(var(--s2-green-300), var(--s2-green-700));
+}
+
+.skill-detail-badge.is-draft {
+  background: light-dark(var(--s2-orange-100), color-mix(in srgb, var(--s2-orange-600) 20%, transparent));
+  color: light-dark(var(--s2-orange-900), var(--s2-orange-600));
+  border-color: light-dark(var(--s2-orange-300), var(--s2-orange-700));
+}
+
+.skill-detail-description {
+  padding: var(--s2-spacing-300);
+  border-radius: var(--s2-corner-radius-200);
+  border: 1px solid light-dark(var(--s2-gray-200), var(--s2-gray-100));
+  font-size: var(--s2-body-size-s);
+  color: var(--s2-gray-800);
+  line-height: 1.6;
+  line-height: 1.5;
+}
+
+.skill-detail-view-md {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--s2-body-size-s);
+  color: light-dark(var(--s2-blue-900), var(--s2-blue-700));
+}
+
+.skill-detail-view-md:hover {
+  text-decoration: underline;
+}
+
+.skill-detail-section-label {
+  font-size: var(--s2-body-size-s);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-800);
+}
+
+.skill-md-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+}
+
+/* ─── SKILL.md viewer modal ──────────────────────────────────────────────────── */
+
+.skill-md-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.skill-md-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 90vw);
+  max-height: 80vh;
+  border-radius: var(--s2-corner-radius-200);
+  background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
+  border: 1px solid var(--s2-gray-200);
+  overflow: hidden;
+  margin: var(--s2-spacing-300);
+}
+
+.skill-md-modal-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2-spacing-200) var(--s2-spacing-300);
+  border-bottom: 1px solid var(--s2-gray-200);
+}
+
+.skill-md-modal-title {
+  font-size: var(--s2-body-size-m);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-900);
+}
+
+.skill-md-modal-close {
+  all: unset;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--s2-gray-600);
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--s2-corner-radius-75);
+}
+
+.skill-md-modal-close:hover {
+  background: var(--s2-gray-200);
+}
+
+.skill-md-modal-body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 300px;
+}
+
+.skill-md-monaco-host {
+  padding: 0;
+}
+
+.skill-md-modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2-spacing-200) var(--s2-spacing-300);
+  border-top: 1px solid var(--s2-gray-200);
+  background: light-dark(var(--s2-gray-50), var(--s2-gray-75));
+}
+
+.skill-md-modal-meta {
+  font-size: var(--s2-body-size-s);
+  color: var(--s2-gray-500);
+}
+
+.skill-md-modal-close-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: var(--s2-spacing-75) var(--s2-spacing-200);
+  border-radius: var(--s2-corner-radius-75);
+  font-size: var(--s2-body-size-s);
+  font-family: inherit;
+  color: var(--s2-gray-800);
+  background: var(--s2-gray-200);
+  border: 1px solid var(--s2-gray-300);
+  min-height: 32px;
+}
+
+.skill-md-modal-close-btn:hover {
+  background: var(--s2-gray-300);
+}
+
+/* ─── plugin detail skills sub-section ───────────────────────────────────────── */
+
+.plugin-detail-skills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-100);
+}
+
+.plugin-detail-skills-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }

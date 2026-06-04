@@ -21,7 +21,7 @@ class NxTabs extends LitElement {
   }
 
   _select(id) {
-    if (id === this.active) return;
+    if (id === this.active || this.items?.find((i) => i.id === id)?.disabled) return;
     this.active = id;
     this.dispatchEvent(new CustomEvent('tab-change', {
       detail: { id },
@@ -65,9 +65,10 @@ class NxTabs extends LitElement {
             role="tab"
             part="tab"
             type="button"
-            class="tab ${item.id === this.active ? 'is-active' : ''}"
+            class="tab ${item.id === this.active ? 'is-active' : ''} ${item.disabled ? 'is-disabled' : ''}"
             data-id=${item.id}
             aria-selected=${item.id === this.active ? 'true' : 'false'}
+            aria-disabled=${item.disabled ? 'true' : 'false'}
             tabindex=${item.id === this.active ? '0' : '-1'}
             @click=${() => this._select(item.id)}
           >${item.icon ? item.icon : nothing}<span class="tab-label">${item.label}</span></button>
