@@ -4,7 +4,7 @@ nerve-center-app {
 
   display: block;
   margin: 10px;
-  padding: 0 var(--spacing-200, 12px);
+  padding: 0 6px;
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   font-family: var(
@@ -62,10 +62,8 @@ nerve-center-app .app-title {
 }
 
 nerve-center-app .card {
-  background: var(--s2-gray-50, #f9f9f9);
-  border: 1px solid var(--s2-gray-200, #e0e0e0);
   border-radius: var(--s2-radius-200, 10px);
-  padding: var(--spacing-300, 16px) var(--spacing-300, 16px);
+  box-shadow: 0 1px 6px 0 rgb(0 0 0 / 12%);
 }
 
 nerve-center-app .card.error {
@@ -137,35 +135,37 @@ nerve-center-app .badge {
   text-transform: capitalize;
 }
 
-nerve-center-app .badge[class*='badge--']::before {
-  content: '';
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-right: 5px;
-  vertical-align: middle;
+nerve-center-app .badge--confirmed,
+nerve-center-app .badge--active {
+  background: var(--s2-green-100, #dcfce7);
+  color: var(--s2-green-800, #166534);
+  border: 1px solid;
+}
+nerve-center-app .badge--draft {
+  background: var(--s2-blue-100, #dbeafe);
+  color: var(--s2-blue-800, #1e40af);
+  border: 1px solid;
+}
+nerve-center-app .badge--archived {
+  background: var(--s2-gray-200, #e5e7eb);
+  color: var(--s2-gray-600, #767676);
+  border: 1px solid;
 }
 
-nerve-center-app .badge--confirmed::before,
-nerve-center-app .badge--active::before {
-  background: var(--s2-green-500, #22c55e);
+nerve-center-app .badge--priority--high {
+  background: var(--s2-orange-100, #ffedd5);
+  color: var(--s2-orange-800, #9a3412);
+  border: 1px solid;
 }
-nerve-center-app .badge--draft::before {
-  background: var(--s2-blue-400, #60a5fa);
+nerve-center-app .badge--priority--medium {
+  background: var(--s2-blue-100, #dbeafe);
+  color: var(--s2-blue-800, #1e40af);
+  border: 1px solid;
 }
-nerve-center-app .badge--archived::before {
-  background: var(--s2-gray-400, #9ca3af);
-}
-
-nerve-center-app .badge--priority--high::before {
-  background: var(--s2-orange-500, #f97316);
-}
-nerve-center-app .badge--priority--medium::before {
-  background: var(--s2-blue-500, #3b82f6);
-}
-nerve-center-app .badge--priority--low::before {
-  background: var(--s2-gray-400, #9ca3af);
+nerve-center-app .badge--priority--low {
+  background: var(--s2-gray-100, #f3f4f6);
+  color: var(--s2-gray-600, #767676);
+  border: 1px solid;
 }
 
 nerve-center-app .confidence-wrap {
