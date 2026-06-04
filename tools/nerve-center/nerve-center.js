@@ -66,6 +66,16 @@ class NerveCenterApp extends LitElement {
     this._siteId = params.get('nerve-center-site-id');
     this._apiKey = params.get('nerve-center-key');
 
+    const completedParam = params.get('nerve-center-completed');
+    if (completedParam) {
+      this._completed = new Set(completedParam.split(',').map((id) => id.trim()).filter(Boolean));
+    } else {
+      try {
+        const stored = localStorage.getItem('nc-completed');
+        if (stored) this._completed = new Set(JSON.parse(stored));
+      } catch { /* ignore */ }
+    }
+
     if (this._siteId && this._apiKey) {
       this._fetchObservations();
     }
@@ -193,6 +203,7 @@ class NerveCenterApp extends LitElement {
     if (next.has(obsId)) next.delete(obsId);
     else next.add(obsId);
     this._completed = next;
+    try { localStorage.setItem('nc-completed', JSON.stringify([...next])); } catch { /* ignore */ }
   }
 
   _canvasUrl(item) {
