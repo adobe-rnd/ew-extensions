@@ -252,6 +252,35 @@ nerve-center-app .obs-chat-btn {
   width: 100%;
 }
 
+nerve-center-app .obs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+nerve-center-app .obs-info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--s2-gray-300, #ccc);
+  background: transparent;
+  color: var(--s2-gray-600, #767676);
+  cursor: pointer;
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+nerve-center-app .obs-info-btn:hover {
+  background: var(--s2-gray-100, #f5f5f5);
+  border-color: var(--s2-gray-400, #aaa);
+}
+
 nerve-center-app .obs-header {
   display: flex;
   align-items: center;
