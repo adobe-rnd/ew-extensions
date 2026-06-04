@@ -4,6 +4,18 @@ import { LitElement, html } from 'da-lit';
 const STORAGE_KEY = 'da-drafts-preview';
 const CHANNEL_NAME = 'da-drafts-preview';
 
+async function livePreviewLogin(org, repo, token) {
+  try {
+    await fetch(`https://main--${repo}--${org}.aem.page/gimme_cookie`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('Live Preview Login failed', e);
+  }
+}
+
 class DraftsPreviewApp extends LitElement {
   static properties = {
     _items: { state: true },
@@ -41,7 +53,12 @@ class DraftsPreviewApp extends LitElement {
       this._activeTab = 0;
     };
 
-    DA_SDK.then(({ actions }) => { this._actions = actions; }).catch(() => { });
+    DA_SDK.then(({ token, actions, project }) => {
+      this._actions = actions;
+      if (token && project?.org && project?.repo) {
+        livePreviewLogin(project.org, project.repo, token);
+      }
+    }).catch(() => {});
   }
 
   disconnectedCallback() {
