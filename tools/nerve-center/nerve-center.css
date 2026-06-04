@@ -80,12 +80,10 @@ nerve-center-app .card-title {
 
 nerve-center-app .card ul {
   margin: 0;
-  padding-left: var(--spacing-400, 24px);
 }
 
 nerve-center-app .card ul li {
   margin-bottom: var(--spacing-75, 6px);
-  font-size: var(--s2-body-m-size, 14px);
 }
 
 nerve-center-app .card {
@@ -327,6 +325,56 @@ nerve-center-app .obs-complete-btn--done {
 nerve-center-app .obs-complete-btn--done:hover {
   background: var(--s2-green-100, #dcfce7);
   border-color: var(--s2-green-700, #15803d);
+}
+
+nerve-center-app .obs-insights {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--s2-green-200, #bbf7d0);
+}
+
+nerve-center-app .obs-insights-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-green-700, #15803d);
+  margin: 0 0 6px;
+}
+
+nerve-center-app .obs-insights-summary {
+  font-size: 12px;
+  color: var(--s2-gray-600, #767676);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+nerve-center-app .obs-insights-metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+nerve-center-app .obs-insights-metrics li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+nerve-center-app .obs-metric-name {
+  color: var(--s2-gray-500, #999);
+  flex-shrink: 0;
+}
+
+nerve-center-app .obs-metric-value {
+  color: var(--s2-gray-900, #1a1a1a);
+  font-weight: 600;
+  text-align: right;
 }
 
 nerve-center-app .completed-label {
