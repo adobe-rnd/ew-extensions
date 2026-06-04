@@ -149,17 +149,28 @@ nerve-center-app .badge[class*='badge--']::before {
   border-radius: 50%;
   margin-right: 5px;
   vertical-align: middle;
-  background: var(--s2-gray-400, #aaa);
 }
 
 nerve-center-app .badge--confirmed::before,
-nerve-center-app .badge--active::before    { background: var(--s2-green-500, #22c55e); }
-nerve-center-app .badge--draft::before     { background: var(--s2-blue-400, #60a5fa); }
-nerve-center-app .badge--archived::before  { background: var(--s2-gray-400, #9ca3af); }
+nerve-center-app .badge--active::before {
+  background: var(--s2-green-500, #22c55e);
+}
+nerve-center-app .badge--draft::before {
+  background: var(--s2-blue-400, #60a5fa);
+}
+nerve-center-app .badge--archived::before {
+  background: var(--s2-gray-400, #9ca3af);
+}
 
-nerve-center-app .badge--priority--high::before   { background: var(--s2-orange-500, #f97316); }
-nerve-center-app .badge--priority--medium::before { background: var(--s2-blue-500, #3b82f6); }
-nerve-center-app .badge--priority--low::before    { background: var(--s2-gray-400, #9ca3af); }
+nerve-center-app .badge--priority--high::before {
+  background: var(--s2-orange-500, #f97316);
+}
+nerve-center-app .badge--priority--medium::before {
+  background: var(--s2-blue-500, #3b82f6);
+}
+nerve-center-app .badge--priority--low::before {
+  background: var(--s2-gray-400, #9ca3af);
+}
 
 nerve-center-app .confidence-wrap {
   display: flex;
