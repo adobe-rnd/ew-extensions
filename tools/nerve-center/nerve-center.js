@@ -217,7 +217,7 @@ class NerveCenterApp extends LitElement {
         `)}
         <sl-button class="ew-outline-accent nc-preview-btn" @click=${() => {
         window.parent.postMessage({ type: 'nx-show-draft-preview', obsId, items: entry.items, org: this._org, site: this._site }, '*');
-      }}>Preview drafts</sl-button>
+      }}>Compare drafts</sl-button>
       </div>`;
   }
 
@@ -288,9 +288,6 @@ class NerveCenterApp extends LitElement {
 
           <div class="obs-header">
             <p class="obs-name">${obs.name}</p>
-            <button class="obs-complete-btn" @click=${() => this._toggleComplete(obs.id)}>
-              Mark complete
-            </button>
           </div>
           ${obs.description ? html`<p class="obs-description">${this._renderWithLinks(obs.description)}</p>` : nothing}
           ${obs.confidence ? html`

@@ -80,10 +80,6 @@ nerve-center-app .card-title {
   color: var(--s2-gray-900, #1a1a1a);
 }
 
-nerve-center-app .card p {
-  margin: 0 0 var(--spacing-200, 12px);
-}
-
 nerve-center-app .card ul {
   margin: 0;
   padding-left: var(--spacing-400, 24px);
@@ -237,7 +233,7 @@ nerve-center-app .drafts-loading {
 
 nerve-center-app .draft-link {
   display: block;
-  font-size: var(--s2-body-s-size, 13px);
+  font-size: 14px;
   color: var(--ew-accent);
   text-decoration: none;
   padding: var(--spacing-75, 6px) 0;
