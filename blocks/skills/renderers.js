@@ -1,5 +1,4 @@
 import { html, nothing } from 'da-lit';
-import { extractTitle } from './utils/markdown.js';
 import {
   BUILTIN_AGENTS,
   BUILTIN_MCP_SERVERS,
@@ -82,7 +81,7 @@ function agentsUsingSkill(vm, skillId) {
 }
 
 function renderSkillCard(vm, id) {
-  const title = extractTitle(vm.skills[id]);
+  const title = vm.skills[id] || id;
   const status = vm.skillStatuses[id] || STATUS.APPROVED;
   const isEditing = vm.isFormEdit && vm.formSkillId === id;
   const isDraft = status === STATUS.DRAFT;
@@ -375,10 +374,12 @@ export function renderSkillForm(vm) {
         ?readonly=${vm.isFormEdit}
         @input=${(e) => vm.setFormSkillId(e.target.value)}
       >
-      <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''}">
+      <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''} ${vm.isSkillBodyLoading ? 'is-loading' : ''}">
         <textarea
-          placeholder="Write or revise skill markdown"
+          placeholder=${vm.isSkillBodyLoading ? 'Loading…' : 'Write or revise skill markdown'}
           aria-label="Skill markdown"
+          aria-busy=${vm.isSkillBodyLoading ? 'true' : 'false'}
+          ?disabled=${vm.isSkillBodyLoading}
           .value=${vm.formSkillBody}
           @input=${(e) => vm.setFormSkillBody(e.target.value)}
         ></textarea>
@@ -767,7 +768,7 @@ export function renderSkillsCatalog(vm) {
 
   if (searchQuery) {
     filtered = filtered.filter((id) => {
-      const title = extractTitle(vm.skills[id]).toLowerCase();
+      const title = (vm.skills[id] || id).toLowerCase();
       return id.toLowerCase().includes(searchQuery) || title.includes(searchQuery);
     });
   }

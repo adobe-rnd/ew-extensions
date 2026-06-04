@@ -28,6 +28,9 @@ const KNOWN_CATEGORY_CLASSES = new Set(['review', 'workflow', 'style', 'content'
 
 const STATUS = { APPROVED: 'approved', DRAFT: 'draft' };
 
+/** Minimum ms between visibility-triggered silent reloads (prevents reload storms on tab focus). */
+const RELOAD_STALE_THRESHOLD_MS = 30_000;
+
 const STATUS_TYPE = { OK: 'ok', WARN: 'warn', ERR: 'err' };
 
 /**
@@ -119,6 +122,7 @@ export {
   CATEGORY_OPTIONS,
   FRESH_FORM_STATE,
   KNOWN_CATEGORY_CLASSES,
+  RELOAD_STALE_THRESHOLD_MS,
   STATUS,
   STATUS_TYPE,
   TAB_ACTIONS,
