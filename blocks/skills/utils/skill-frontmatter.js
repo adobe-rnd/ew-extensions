@@ -283,7 +283,7 @@ function serializeFields(fields, order) {
   return `---\n${lines.join('\n')}\n---\n`;
 }
 
-function buildFrontmatterBlock({
+export function buildFrontmatterBlock({
   name, description = '', version = 1, status = STATUS_APPROVED,
 }) {
   return `${serializeFields({ name, description, version, status }, INDEX_ENTRY_KEYS)}\n`;
