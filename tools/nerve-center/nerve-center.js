@@ -14,6 +14,7 @@ class NerveCenterApp extends LitElement {
     _loading: { state: true },
     _error: { state: true },
     _drafts: { state: true },
+    _previewingId: { state: true },
   };
 
   constructor() {
@@ -25,11 +26,13 @@ class NerveCenterApp extends LitElement {
     this._loading = false;
     this._error = null;
     this._drafts = {};
+    this._previewingId = null;
     // Non-reactive — don't trigger re-renders
     this._actions = null;
     this._org = null;
     this._site = null;
     this._draftsStarted = false;
+    this._previewedIds = new Set();
   }
 
   createRenderRoot() { return this; }
@@ -206,14 +209,34 @@ class NerveCenterApp extends LitElement {
         ${entry.items.map((item) => html`
           <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${item.name}</a>
         `)}
-        <sl-button class="ew-outline-accent nc-preview-btn" @click=${() => {
-        const payload = { items: entry.items, org: this._org, site: this._site };
-        localStorage.setItem('da-drafts-preview', JSON.stringify(payload));
-        const bc = new BroadcastChannel('da-drafts-preview');
-        bc.postMessage(payload);
-        bc.close();
-        this._actions?.showPanel?.('drafts-preview');
-      }}>Preview drafts</sl-button>
+        <sl-button class="ew-outline-accent nc-preview-btn"
+          ?loading=${this._previewingId === obsId}
+          ?disabled=${this._previewingId !== null}
+          @click=${async () => {
+          this._previewingId = obsId;
+          try {
+            if (!this._previewedIds.has(obsId)) {
+              const prefix = `/${this._org}/${this._site}`;
+              await Promise.all(entry.items.map((item) => {
+                const path = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path;
+                const withoutExt = item.ext ? path.slice(0, -(item.ext.length + 1)) : path;
+                return this._actions.daFetch(
+                  `https://admin.hlx.page/preview/${this._org}/${this._site}/main${withoutExt}`,
+                  { method: 'POST' },
+                );
+              }));
+              this._previewedIds.add(obsId);
+            }
+            const payload = { items: entry.items, org: this._org, site: this._site };
+            localStorage.setItem('da-drafts-preview', JSON.stringify(payload));
+            const bc = new BroadcastChannel('da-drafts-preview');
+            bc.postMessage(payload);
+            bc.close();
+            this._actions?.showPanel?.('drafts-preview');
+          } finally {
+            this._previewingId = null;
+          }
+        }}>Preview drafts</sl-button>
       </div>`;
   }
 

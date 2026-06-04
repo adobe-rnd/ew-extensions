@@ -1,5 +1,5 @@
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
-import { LitElement, html, nothing } from 'da-lit';
+import { LitElement, html } from 'da-lit';
 
 const STORAGE_KEY = 'da-drafts-preview';
 const CHANNEL_NAME = 'da-drafts-preview';
@@ -41,7 +41,7 @@ class DraftsPreviewApp extends LitElement {
       this._activeTab = 0;
     };
 
-    DA_SDK.then(({ actions }) => { this._actions = actions; }).catch(() => {});
+    DA_SDK.then(({ actions }) => { this._actions = actions; }).catch(() => { });
   }
 
   disconnectedCallback() {
@@ -54,7 +54,7 @@ class DraftsPreviewApp extends LitElement {
     const prefix = `/${this._org}/${this._site}`;
     const rel = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path;
     const withoutExt = item.ext ? rel.slice(0, -(item.ext.length + 1)) : rel;
-    return `https://main--${this._site}--${this._org}.aem.live${withoutExt}`;
+    return `https://main--${this._site}--${this._org}.aem.page${withoutExt}`;
   }
 
   _openInCanvas(item) {
@@ -62,6 +62,7 @@ class DraftsPreviewApp extends LitElement {
       ? item.path.slice(1, -(item.ext.length + 1))
       : item.path.replace(/^\//, '');
     this._actions?.setHash(`/${hash}`);
+    this._actions?.closeLibrary();
   }
 
   render() {
