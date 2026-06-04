@@ -223,6 +223,7 @@ class NerveCenterApp extends LitElement {
 
 
   _renderButton(obs) {
+    if (obs.status?.toLowerCase() === 'draft') return nothing;
     const drafts = this._drafts[obs.id];
     const hasDrafts = drafts && !drafts.loading && drafts.items.length > 0;
     const label = hasDrafts ? 'Start Publish Workflow' : 'Generate content from observation';
