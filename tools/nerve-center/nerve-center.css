@@ -170,6 +170,31 @@ nerve-center-app .obs-chat-btn {
   width: 100%;
 }
 
+sl-button.ew-outline-accent {
+  background: transparent;
+  border: none;
+  padding: 0;
+  vertical-align: middle;
+}
+
+sl-button.ew-outline-accent::part(base) {
+  background: transparent;
+  border-color: var(--ew-accent);
+  color: var(--ew-accent);
+}
+
+sl-button.ew-outline-accent::part(base):hover:not(:disabled) {
+  background: var(--s2-blue-100, #eff6ff);
+  border-color: var(--ew-accent-hover);
+  color: var(--ew-accent-hover);
+}
+
+nerve-center-app .nc-preview-btn {
+  width: 100%;
+  margin-top: var(--spacing-150, 10px);
+}
+
+
 .nc-toast {
   position: fixed;
   bottom: var(--spacing-400, 24px);

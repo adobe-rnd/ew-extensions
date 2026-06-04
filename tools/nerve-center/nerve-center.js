@@ -206,8 +206,17 @@ class NerveCenterApp extends LitElement {
         ${entry.items.map((item) => html`
           <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${item.name}</a>
         `)}
+        <sl-button class="ew-outline-accent nc-preview-btn" @click=${() => {
+        const payload = { items: entry.items, org: this._org, site: this._site };
+        localStorage.setItem('da-drafts-preview', JSON.stringify(payload));
+        const bc = new BroadcastChannel('da-drafts-preview');
+        bc.postMessage(payload);
+        bc.close();
+        this._actions?.showPanel('drafts-preview');
+      }}>Preview drafts</sl-button>
       </div>`;
   }
+
 
   _renderButton(obs) {
     const drafts = this._drafts[obs.id];
