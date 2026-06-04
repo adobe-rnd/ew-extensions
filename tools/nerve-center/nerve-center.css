@@ -3,12 +3,17 @@ nerve-center-app {
   --ew-accent-hover: var(--s2-blue-1000);
 
   display: block;
-  max-width: var(--grid-container-width, 900px);
-  margin: var(--spacing-400, 24px) auto;
+  margin: 10px;
   padding: 0 var(--spacing-200, 12px);
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
-  font-family: var(--body-font-family, adobe-clean, 'Source Sans Pro', -apple-system, sans-serif);
+  font-family: var(
+    --body-font-family,
+    adobe-clean,
+    'Source Sans Pro',
+    -apple-system,
+    sans-serif
+  );
   color: var(--s2-gray-800, #222);
 }
 
@@ -35,10 +40,23 @@ sl-button.ew-fill-accent::part(base):hover:not(:disabled) {
   border-color: var(--ew-accent-hover);
 }
 
+nerve-center-app .app-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--spacing-200, 12px);
+}
+
+nerve-center-app .nc-logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
 nerve-center-app .app-title {
   font-size: var(--s2-heading-xl-size, 28px);
   font-weight: 700;
-  margin: 0 0 var(--spacing-200, 12px);
+  margin: 0;
   color: var(--s2-gray-900, #1a1a1a);
   letter-spacing: -0.02em;
 }
@@ -76,14 +94,12 @@ nerve-center-app .card ul li {
   font-size: var(--s2-body-m-size, 14px);
 }
 
-nerve-center-app .observation-item {
-  padding: var(--spacing-300, 16px) 0;
-  border-bottom: 1px solid var(--s2-gray-200, #e0e0e0);
+nerve-center-app .card {
+  margin-bottom: var(--spacing-200, 12px);
 }
 
-nerve-center-app .observation-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+nerve-center-app .card:last-of-type {
+  margin-bottom: 0;
 }
 
 nerve-center-app .obs-name {
@@ -125,9 +141,32 @@ nerve-center-app .badge {
   text-transform: capitalize;
 }
 
-nerve-center-app .badge.confidence {
-  background: var(--s2-green-100, #dcfce7);
-  color: var(--s2-green-900, #166534);
+nerve-center-app .confidence-bar {
+  height: 6px;
+  background: var(--s2-gray-200, #e0e0e0);
+  border-radius: 3px;
+  margin-bottom: var(--spacing-200, 12px);
+  overflow: hidden;
+}
+
+nerve-center-app .confidence-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+nerve-center-app .confidence-fill--high {
+  width: 100%;
+  background: var(--s2-green-500, #22c55e);
+}
+
+nerve-center-app .confidence-fill--medium {
+  width: 55%;
+  background: var(--s2-orange-500, #f97316);
+}
+
+nerve-center-app .confidence-fill--low {
+  width: 25%;
+  background: var(--s2-red-400, #f87171);
 }
 
 nerve-center-app .drafts {
@@ -170,6 +209,67 @@ nerve-center-app .obs-chat-btn {
   width: 100%;
 }
 
+nerve-center-app .obs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-200, 12px);
+}
+
+nerve-center-app .obs-header .obs-name {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+nerve-center-app .obs-check {
+  color: var(--s2-green-700, #15803d);
+  margin-right: 6px;
+}
+
+nerve-center-app .obs-complete-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--s2-gray-400, #aaa);
+  background: transparent;
+  color: var(--s2-gray-600, #767676);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+nerve-center-app .obs-complete-btn:hover {
+  border-color: var(--s2-gray-600, #767676);
+  color: var(--s2-gray-900, #1a1a1a);
+}
+
+nerve-center-app .obs-complete-btn--done {
+  border-color: var(--s2-green-600, #16a34a);
+  color: var(--s2-green-700, #15803d);
+  background: var(--s2-green-50, #f0fdf4);
+}
+
+nerve-center-app .obs-complete-btn--done:hover {
+  background: var(--s2-green-100, #dcfce7);
+  border-color: var(--s2-green-700, #15803d);
+}
+
+nerve-center-app .completed-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-green-700, #15803d);
+  margin: var(--spacing-300, 16px) 0 var(--spacing-75, 6px);
+}
+
+nerve-center-app .observation-item.obs-completed {
+  background: var(--s2-green-50, #f0fdf4);
+  border-color: var(--s2-green-300, #86efac);
+}
+
 sl-button.ew-outline-accent {
   background: transparent;
   border: none;
@@ -194,7 +294,6 @@ nerve-center-app .nc-preview-btn {
   margin-top: var(--spacing-150, 10px);
 }
 
-
 .nc-toast {
   position: fixed;
   bottom: var(--spacing-400, 24px);
@@ -206,7 +305,9 @@ nerve-center-app .nc-preview-btn {
   padding: var(--spacing-150, 10px) var(--spacing-300, 16px);
   border-radius: var(--s2-radius-200, 10px);
   opacity: 0;
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   pointer-events: none;
   z-index: 9999;
   white-space: nowrap;
@@ -218,5 +319,7 @@ nerve-center-app .nc-preview-btn {
 }
 
 @media (width <= 600px) {
-  nerve-center-app .card { padding: var(--spacing-300, 16px); }
+  nerve-center-app .card {
+    padding: var(--spacing-300, 16px);
+  }
 }
