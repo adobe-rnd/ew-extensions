@@ -1,9 +1,4 @@
 :host {
-  --chat-drawer-width: 380px;
-  --confirm-dialog-width: 350px;
-  --gate-card-width: 420px;
-  --top-nav-min-height: 40px;
-
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -25,7 +20,9 @@
 }
 
 .refresh-indicator {
-  flex-shrink: 0;
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -39,7 +36,7 @@
   border-radius: 999px;
   background: light-dark(var(--s2-blue-100), color-mix(in srgb, var(--s2-blue-900) 18%, transparent));
   color: var(--s2-blue-900);
-  font-size: var(--s2-body-size-xxs, 10px);
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -78,7 +75,7 @@
 
 .gate-card {
   width: 100%;
-  max-width: var(--gate-card-width);
+  max-width: 420px;
   display: flex;
   flex-direction: column;
   gap: var(--s2-spacing-200);
@@ -185,7 +182,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  min-height: var(--top-nav-min-height);
+  min-height: 40px;
   background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
   border-bottom: 1px solid var(--s2-gray-200);
 }
@@ -197,8 +194,8 @@
 .chat-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2-spacing-75);
-  padding: var(--s2-spacing-75) var(--s2-spacing-150);
+  gap: 6px;
+  padding: 6px 12px;
   border: none;
   border-radius: var(--s2-corner-radius-100);
   background: none;
@@ -261,7 +258,7 @@
 .detail-back-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2-spacing-50);
+  gap: 4px;
   padding: var(--s2-spacing-100) var(--s2-spacing-200);
   border: none;
   background: none;
@@ -289,7 +286,7 @@
 /* ─── chat drawer: collapsed by default, slides in from the left ─────────── */
 
 .chat-drawer {
-  flex: 0 0 var(--chat-drawer-width);
+  flex: 0 0 380px;
   max-width: 0;
   overflow: hidden;
   display: flex;
@@ -298,7 +295,7 @@
 }
 
 .root.is-chat-open .chat-drawer {
-  max-width: var(--chat-drawer-width);
+  max-width: 380px;
   border-right: 1px solid var(--s2-gray-200);
 }
 
@@ -329,7 +326,7 @@
 
 .confirm-dialog {
   width: 100%;
-  max-width: var(--confirm-dialog-width);
+  max-width: 350px;
   margin: var(--s2-spacing-200);
   padding: var(--s2-spacing-700) 0;
   border: 1px solid var(--s2-gray-300);
@@ -416,7 +413,7 @@
 @media (width <= 900px) {
   .top-nav { flex-wrap: wrap; }
 
-  .chat-toggle-btn { padding: var(--s2-spacing-50) var(--s2-spacing-100); }
+  .chat-toggle-btn { padding: 4px 10px; }
 
   .content-area {
     flex-direction: column;

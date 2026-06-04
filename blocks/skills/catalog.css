@@ -27,7 +27,7 @@
 /* ─── MCP tool inline description (used in dependency tree) ────────────────── */
 
 .mcp-tool-inline-desc {
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   color: var(--s2-gray-500);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -51,6 +51,7 @@
 .dep-tree {
   display: flex;
   flex-direction: column;
+  gap: 0;
   padding: var(--s2-spacing-75) var(--s2-spacing-100);
   border: 1px solid color-mix(in srgb, var(--s2-gray-200) 60%, transparent);
   border-radius: var(--s2-corner-radius-200);
@@ -77,17 +78,17 @@
 
 /* ─── tab header (title + description above the list) ──────────────────────── */
 
-.tab-header { margin-bottom: var(--s2-spacing-200); }
+.tab-header { margin-bottom: 16px; }
 
 .tab-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--s2-spacing-200);
+  gap: 16px;
 }
 
 .tab-title {
-  font-size: var(--s2-body-size-l, 18px);
+  font-size: 18px;
   font-weight: 600;
   color: var(--s2-gray-900);
   margin: 0;
@@ -95,21 +96,21 @@
 }
 
 .tab-description {
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   color: var(--s2-gray-600);
-  margin: var(--s2-spacing-50) 0 0;
+  margin: 4px 0 0;
   line-height: 1.4;
 }
 
 .new-btn {
   flex-shrink: 0;
-  padding: var(--s2-spacing-75) var(--s2-spacing-150);
+  padding: 6px 14px;
   border: 1px dashed var(--s2-gray-400);
-  border-radius: var(--s2-corner-radius-100);
+  border-radius: 8px;
   background: none;
   color: var(--s2-gray-600);
   font-family: inherit;
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
@@ -124,12 +125,12 @@
 
 .list-search {
   position: relative;
-  margin-bottom: var(--s2-spacing-200);
+  margin-bottom: 16px;
 }
 
 .list-search .search-icon {
   position: absolute;
-  left: var(--s2-spacing-150);
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--s2-gray-500);
@@ -138,13 +139,13 @@
 
 .list-search input {
   width: 100%;
-  padding: var(--s2-spacing-100) var(--s2-spacing-150) var(--s2-spacing-100) calc(var(--s2-spacing-150) + 22px);
+  padding: 10px 12px 10px 34px;
   border: 1px solid var(--s2-gray-300);
-  border-radius: var(--s2-corner-radius-100);
+  border-radius: 8px;
   background: light-dark(var(--s2-gray-25), var(--s2-gray-100));
   color: var(--s2-gray-900);
   font-family: inherit;
-  font-size: var(--s2-body-size-s);
+  font-size: 14px;
   box-sizing: border-box;
   outline: none;
   transition: border-color 0.15s;
@@ -157,8 +158,8 @@
 .catalog-scroll {
   display: flex;
   flex-direction: column;
-  gap: var(--s2-spacing-100);
-  padding: var(--s2-spacing-300);
+  gap: 8px;
+  padding: 24px;
 }
 
 .catalog-toolbar {
@@ -172,13 +173,13 @@
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  padding: var(--s2-spacing-50) var(--s2-spacing-100);
+  padding: 4px 10px;
   border: 1px solid var(--s2-gray-300);
-  border-radius: var(--s2-corner-radius-100);
+  border-radius: 8px;
   background: none;
   color: var(--s2-gray-700);
   font-family: inherit;
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   cursor: pointer;
   outline: none;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -192,32 +193,33 @@
   color: light-dark(#fff, #1a1a1a);
 }
 
-/* ─── shared list row (flat row style used by all catalog list views) ──────── */
+/* ─── prompt rows ─────────────────────────────────────────────────────────────── */
 
-.list-row {
+.prompt-row {
   display: flex;
   align-items: center;
-  gap: var(--s2-spacing-150);
-  padding: var(--s2-spacing-150) var(--s2-spacing-200);
+  gap: 12px;
+  padding: 14px 16px;
   border: none;
   border-bottom: 1px solid color-mix(in srgb, var(--s2-gray-200) 40%, transparent);
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.list-row:hover {
+.prompt-row:hover {
   background: light-dark(
     color-mix(in srgb, var(--s2-gray-100) 50%, transparent),
     color-mix(in srgb, var(--s2-gray-75) 50%, transparent)
   );
 }
 
-.list-row.is-selected {
+.prompt-row.is-selected {
   background: light-dark(var(--s2-gray-100), var(--s2-gray-75));
 }
 
-.list-row-pill {
+.prompt-row-pill {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -229,7 +231,7 @@
   color: var(--s2-gray-600);
 }
 
-.list-row-body {
+.prompt-row-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -237,15 +239,15 @@
   min-width: 0;
 }
 
-.list-row-title-line {
+.prompt-row-title-line {
   display: flex;
   align-items: baseline;
-  gap: var(--s2-spacing-100);
+  gap: 8px;
   min-width: 0;
 }
 
-.list-row-name {
-  font-size: var(--s2-body-size-s);
+.prompt-row-title {
+  font-size: 14px;
   font-weight: 500;
   color: var(--s2-gray-900);
   overflow: hidden;
@@ -253,15 +255,8 @@
   white-space: nowrap;
 }
 
-.list-row-meta {
-  font-size: var(--s2-body-size-xs);
-  color: var(--s2-gray-500);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.list-row-desc {
-  font-size: var(--s2-body-size-xs);
+.prompt-row-desc {
+  font-size: 12px;
   color: var(--s2-gray-500);
   line-height: 1.4;
   overflow: hidden;
@@ -286,12 +281,12 @@
 
 .section-h,
 .tools-selector-heading {
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   font-weight: 600;
   color: var(--s2-gray-600);
 }
 
-.section-h { margin: var(--s2-spacing-300) 0 var(--s2-spacing-150); }
+.section-h { margin: 24px 0 12px; }
 .tools-selector-heading { margin: 0; }
 
 /* ─── plugin card grid (agents tab — matches AO's Plugins layout) ──────────── */
@@ -299,23 +294,26 @@
 .plugin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--s2-spacing-150);
+  gap: 12px;
 }
 
 .plugin-card {
   display: flex;
   flex-direction: column;
-  gap: var(--s2-spacing-100);
-  padding: var(--s2-spacing-200);
+  gap: 8px;
+  padding: 16px;
   border: 1px solid color-mix(in srgb, var(--s2-gray-200) 60%, transparent);
-  border-radius: var(--s2-corner-radius-200);
+  border-radius: 12px;
   background: transparent;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .plugin-card:focus-visible,
-.list-row:focus-visible {
+[data-testid="skill-card"]:focus-visible,
+.prompt-row[role="button"]:focus-visible,
+[data-testid="mcp-builtin-card"]:focus-visible,
+[data-testid="mcp-card"]:focus-visible {
   outline: 2px solid var(--s2-gray-900);
   outline-offset: 2px;
 }
@@ -336,7 +334,7 @@
 .plugin-card-top {
   display: flex;
   align-items: flex-start;
-  gap: var(--s2-spacing-100);
+  gap: 10px;
 }
 
 .plugin-card-pill {
@@ -346,7 +344,7 @@
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  border-radius: var(--s2-corner-radius-100);
+  border-radius: 8px;
   background: var(--s2-gray-200);
   color: var(--s2-gray-600);
 }
@@ -359,7 +357,7 @@
 }
 
 .plugin-card-name {
-  font-size: var(--s2-body-size-s);
+  font-size: 14px;
   font-weight: 500;
   color: var(--s2-gray-900);
   overflow: hidden;
@@ -368,13 +366,13 @@
 }
 
 .plugin-card-source {
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   color: var(--s2-gray-500);
 }
 
 .plugin-card-desc {
   margin: 0;
-  font-size: var(--s2-body-size-xs);
+  font-size: 12px;
   color: var(--s2-gray-600);
   line-height: 1.4;
   display: -webkit-box;
@@ -386,17 +384,17 @@
 .plugin-card-meta {
   display: flex;
   align-items: center;
-  gap: var(--s2-spacing-100);
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: auto;
-  padding-top: var(--s2-spacing-50);
+  padding-top: 4px;
 }
 
 .plugin-card-badge {
   display: inline-block;
-  padding: 2px var(--s2-spacing-75);
-  border-radius: var(--s2-corner-radius-75, 4px);
-  font-size: var(--s2-body-size-xxs, 10px);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
   background: var(--s2-gray-200);
@@ -404,7 +402,7 @@
 }
 
 .plugin-card-count {
-  font-size: var(--s2-body-size-xxs, 11px);
+  font-size: 11px;
   color: var(--s2-gray-500);
 }
 
@@ -414,7 +412,7 @@
   border: none;
   background: none;
   font-family: inherit;
-  font-size: var(--s2-body-size-xxs, 11px);
+  font-size: 11px;
   color: var(--s2-gray-500);
   cursor: pointer;
   transition: color 0.15s;
@@ -447,13 +445,24 @@
 }
 
 
+/* ─── card more button ────────────────────────────────────────────────────────── */
+
+.more-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--s2-gray-700);
+  font-size: 1rem;
+}
+
+/* ─── card menu ───────────────────────────────────────────────────────────────── */
+
 /* ─── view toggle (grid / list) ────────────────────────────────────────────── */
 
 .view-toggle {
   display: inline-flex;
   margin-left: auto;
   border: 1px solid var(--s2-gray-300);
-  border-radius: var(--s2-corner-radius-75, 6px);
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -478,11 +487,86 @@
   color: var(--s2-gray-900);
 }
 
-/* ─── catalog list (container for list-row items) ──────────────────────────── */
+/* ─── catalog list rows (list-mode alternative to plugin-grid) ─────────────── */
 
 .catalog-list {
   display: flex;
   flex-direction: column;
+}
+
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--s2-gray-200) 40%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.catalog-row:hover {
+  background: light-dark(
+    color-mix(in srgb, var(--s2-gray-100) 50%, transparent),
+    color-mix(in srgb, var(--s2-gray-75) 50%, transparent)
+  );
+}
+
+.catalog-row.is-selected {
+  background: light-dark(var(--s2-gray-100), var(--s2-gray-75));
+}
+
+.catalog-row-pill {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--s2-gray-200);
+  color: var(--s2-gray-600);
+}
+
+.catalog-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.catalog-row-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.catalog-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--s2-gray-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-row-meta {
+  font-size: 12px;
+  color: var(--s2-gray-500);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.catalog-row-desc {
+  font-size: 12px;
+  color: var(--s2-gray-500);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── drill-down chevron (trailing affordance on interactive rows) ──────────── */
@@ -493,6 +577,7 @@
   transition: color 0.15s;
 }
 
-.list-row:hover .drill-chevron {
+.prompt-row:hover .drill-chevron,
+.catalog-row:hover .drill-chevron {
   color: var(--s2-gray-700);
 }

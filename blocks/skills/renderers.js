@@ -7,7 +7,6 @@ import {
   BUILTIN_TOOL_IDS,
   CATALOG_TABS,
   CATEGORY_OPTIONS,
-  DEP_TREE_MAX_TOOLS,
   KNOWN_CATEGORY_CLASSES,
   STATUS,
   STATUS_TYPE,
@@ -20,7 +19,6 @@ import {
   TAB_MEMORY,
   TAB_PROMPTS,
   TAB_SKILLS,
-  TOOLS_FILTER_THRESHOLD,
 } from './constants.js';
 import {
   skillRowEnabled,
@@ -109,7 +107,6 @@ const MCP_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none
 const SKILL_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>`;
 const GRID_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`;
 const LIST_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 3h10M4 8h10M4 13h10M2 3h0M2 8h0M2 13h0"/></svg>`;
-const AGENT_USAGE_ICON = '\u26A1';
 
 function renderViewToggle(vm) {
   const { catalogViewMode: mode } = vm;
@@ -157,7 +154,7 @@ function renderSkillCard(vm, id) {
       ${title ? html`<p class="plugin-card-desc">${title}</p>` : nothing}
       <footer class="plugin-card-meta">
         ${usedBy.length ? html`
-          ${usedBy.map((name) => html`<span class="plugin-card-count">${AGENT_USAGE_ICON} ${name}</span>`)}
+          ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
         <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
         <span class="plugin-card-count">${lineCount}L</span>
@@ -173,23 +170,23 @@ function renderSkillRow(vm, id) {
   const usedBy = agentsUsingSkill(vm, id);
 
   return html`
-    <div class="list-row ${isEditing ? 'is-selected' : ''}" role="button"
+    <div class="catalog-row ${isEditing ? 'is-selected' : ''}" role="button"
       tabindex="0"
       aria-label="Edit skill ${id}"
-      data-testid="skill-row"
+      data-testid="skill-card"
       data-skill-id=${id}
       @click=${(e) => vm.onCardClick(e, () => vm.onEditSkill(id))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onEditSkill(id))}
     >
-      <span class="list-row-pill">${SKILL_ICON}</span>
-      <div class="list-row-body">
-        <div class="list-row-title-line">
-          <span class="list-row-name">${id}</span>
+      <span class="catalog-row-pill">${SKILL_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${id}</span>
           ${usedBy.length ? html`
-            <span class="list-row-meta">${AGENT_USAGE_ICON} ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
+            <span class="catalog-row-meta">⚡ ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
           ` : nothing}
         </div>
-        ${title ? html`<span class="list-row-desc">${title}</span>` : nothing}
+        ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
       ${DRILL_CHEVRON}
     </div>
@@ -250,19 +247,19 @@ function renderAgentRow(vm, agent, isBuiltin = false) {
   const description = agent.description || agent.preset?.description || '';
 
   return html`
-    <div class="list-row" role="button" tabindex="0"
+    <div class="catalog-row" role="button" tabindex="0"
       aria-label="Open agent ${title}"
-      data-testid=${isBuiltin ? 'agent-builtin-row' : 'agent-row'}
+      data-testid=${isBuiltin ? 'agent-builtin-card' : 'agent-card'}
       @click=${(e) => vm.onCardClick(e, () => vm.onSelectAgent(agent))}
       @keydown=${(e) => vm.onCardKeydown(e, () => vm.onSelectAgent(agent))}
     >
-      <span class="list-row-pill">${PLUGIN_ICON}</span>
-      <div class="list-row-body">
-        <div class="list-row-title-line">
-          <span class="list-row-name">${title}</span>
-          <span class="list-row-meta">${isBuiltin ? 'built-in' : 'custom'}</span>
+      <span class="catalog-row-pill">${PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${title}</span>
+          <span class="catalog-row-meta">${isBuiltin ? 'built-in' : 'custom'}</span>
         </div>
-        ${description ? html`<span class="list-row-desc">${description}</span>` : nothing}
+        ${description ? html`<span class="catalog-row-desc">${description}</span>` : nothing}
       </div>
       ${DRILL_CHEVRON}
     </div>
@@ -396,8 +393,8 @@ function renderCatalogView(vm) {
             type="search"
             placeholder="Search ${tabLabel.toLowerCase()}…"
             aria-label="Search ${tabLabel.toLowerCase()}"
-            .value=${vm.catalogSearch}
-            @input=${(e) => vm.setCatalogSearch(e.target.value)}
+            .value=${vm.promptSearch}
+            @input=${(e) => vm.setPromptSearch(e.target.value)}
           >
         </div>
       ` : nothing}
@@ -678,7 +675,7 @@ export function renderMcpToolsList(vm) {
   return html`
     <div class="mcp-tools-section">
       <h4 class="tools-selector-heading">Tools (${tools.length})</h4>
-      ${tools.length > TOOLS_FILTER_THRESHOLD ? html`
+      ${tools.length > 6 ? html`
         <input type="search" class="tools-search-input"
           placeholder="Filter tools…" aria-label="Filter tools"
           .value=${vm.toolsSearch}
@@ -825,7 +822,7 @@ export function renderEditorFooter(vm, tab) {
 
 export function renderSkillsCatalog(vm) {
   const ids = Object.keys(vm.skills);
-  const searchQuery = vm.catalogSearch.trim().toLowerCase();
+  const searchQuery = vm.promptSearch.trim().toLowerCase();
 
   let filtered = vm.catalogFilter === 'all' ? ids
     : ids.filter((id) => vm.skillStatuses[id] === vm.catalogFilter);
@@ -838,7 +835,6 @@ export function renderSkillsCatalog(vm) {
   }
 
   const isGrid = vm.catalogViewMode === 'grid';
-  const hasResults = filtered.length > 0;
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Filter skills">
@@ -856,9 +852,9 @@ export function renderSkillsCatalog(vm) {
       >All</button>
       ${renderViewToggle(vm)}
     </div>
-    ${!hasResults ? html`<div class="empty">No skills found</div>` : nothing}
-    ${hasResults && isGrid ? html`<div class="plugin-grid">${filtered.map((id) => renderSkillCard(vm, id))}</div>` : nothing}
-    ${hasResults && !isGrid ? html`<div class="catalog-list">${filtered.map((id) => renderSkillRow(vm, id))}</div>` : nothing}
+    ${!filtered.length ? html`<div class="empty">No skills found</div>` : nothing}
+    ${filtered.length && isGrid ? html`<div class="plugin-grid">${filtered.map((id) => renderSkillCard(vm, id))}</div>` : nothing}
+    ${filtered.length && !isGrid ? html`<div class="catalog-list">${filtered.map((id) => renderSkillRow(vm, id))}</div>` : nothing}
   `;
 }
 
@@ -870,12 +866,12 @@ function renderDepTree(vm, agent, isBuiltin) {
   return html`
     <div class="dep-tree" aria-label="Dependency tree for ${title}">
       <div class="dep-tree-node">
-        <span class="entity-chip">${title}</span>
+        <span class="entity-chip entity-chip-agent">${title}</span>
       </div>
       ${skills.map((s) => html`
         <div class="dep-tree-node dep-tree-indent">
           <span class="dep-tree-connector">├─</span>
-          <span class="entity-chip">${s}</span>
+          <span class="entity-chip entity-chip-skill">${s}</span>
         </div>
       `)}
       ${mcps.map((mcpId) => {
@@ -883,18 +879,18 @@ function renderDepTree(vm, agent, isBuiltin) {
         return html`
           <div class="dep-tree-node dep-tree-indent">
             <span class="dep-tree-connector">├─</span>
-            <span class="entity-chip">${mcpId}</span>
+            <span class="entity-chip entity-chip-mcp">${mcpId}</span>
           </div>
-          ${tools.slice(0, DEP_TREE_MAX_TOOLS).map((t, i) => html`
+          ${tools.slice(0, 6).map((t, i) => html`
             <div class="dep-tree-node dep-tree-indent-2">
-              <span class="dep-tree-connector">${i < Math.min(tools.length, DEP_TREE_MAX_TOOLS) - 1 ? '├─' : '└─'}</span>
-              <span class="entity-chip">${t.name}</span>
+              <span class="dep-tree-connector">${i < Math.min(tools.length, 6) - 1 ? '├─' : '└─'}</span>
+              <span class="entity-chip entity-chip-tool">${t.name}</span>
             </div>
           `)}
-          ${tools.length > DEP_TREE_MAX_TOOLS ? html`
+          ${tools.length > 6 ? html`
             <div class="dep-tree-node dep-tree-indent-2">
               <span class="dep-tree-connector">└─</span>
-              <span class="mcp-tool-inline-desc">+ ${tools.length - DEP_TREE_MAX_TOOLS} more</span>
+              <span class="mcp-tool-inline-desc">+ ${tools.length - 6} more</span>
             </div>
           ` : nothing}
         `;
@@ -941,7 +937,7 @@ export function renderAgentsCatalog(vm) {
 }
 
 export function renderPromptsCatalog(vm) {
-  const searchQuery = vm.catalogSearch.trim().toLowerCase();
+  const searchQuery = vm.promptSearch.trim().toLowerCase();
   const prompts = searchQuery
     ? vm.prompts.filter((r) => (r.title || '').toLowerCase().includes(searchQuery)
       || (r.category || '').toLowerCase().includes(searchQuery))
@@ -960,28 +956,28 @@ export function renderPromptsCatalog(vm) {
         const cat = (row.category || '').toLowerCase().trim();
         const catClass = KNOWN_CATEGORY_CLASSES.has(cat) ? cat : 'default';
         return html`
-          <div class="list-row ${isSelected ? 'is-selected' : ''}" role="listitem"
-            tabindex="0"
-            aria-label="Edit prompt ${title || '(untitled)'}"
-            data-testid="prompt-row"
-            data-prompt-title=${title}
-            @click=${(e) => vm.onCardClick(e, () => vm.onOpenEditor(row))}
-            @keydown=${(e) => vm.onCardKeydown(e, () => vm.onOpenEditor(row))}
-          >
-            <span class="list-row-pill">${PROMPT_ICON}</span>
-            <div class="list-row-body">
-              <div class="list-row-title-line">
-                <span class="list-row-name">${title || '(untitled)'}</span>
-                ${row.category ? html`
-                  <span class="category-badge cat-${catClass}">${row.category}</span>
+          <article role="listitem" data-testid="prompt-card" data-prompt-title=${title}>
+            <div class="prompt-row ${isSelected ? 'is-selected' : ''}" role="button"
+              tabindex="0"
+              aria-label="Edit prompt ${title || '(untitled)'}"
+              @click=${(e) => vm.onCardClick(e, () => vm.onOpenEditor(row))}
+              @keydown=${(e) => vm.onCardKeydown(e, () => vm.onOpenEditor(row))}
+            >
+              <span class="prompt-row-pill">${PROMPT_ICON}</span>
+              <div class="prompt-row-body">
+                <div class="prompt-row-title-line">
+                  <span class="prompt-row-title">${title || '(untitled)'}</span>
+                  ${row.category ? html`
+                    <span class="category-badge cat-${catClass}">${row.category}</span>
+                  ` : nothing}
+                </div>
+                ${row.prompt ? html`
+                  <span class="prompt-row-desc">${row.prompt}</span>
                 ` : nothing}
               </div>
-              ${row.prompt ? html`
-                <span class="list-row-desc">${row.prompt}</span>
-              ` : nothing}
+              ${DRILL_CHEVRON}
             </div>
-            ${DRILL_CHEVRON}
-          </div>
+          </article>
         `;
       })}
     </div>
@@ -1000,11 +996,11 @@ function mcpShared(vm, s, isBuiltin) {
     ? vm.viewingMcpServerId === s.id && !vm.editingMcpKey
     : vm.isEditorOpen && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
   const onClick = isBuiltin
-    ? (e) => vm.onCardClick(e, () => vm.onViewMcpTools(s.id))
-    : (e) => vm.onCardClick(e, () => vm.onEditMcp(s));
+    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))
+    : (e) => vm.onMcpCardClick(e, () => vm.onEditMcp(s));
   const onKey = isBuiltin
-    ? (e) => vm.onCardKeydown(e, () => vm.onViewMcpTools(s.id))
-    : (e) => vm.onCardKeydown(e, () => vm.onEditMcp(s));
+    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))
+    : (e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(s));
   let badge = 'BUILT-IN';
   if (!isBuiltin) badge = (skillRowStatus(s) === STATUS.APPROVED && skillRowEnabled(s)) ? 'CONNECTED' : 'DISABLED';
   return { key, desc, toolCount, transport, isSelected, onClick, onKey, badge };
@@ -1041,17 +1037,17 @@ function renderMcpRow(vm, s, isBuiltin) {
   const { key, desc, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
 
   return html`
-    <div class="list-row ${isSelected ? 'is-selected' : ''}" role="button" tabindex="0"
+    <div class="catalog-row ${isSelected ? 'is-selected' : ''}" role="button" tabindex="0"
       aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
-      data-testid=${isBuiltin ? 'mcp-builtin-row' : 'mcp-row'}
+      data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
       data-mcp-key=${key}
       @click=${onClick} @keydown=${onKey}
     >
-      <span class="list-row-pill">${MCP_ICON}</span>
-      <div class="list-row-body">
-        <div class="list-row-title-line">
-          <span class="list-row-name">${key || '(unnamed)'}</span>
-          <span class="list-row-meta">${desc} · ${transport || 'built-in'}</span>
+      <span class="catalog-row-pill">${MCP_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${key || '(unnamed)'}</span>
+          <span class="catalog-row-meta">${desc} · ${transport || 'built-in'}</span>
         </div>
       </div>
       ${DRILL_CHEVRON}
@@ -1060,7 +1056,7 @@ function renderMcpRow(vm, s, isBuiltin) {
 }
 
 export function renderMcpsCatalog(vm) {
-  const searchQuery = vm.catalogSearch.trim().toLowerCase();
+  const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
   let filteredCustom = vm.mcpRows.filter((row) => filterPasses(skillRowStatus(row)));
   if (searchQuery) {
@@ -1072,7 +1068,6 @@ export function renderMcpsCatalog(vm) {
   }
   const showBuiltins = filterPasses(STATUS.APPROVED);
   const isGrid = vm.catalogViewMode === 'grid';
-  const hasCustom = filteredCustom.length > 0;
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="MCP view controls">
@@ -1085,9 +1080,9 @@ export function renderMcpsCatalog(vm) {
         : html`<div class="catalog-list">${BUILTIN_MCP_SERVERS.map((s) => renderMcpRow(vm, s, true))}</div>`}
     ` : nothing}
     <h3 class="section-h">Custom (${filteredCustom.length})</h3>
-    ${!hasCustom ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
-    ${hasCustom && isGrid ? html`<div class="plugin-grid">${filteredCustom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
-    ${hasCustom && !isGrid ? html`<div class="catalog-list">${filteredCustom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
+    ${!filteredCustom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
+    ${filteredCustom.length && isGrid ? html`<div class="plugin-grid">${filteredCustom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
+    ${filteredCustom.length && !isGrid ? html`<div class="catalog-list">${filteredCustom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
   `;
 }
 
