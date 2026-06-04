@@ -212,7 +212,7 @@ class NerveCenterApp extends LitElement {
         const bc = new BroadcastChannel('da-drafts-preview');
         bc.postMessage(payload);
         bc.close();
-        this._actions?.showPanel('drafts-preview');
+        this._actions?.showPanel?.('drafts-preview');
       }}>Preview drafts</sl-button>
       </div>`;
   }
