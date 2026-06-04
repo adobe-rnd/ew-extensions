@@ -301,9 +301,8 @@ class NerveCenterApp extends LitElement {
           <div class="obs-header">
             <p class="obs-name">${obs.name}</p>
             <div class="obs-header-actions">
-              <button class="obs-info-btn" aria-label="Details"
-                @click=${() => window.parent.postMessage({ type: 'nx-show-obs-details', obs }, '*')}>ℹ</button>
-              <button class="obs-complete-btn" @click=${() => this._toggleComplete(obs.id)}>Mark complete</button>
+              <button class="obs-complete-btn" aria-label="Details"
+                @click=${() => window.parent.postMessage({ type: 'nx-show-obs-details', obs }, '*')}>Learn more</button>
             </div>
           </div>
           ${obs.description ? html`<p class="obs-description">${this._renderWithLinks(obs.description)}</p>` : nothing}
