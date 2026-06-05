@@ -262,7 +262,7 @@ nerve-center-app .drafts-label {
 }
 
 nerve-center-app .drafts-loading {
-  font-size: var(--s2-body-s-size, 13px);
+  font-size: 13px;
   color: var(--s2-gray-500, #999);
   margin: 0 0 var(--spacing-200, 12px);
 }

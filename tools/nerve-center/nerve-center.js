@@ -69,11 +69,6 @@ class NerveCenterApp extends LitElement {
     const completedParam = params.get('nerve-center-completed');
     if (completedParam) {
       this._completed = new Set(completedParam.split(',').map((id) => id.trim()).filter(Boolean));
-    } else {
-      try {
-        const stored = localStorage.getItem('nc-completed');
-        if (stored) this._completed = new Set(JSON.parse(stored));
-      } catch { /* ignore */ }
     }
 
     if (this._siteId && this._apiKey) {
@@ -266,7 +261,8 @@ class NerveCenterApp extends LitElement {
   _renderButton(obs) {
     if (obs.status?.toLowerCase() === 'draft') return nothing;
     const drafts = this._drafts[obs.id];
-    const hasDrafts = drafts && !drafts.loading && drafts.items.length > 0;
+    if (!drafts || drafts.loading) return nothing;
+    const hasDrafts = drafts.items.length > 0;
     const label = hasDrafts ? 'Start Publish Workflow' : 'Generate content from observation';
     const prompt = hasDrafts
       ? this._buildPublishPrompt(obs, drafts.items)
