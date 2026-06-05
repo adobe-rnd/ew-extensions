@@ -346,6 +346,7 @@ class NerveCenterApp extends LitElement {
             </div>
           ` : nothing}
           ${this._renderDrafts(obs.id)}
+          ${this._renderButton(obs)}
         </div>
       `)}
       ${done.length ? html`
