@@ -214,6 +214,44 @@ nerve-center-app .drafts {
   margin-bottom: var(--spacing-200, 12px);
 }
 
+nerve-center-app .drafts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--spacing-150, 10px);
+  font-size: 13px;
+}
+
+nerve-center-app .drafts-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--s2-gray-500, #999);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--s2-gray-100, #f0f0f0);
+}
+
+nerve-center-app .drafts-table td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--s2-gray-100, #f0f0f0);
+  vertical-align: middle;
+
+  &:first-child {
+    padding-right: 10px;
+  }
+}
+
+nerve-center-app .drafts-table tr:last-child td {
+  border-bottom: none;
+}
+
+nerve-center-app .draft-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--s2-gray-600, #767676);
+  white-space: nowrap;
+}
+
 nerve-center-app .drafts-label {
   font-size: 11px;
   font-weight: 600;
@@ -230,12 +268,13 @@ nerve-center-app .drafts-loading {
 }
 
 nerve-center-app .draft-link {
-  display: block;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ew-accent);
   text-decoration: none;
-  padding: var(--spacing-75, 6px) 0;
-  border-bottom: 1px solid var(--s2-gray-100, #f0f0f0);
+}
+
+nerve-center-app .draft-link:hover {
+  text-decoration: underline;
 }
 
 nerve-center-app .draft-link:last-child {

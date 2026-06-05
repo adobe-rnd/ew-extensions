@@ -214,6 +214,18 @@ class NerveCenterApp extends LitElement {
     return `${DA_CANVAS}#/${hash}`;
   }
 
+  _draftName(item) {
+    const seg = item.path.split('/').pop() ?? '';
+    const base = item.ext ? seg.slice(0, -(item.ext.length + 1)) : seg;
+    return base.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  _assignedRole(item) {
+    const roles = ['Technical Writer', 'Editor', 'Product Marketing', 'Brand Marketing'];
+    const hash = item.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    return roles[hash % roles.length];
+  }
+
   _renderDrafts(obsId) {
     const entry = this._drafts[obsId];
     if (!entry) return nothing;
@@ -222,10 +234,28 @@ class NerveCenterApp extends LitElement {
 
     return html`
       <div class="drafts">
-        <p class="drafts-label">Draft pages</p>
-        ${entry.items.map((item) => html`
-          <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${item.name}</a>
-        `)}
+        <table class="drafts-table">
+          <thead>
+            <tr>
+              <th>Draft Page</th>
+              <th>Assign to</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entry.items.map((item) => html`
+              <tr>
+                <td>
+                  <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">
+                    ${this._draftName(item)}
+                  </a>
+                </td>
+                <td>
+                  <span class="draft-role">${this._assignedRole(item)}</span>
+                </td>
+              </tr>
+            `)}
+          </tbody>
+        </table>
         <sl-button class="ew-outline-accent nc-preview-btn" @click=${() => {
         window.parent.postMessage({ type: 'nx-show-draft-preview', obsId, items: entry.items, org: this._org, site: this._site }, '*');
       }}>Compare drafts</sl-button>
@@ -315,7 +345,6 @@ class NerveCenterApp extends LitElement {
             </div>
           ` : nothing}
           ${this._renderDrafts(obs.id)}
-          ${this._renderButton(obs)}
         </div>
       `)}
       ${done.length ? html`
