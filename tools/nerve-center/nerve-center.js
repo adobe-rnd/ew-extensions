@@ -263,6 +263,7 @@ class NerveCenterApp extends LitElement {
     const drafts = this._drafts[obs.id];
     if (!drafts || drafts.loading) return nothing;
     const hasDrafts = drafts.items.length > 0;
+    if (hasDrafts) { return nothing; }
     const label = hasDrafts ? 'Start Publish Workflow' : 'Generate content from observation';
     const prompt = hasDrafts
       ? this._buildPublishPrompt(obs, drafts.items)
