@@ -39,6 +39,11 @@ class NerveCenterApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._onAgentChange = (e) => {
+      if (e.data?.type === 'nx-completed-obs') {
+        const matched = (e.data.ids ?? []).filter((id) => this._observations.some((obs) => obs.id === id));
+        if (matched.length) this._completed = new Set([...this._completed, ...matched]);
+        return;
+      }
       if (e.data?.action !== 'agentChange') return;
       const { detail } = e.data;
       if (detail?.scope !== 'file') return;
@@ -69,6 +74,11 @@ class NerveCenterApp extends LitElement {
     const completedParam = params.get('nerve-center-completed');
     if (completedParam) {
       this._completed = new Set(completedParam.split(',').map((id) => id.trim()).filter(Boolean));
+    } else {
+      try {
+        const stored = sessionStorage.getItem('nc-completed');
+        if (stored) this._completed = new Set(JSON.parse(stored));
+      } catch { /* ignore */ }
     }
 
     if (this._siteId && this._apiKey) {
@@ -198,7 +208,9 @@ class NerveCenterApp extends LitElement {
     if (next.has(obsId)) next.delete(obsId);
     else next.add(obsId);
     this._completed = next;
-    try { localStorage.setItem('nc-completed', JSON.stringify([...next])); } catch { /* ignore */ }
+    try {
+      sessionStorage.setItem('nc-completed', JSON.stringify([...next]));
+    } catch { /* ignore */ }
   }
 
   _canvasUrl(item) {
@@ -324,7 +336,9 @@ class NerveCenterApp extends LitElement {
             <span class="badge badge--${obs.status?.toLowerCase()}">${obs.status}</span>
             ${obs.priority ? html`<span class="badge badge--priority--${obs.priority?.toLowerCase()}">${obs.priority}</span>` : nothing}
             ${obs.classification ? html`<span class="badge">${obs.classification}</span>` : nothing}
-          </div>
+                        <button class="obs-check-btn" aria-label="Mark complete"
+                @click=${() => this._toggleComplete(obs.id)}>✓</button>
+            </div>
 
           <div class="obs-header">
             <p class="obs-name">${obs.name}</p>

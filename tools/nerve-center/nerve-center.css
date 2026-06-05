@@ -318,6 +318,34 @@ nerve-center-app .obs-info-btn:hover {
   border-color: var(--s2-gray-400, #aaa);
 }
 
+.obs-meta {
+  position: relative;
+}
+
+nerve-center-app .obs-check-btn {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--s2-gray-300, #ccc);
+  background: transparent;
+  color: var(--s2-gray-500, #999);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+nerve-center-app .obs-check-btn:hover {
+  border-color: var(--s2-green-600, #16a34a);
+  color: var(--s2-green-700, #15803d);
+  background: var(--s2-green-50, #f0fdf4);
+}
+
 nerve-center-app .obs-header {
   display: flex;
   align-items: center;
