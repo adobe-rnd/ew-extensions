@@ -891,6 +891,7 @@ export async function fetchSiteSourceText(org, site, pathUnderSite) {
   if (!isSafeSubPath(p)) return { error: 'Invalid path' };
   try {
     const resp = await daFetch(`${DA_ORIGIN}/source/${org}/${site}/${p}`);
+    if (resp.status === 404) return { text: '' };
     if (!resp.ok) return { error: `HTTP ${resp.status}` };
     return { text: await resp.text() };
   } catch (e) {

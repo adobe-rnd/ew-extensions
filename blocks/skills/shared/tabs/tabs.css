@@ -5,8 +5,8 @@
 
 .tabs {
   display: flex;
-  gap: var(--s2-spacing-50);
-  border-bottom: 1px solid var(--s2-gray-200);
+  align-items: center;
+  gap: var(--s2-spacing-75);
   padding: 0 var(--s2-spacing-100);
 }
 
@@ -14,9 +14,10 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: var(--s2-spacing-100) var(--s2-spacing-200);
+  gap: var(--ew-spacing-75);
+  padding: var(--ew-spacing-75) var(--s2-spacing-200);
   border: none;
-  border-radius: var(--s2-corner-radius-200) var(--s2-corner-radius-200) 0 0;
+  border-radius: var(--s2-corner-radius-100);
   background: none;
   color: var(--s2-gray-700);
   font-family: inherit;
@@ -25,7 +26,7 @@
   cursor: pointer;
   outline: none;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
 .tab:hover {
@@ -39,16 +40,24 @@
 }
 
 .tab.is-active {
-  color: var(--s2-blue-900);
+  color: light-dark(#fff, #1a1a1a);
+  background: light-dark(#1a1a1a, #fff);
 }
 
-.tab.is-active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: var(--s2-spacing-100);
-  right: var(--s2-spacing-100);
-  height: 2px;
-  background: var(--s2-blue-900);
-  border-radius: 1px;
+.tab.is-disabled {
+  color: var(--s2-gray-400);
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ─── tab icon (inline SVG passed via item.icon) ──────────────────────────── */
+
+.tab svg {
+  width: var(--ew-icon-size-m);
+  height: var(--ew-icon-size-m);
+  flex-shrink: 0;
+}
+
+.tab-label {
+  line-height: 1;
 }
