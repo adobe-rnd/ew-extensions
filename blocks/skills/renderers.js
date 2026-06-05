@@ -22,6 +22,7 @@ import {
   TAB_SKILLS,
 } from './constants.js';
 import {
+  isSensitiveHeaderName,
   skillRowEnabled,
   skillRowStatus,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
@@ -218,6 +219,7 @@ function renderSkillDetail(vm) {
   const readOnly = isPluginSkill(id);
   const pluginName = usedBy.length ? usedBy[0] : null;
   const origin = readOnly ? 'built-in' : 'user-created';
+  const badgeLabel = isDraft ? 'DRAFT' : 'APPROVED';
 
   return html`
     <div class="skill-detail">
@@ -246,7 +248,7 @@ function renderSkillDetail(vm) {
         ` : nothing}
       </header>
 
-      <span class="skill-detail-badge ${isDraft ? 'is-draft' : ''}">${readOnly ? 'BUILT-IN' : (isDraft ? 'DRAFT' : 'APPROVED')}</span>
+      <span class="skill-detail-badge ${isDraft ? 'is-draft' : ''}">${readOnly ? 'BUILT-IN' : badgeLabel}</span>
 
       <div class="skill-detail-description">
         ${description || 'No description provided.'}
@@ -738,7 +740,8 @@ export function renderAssociatedToolsSelector(vm) {
 }
 
 export function renderMcpForm(vm) {
-  const hasSecret = Boolean(String(vm.mcpAuthHeaderValue || '').trim());
+  const headers = vm.mcpHeaders || [];
+  const hasSecret = headers.some((h) => isSensitiveHeaderName(h.name) && String(h.value || '').trim());
   return html`
     <form class="form" @submit=${(e) => e.preventDefault()}>
       <input type="text" placeholder="server-id (not API key)" aria-label="MCP server id"
@@ -759,25 +762,39 @@ export function renderMcpForm(vm) {
         @input=${(e) => vm.setMcpDescription(e.target.value)}
       ></textarea>
       <div class="mcp-auth-section ${hasSecret ? 'is-sensitive' : ''}">
-        <p class="form-hint">Authentication header (optional, for private MCP servers)</p>
-        <input
-          type="text"
-          placeholder="Header name (e.g. Authorization, x-api-key)"
-          aria-label="MCP auth header name"
-          .value=${vm.mcpAuthHeaderName}
-          @input=${(e) => vm.setMcpAuthHeaderName(e.target.value)}
-        >
-        <input
-          type="password"
-          autocomplete="new-password"
-          placeholder="Header value"
-          aria-label="MCP auth header value"
-          .value=${vm.mcpAuthHeaderValue}
-          @input=${(e) => vm.setMcpAuthHeaderValue(e.target.value)}
-        >
+        <p class="form-hint">HTTP headers (optional — e.g. Authorization, x-api-key)</p>
+        ${headers.map((h, i) => {
+          const masked = isSensitiveHeaderName(h.name);
+          return html`
+            <div class="mcp-header-row">
+              <input
+                type="text"
+                placeholder="Header name"
+                aria-label="Header name ${i + 1}"
+                .value=${h.name}
+                @input=${(e) => vm.setMcpHeader(i, 'name', e.target.value)}
+              >
+              <input
+                type=${masked ? 'password' : 'text'}
+                autocomplete=${masked ? 'new-password' : 'off'}
+                placeholder="Header value"
+                aria-label="Header value ${i + 1}"
+                .value=${h.value}
+                @input=${(e) => vm.setMcpHeader(i, 'value', e.target.value)}
+              >
+              <button type="button" class="btn-icon mcp-header-remove"
+                aria-label="Remove header ${i + 1}"
+                @click=${() => vm.removeMcpHeader(i)}
+              >✕</button>
+            </div>
+          `;
+        })}
+        <button type="button" class="mcp-header-add"
+          @click=${() => vm.addMcpHeader()}
+        >+ Add header</button>
         ${hasSecret ? html`
           <p class="mcp-auth-warning" role="note">
-            ⚠ Saving this key makes it available to all authors with configuration permission.
+            Warning: saving headers makes them available to all authors with configuration permission.
           </p>
         ` : nothing}
       </div>
@@ -1090,11 +1107,8 @@ export function renderAgentsCatalog(vm) {
   const customTagged = vm.agents.map((a) => ({ agent: a, builtin: false }));
   const allAgents = [...builtinTagged, ...customTagged];
 
-  const filtered = filter === 'builtin'
-    ? builtinTagged
-    : filter === 'custom'
-      ? customTagged
-      : allAgents;
+  const filterMap = { builtin: builtinTagged, custom: customTagged };
+  const filtered = filterMap[filter] || allAgents;
 
   return html`
     <h3 class="section-h">Installed <span class="section-h-count">${totalCount}</span></h3>

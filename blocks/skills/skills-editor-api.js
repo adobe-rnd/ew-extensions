@@ -252,9 +252,9 @@ export async function fetchDaConfigSheets(org, site, options = {}) {
         const rowKey = String(row?.key || '').trim();
         if (rowKey && rowUrl && approved && enabled) {
           servers[rowKey] = rowUrl;
-          const headerName = String(row?.authHeaderName || '').trim();
-          const headerValue = String(row?.authHeaderValue || '').trim();
-          if (headerName && headerValue) serverHeaders[rowKey] = { [headerName]: headerValue };
+          // eslint-disable-next-line no-use-before-define
+          const hdrs = parseRowHeaders(row);
+          if (Object.keys(hdrs).length) serverHeaders[rowKey] = hdrs;
         }
       });
       const agentRows = (json?.agents?.data || [])
@@ -682,6 +682,49 @@ export async function deleteToolOverride(org, site, serverId, toolName) {
   );
 }
 
+// ─── MCP header helpers ─────────────────────────────────────────────────────
+
+const SENSITIVE_HEADER_RE = /^(authorization|x-api-key|x-auth|x-token|cookie|proxy-authorization|x-csrf|x-xsrf)/i;
+
+/**
+ * Return true when a header name is likely to carry a secret value
+ * (auth tokens, API keys, cookies, CSRF tokens).
+ */
+export function isSensitiveHeaderName(name) {
+  return SENSITIVE_HEADER_RE.test(String(name || '').trim());
+}
+
+/**
+ * Read headers from a config row, supporting both the new `headers` array
+ * and legacy `authHeaderName`/`authHeaderValue` single-pair columns.
+ * @returns {Record<string, string>}
+ */
+function parseRowHeaders(row) {
+  const out = {};
+  if (Array.isArray(row?.headers)) {
+    row.headers.forEach((h) => {
+      const n = String(h?.name || '').trim();
+      const v = String(h?.value || '').trim();
+      if (n && v) out[n] = v;
+    });
+  }
+  // Legacy single-header fallback (only if `headers` array didn't already cover it)
+  const legacyName = String(row?.authHeaderName || '').trim();
+  const legacyValue = String(row?.authHeaderValue || '').trim();
+  if (legacyName && legacyValue && !(legacyName in out)) {
+    out[legacyName] = legacyValue;
+  }
+  return out;
+}
+
+/**
+ * Read headers from a config row as a `[{ name, value }]` array for the editor form.
+ */
+export function rowHeadersToArray(row) {
+  const map = parseRowHeaders(row);
+  return Object.entries(map).map(([name, value]) => ({ name, value }));
+}
+
 // ─── MCP servers ────────────────────────────────────────────────────────────
 
 const MCP_SHEET = 'mcp-servers';
@@ -696,14 +739,17 @@ export async function registerMcpServer(
   key,
   url,
   description = '',
-  authHeaderName = '',
-  authHeaderValue = '',
+  headers = [],
 ) {
   const serverKey = String(key || '').trim();
   const serverUrl = String(url || '').trim();
   if (!serverKey || !serverUrl) return { ok: false, error: 'Key and URL required' };
-  const safeHeaderName = String(authHeaderName || '').trim();
-  const safeHeaderValue = String(authHeaderValue || '').trim();
+  const safeHeaders = (Array.isArray(headers) ? headers : [])
+    .map((h) => ({
+      name: String(h?.name || '').trim(),
+      value: String(h?.value || '').trim(),
+    }))
+    .filter((h) => h.name && h.value);
   return upsertSheetRow(
     org,
     site,
@@ -712,13 +758,10 @@ export async function registerMcpServer(
     (prev) => {
       const row = { ...prev, key: serverKey, url: serverUrl };
       if (description) row.description = String(description).trim();
-      if (safeHeaderName && safeHeaderValue) {
-        row.authHeaderName = safeHeaderName;
-        row.authHeaderValue = safeHeaderValue;
-      } else {
-        delete row.authHeaderName;
-        delete row.authHeaderValue;
-      }
+      if (safeHeaders.length) row.headers = safeHeaders;
+      else delete row.headers;
+      delete row.authHeaderName;
+      delete row.authHeaderValue;
       return row;
     },
     'MCP server',
