@@ -274,6 +274,7 @@ class NerveCenterApp extends LitElement {
 
     return html`
       <sl-button class="ew-fill-accent obs-chat-btn" @click=${() => {
+        window.parent.postMessage({ type: 'nx-open-chat' }, '*');
         if (this._actions?.setPrompt) {
           this._actions.setPrompt(prompt, { autoSend: true });
         } else {
