@@ -9,7 +9,7 @@
   gap: var(--s2-spacing-200);
   padding: var(--s2-spacing-200) var(--s2-spacing-300);
   border: 1px solid color-mix(in srgb, var(--s2-gray-200) 60%, transparent);
-  border-radius: 12px;
+  border-radius: var(--s2-spacing-200);
   background: transparent;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
@@ -55,7 +55,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--s2-spacing-50);
   min-width: 0;
 }
 

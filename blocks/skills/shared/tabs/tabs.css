@@ -14,8 +14,8 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--ew-spacing-75);
+  padding: var(--ew-spacing-75) var(--s2-spacing-200);
   border: none;
   border-radius: var(--s2-corner-radius-100);
   background: none;
@@ -53,8 +53,8 @@
 /* ─── tab icon (inline SVG passed via item.icon) ──────────────────────────── */
 
 .tab svg {
-  width: 16px;
-  height: 16px;
+  width: var(--ew-icon-size-m);
+  height: var(--ew-icon-size-m);
   flex-shrink: 0;
 }
 

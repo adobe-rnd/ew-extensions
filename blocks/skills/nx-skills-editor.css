@@ -1,4 +1,42 @@
 :host {
+  /* ── token shim: bridge naming gaps to host tokens ───────────────────────── */
+
+  /* Spacing not on host scale (ew-extensions custom) */
+  --ew-spacing-75: 6px;
+  --ew-spacing-125: 10px;
+  --ew-spacing-700: 48px;
+
+  /* Icon sizes (ew-extensions custom) */
+  --ew-icon-size-s: 14px;
+  --ew-icon-size-m: 16px;
+  --ew-icon-size-l: 18px;
+  --ew-icon-size-xl: 24px;
+
+  /* Control sizes (ew-extensions custom) */
+  --ew-control-height-s: 26px;
+  --ew-control-width-s: 30px;
+
+  /* Corner radii — host provides --s2-radius-*, we alias to --s2-corner-radius-* */
+  --s2-corner-radius-75: var(--s2-radius-75, 4px);
+  --s2-corner-radius-100: var(--s2-radius-100, 8px);
+  --s2-corner-radius-200: var(--s2-radius-200, 10px);
+  --s2-corner-radius-500: var(--s2-radius-300, 16px);
+
+  /* Font sizes — host uses --s2-body-{t}-size, we alias to --s2-body-size-{t} */
+  --s2-body-size-l: var(--s2-body-l-size, 22px);
+  --s2-body-size-m: var(--s2-body-m-size, 19px);
+  --s2-body-size-s: var(--s2-body-s-size, 17px);
+  --s2-body-size-xs: var(--s2-body-xs-size, 15px);
+  --s2-body-size-xxs: var(--s2-body-xxs-size, 13px);
+
+  /* Heading — host has --s2-heading-s-size but not --s2-heading-size-s */
+  --s2-heading-size-s: var(--s2-heading-s-size, 24px);
+  --s2-heading-font-weight: 700;
+
+  /* Font family — host uses --font-family */
+  --s2-font-family: var(--font-family, "Adobe Clean", adobe-clean, "Trebuchet MS", sans-serif);
+
+  /* ── component layout ──────────────────────────────────────────────────────── */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -158,8 +196,8 @@
 .chat-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--ew-spacing-75);
+  padding: var(--ew-spacing-75) var(--s2-spacing-200);
   border: none;
   border-radius: var(--s2-corner-radius-100);
   background: none;
@@ -178,8 +216,8 @@
 }
 
 .chat-toggle-btn svg {
-  width: 18px;
-  height: 18px;
+  width: var(--ew-icon-size-l);
+  height: var(--ew-icon-size-l);
   flex-shrink: 0;
 }
 
@@ -222,7 +260,7 @@
 .detail-back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s2-spacing-75);
   padding: var(--s2-spacing-100) var(--s2-spacing-200);
   border: none;
   background: none;
@@ -285,7 +323,7 @@
   width: 100%;
   max-width: 350px;
   margin: var(--s2-spacing-200);
-  padding: var(--s2-spacing-700) 0;
+  padding: var(--ew-spacing-700) 0;
   border: 1px solid var(--s2-gray-300);
   border-radius: var(--s2-corner-radius-200);
   background: light-dark(white, var(--s2-gray-75));
@@ -370,7 +408,7 @@
 @media (width <= 900px) {
   .top-nav { flex-wrap: wrap; }
 
-  .chat-toggle-btn { padding: 4px 10px; }
+  .chat-toggle-btn { padding: var(--s2-spacing-75) var(--ew-spacing-125); }
 
   .content-area {
     flex-direction: column;
