@@ -6,7 +6,7 @@
  * adapted for nx2 imports and the skills-editor naming convention.
  */
 
-import { DA_ORIGIN, daFetch } from './utils/da-fetch.js';
+import { DA_ORIGIN, daFetch, getToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
@@ -798,10 +798,14 @@ export async function deleteMcpServer(org, site, key) {
 export async function fetchMcpToolsFromAgent(servers, serverHeaders = {}) {
   if (!Object.keys(servers || {}).length) return { servers: [] };
   try {
+    const payload = { servers, serverHeaders };
+    const token = getToken();
+    if (token) payload.imsToken = token;
+
     const resp = await fetch(`${getAgentOrigin()}/mcp-tools`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ servers, serverHeaders }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10_000),
     });
     return resp.ok ? resp.json() : null;
