@@ -53,7 +53,7 @@ function shouldAttachToken(url) {
  * @param {RequestInit} [opts]
  * @returns {Promise<Response>}
  */
-function getToken() {
+export function getToken() {
   if (_token) return _token;
   try { return window.adobeIMS?.getAccessToken()?.token; } catch { return null; }
 }
