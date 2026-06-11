@@ -17,33 +17,6 @@ export function getAgentOrigin() {
   return isLocal ? 'http://localhost:4002' : 'https://da-agent.adobeaem.workers.dev';
 }
 
-// ─── AO status ──────────────────────────────────────────────────────────────
-
-let aoStatusCache = null;
-let aoStatusTs = 0;
-const AO_STATUS_TTL = 30000;
-
-export async function fetchAOStatus() {
-  if (aoStatusCache && Date.now() - aoStatusTs < AO_STATUS_TTL) return aoStatusCache;
-  try {
-    const token = getToken();
-    const headers = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const resp = await fetch(`${getAgentOrigin()}/ao/status`, { headers });
-    if (!resp.ok) return { connected: false, reason: `HTTP ${resp.status}` };
-    aoStatusCache = await resp.json();
-    aoStatusTs = Date.now();
-    return aoStatusCache;
-  } catch (err) {
-    return { connected: false, reason: err.message || 'Network error' };
-  }
-}
-
-export function invalidateAOStatusCache() {
-  aoStatusCache = null;
-  aoStatusTs = 0;
-}
-
 // ─── lightweight in-memory caches (per org/site) ────────────────────────────
 
 const CACHE_TTL_MS = 15000;
