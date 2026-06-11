@@ -17,6 +17,33 @@ export function getAgentOrigin() {
   return isLocal ? 'http://localhost:4002' : 'https://da-agent.adobeaem.workers.dev';
 }
 
+// ─── AO status ──────────────────────────────────────────────────────────────
+
+let aoStatusCache = null;
+let aoStatusTs = 0;
+const AO_STATUS_TTL = 30000;
+
+export async function fetchAOStatus() {
+  if (aoStatusCache && Date.now() - aoStatusTs < AO_STATUS_TTL) return aoStatusCache;
+  try {
+    const token = getToken();
+    const headers = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const resp = await fetch(`${getAgentOrigin()}/ao/status`, { headers });
+    if (!resp.ok) return { connected: false, reason: `HTTP ${resp.status}` };
+    aoStatusCache = await resp.json();
+    aoStatusTs = Date.now();
+    return aoStatusCache;
+  } catch (err) {
+    return { connected: false, reason: err.message || 'Network error' };
+  }
+}
+
+export function invalidateAOStatusCache() {
+  aoStatusCache = null;
+  aoStatusTs = 0;
+}
+
 // ─── lightweight in-memory caches (per org/site) ────────────────────────────
 
 const CACHE_TTL_MS = 15000;
@@ -885,6 +912,42 @@ export { extractToolRefs } from './utils/markdown.js';
  * Fetch site source text by path under site (e.g. /drafts/page.html).
  * Used by the memory tab to load/display the agent memory file.
  */
+/**
+ * Parses an `x-da-actions` header value and returns whether `write` is granted.
+ * Header format: `/path=perm1,perm2` (multiple entries may be whitespace/semicolon-separated).
+ *
+ * @param {string} actionsHeader
+ * @returns {boolean}
+ */
+export function parseActionsHasWrite(actionsHeader) {
+  return String(actionsHeader || '').split(/[\s;]+/).some((entry) => {
+    const eqIdx = entry.indexOf('=');
+    if (eqIdx === -1) return false;
+    return entry.slice(eqIdx + 1).split(',').some((p) => p.trim() === 'write');
+  });
+}
+
+/**
+ * Returns true if the current user has write permission on the skills folder,
+ * false only when the server returns a definitive x-da-actions header without write.
+ * Defaults to true on missing header, non-2xx response, or network error.
+ *
+ * @param {string} org
+ * @param {string} site
+ * @returns {Promise<boolean>}
+ */
+export async function fetchSkillsPermission(org, site) {
+  try {
+    const resp = await daFetch(`${DA_ORIGIN}/source/${org}/${site}/.da/skills/`, { method: 'HEAD' });
+    if (!resp.ok) return true; // non-2xx: optimistic, header won't be reliable
+    const actions = resp.headers?.get('x-da-actions') || '';
+    if (!actions) return true;
+    return parseActionsHasWrite(actions);
+  } catch {
+    return true;
+  }
+}
+
 export async function fetchSiteSourceText(org, site, pathUnderSite) {
   const p = String(pathUnderSite || '').replace(/^\//, '');
   if (!p) return { error: 'Path required' };
