@@ -37,8 +37,8 @@ import {
   DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_SUGGESTION_HANDOFF,
   DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT,
-  DA_SKILLS_LAB_FORM_DISMISS,
   DA_SKILLS_LAB_PROMPT_SEND,
+  fetchSkillsPermission,
 } from './skills-editor-api.js';
 import {
   BUILTIN_AGENTS,
@@ -125,6 +125,7 @@ class NxSkillsEditor extends LitElement {
     _isChatOpen: { state: true },
     _gateOrg: { state: true },
     _gateSite: { state: true },
+    _canWrite: { state: true },
     _confirmDialog: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
@@ -132,6 +133,10 @@ class NxSkillsEditor extends LitElement {
 
   // ─── non-reactive instance fields (simple inits, not LitElement state) ────
   _loadedKey = null;
+
+  _canWrite = true;
+
+  _canWriteKey = null;
 
   _statusTimer = null;
 
@@ -488,10 +493,18 @@ class NxSkillsEditor extends LitElement {
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
-      const [skillsResult] = await Promise.all([
+      const permKey = `${this._org}/${this._site}`;
+      const [skillsResult, hasWritePermission] = await Promise.all([
         loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles }),
+        this._canWriteKey === permKey
+          ? Promise.resolve(this._canWrite)
+          : fetchSkillsPermission(this._org, this._site),
       ]);
 
+      if (this._canWriteKey !== permKey) {
+        this._canWriteKey = permKey;
+        this._canWrite = hasWritePermission;
+      }
       this._skills = skillsResult.map;
       this._skillStatuses = skillsResult.statuses;
       this._prompts = configResult.json?.prompts?.data || [];
@@ -1525,6 +1538,7 @@ class NxSkillsEditor extends LitElement {
   _buildViewModel() {
     return {
       // ── state ──────────────────────────────────────────────────────────────
+      canWrite: this._canWrite,
       catalogTab: this._catalogTab,
       catalogFilter: this._catalogFilter,
       isChatOpen: this._isChatOpen,

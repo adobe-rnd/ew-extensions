@@ -1242,6 +1242,54 @@ test.describe('Cross-tab regression', () => {
   });
 });
 
+// ─── Skills create button permissions ────────────────────────────────────────
+
+test.describe('Skills create button permissions', () => {
+  test('+ New Skill button is disabled when x-da-actions header excludes write', async ({ page }) => {
+    test.setTimeout(30000);
+
+    // Override HEAD for the skills folder to return a read-only x-da-actions header.
+    // Registered after the beforeEach stubs so it takes priority (Playwright
+    // matches routes in reverse registration order).
+    await page.route(`**/${TEST_ORG}/${TEST_SITE}/.da/skills/`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await route.fulfill({
+          status: 200,
+          headers: { 'x-da-actions': `/${TEST_ORG}/${TEST_SITE}/.da/skills=read` },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await expect(page.getByRole('button', { name: '+ New Skill' })).toBeDisabled();
+  });
+
+  test('+ New Skill button is enabled when x-da-actions header includes write', async ({ page }) => {
+    test.setTimeout(30000);
+
+    // Explicitly stub write permission to guard against future stub-default changes.
+    await page.route(`**/${TEST_ORG}/${TEST_SITE}/.da/skills/`, async (route) => {
+      if (route.request().method() === 'HEAD') {
+        await route.fulfill({
+          status: 200,
+          headers: { 'x-da-actions': `/${TEST_ORG}/${TEST_SITE}/.da/skills=read,write` },
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await expect(page.getByRole('button', { name: '+ New Skill' })).not.toBeDisabled();
+  });
+});
+
 // ─── Catalog navigation ──────────────────────────────────────────────────────
 
 test.describe('Catalog navigation', () => {
