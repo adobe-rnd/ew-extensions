@@ -399,6 +399,9 @@
 .plugin-card-source {
   font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-500);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .plugin-card-desc {
