@@ -1223,7 +1223,7 @@ function renderMcpCard(vm, s, isBuiltin) {
         <span class="plugin-card-pill">${MCP_ICON}</span>
         <div class="plugin-card-identity">
           <span class="plugin-card-name">${key || '(unnamed)'}</span>
-          <span class="plugin-card-source">${desc}</span>
+          <span class="plugin-card-source" title=${desc || nothing}>${desc}</span>
         </div>
         ${transport ? html`<span class="plugin-card-badge">${transport}</span>` : nothing}
       </header>
