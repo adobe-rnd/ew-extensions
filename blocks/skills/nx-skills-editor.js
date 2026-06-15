@@ -134,8 +134,6 @@ class NxSkillsEditor extends LitElement {
   // ─── non-reactive instance fields (simple inits, not LitElement state) ────
   _loadedKey = null;
 
-  _canWrite = true;
-
   _canWriteKey = null;
 
   _statusTimer = null;
@@ -185,6 +183,7 @@ class NxSkillsEditor extends LitElement {
     this._clearForm();
     this._gateOrg = '';
     this._gateSite = '';
+    this._canWrite = true;
     this._mcpEnableBusy = {};
     this._viewingSkillId = null;
     this._skillMdModalOpen = false;

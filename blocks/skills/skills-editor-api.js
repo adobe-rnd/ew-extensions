@@ -882,10 +882,6 @@ export async function deleteAgentPresetFile(org, site, agentId) {
 export { extractToolRefs } from './utils/markdown.js';
 
 /**
- * Fetch site source text by path under site (e.g. /drafts/page.html).
- * Used by the memory tab to load/display the agent memory file.
- */
-/**
  * Parses an `x-da-actions` header value and returns whether `write` is granted.
  * Header format: `/path=perm1,perm2` (multiple entries may be whitespace/semicolon-separated).
  *
@@ -921,6 +917,10 @@ export async function fetchSkillsPermission(org, site) {
   }
 }
 
+/**
+ * Fetch site source text by path under site (e.g. /drafts/page.html).
+ * Used by the memory tab to load/display the agent memory file.
+ */
 export async function fetchSiteSourceText(org, site, pathUnderSite) {
   const p = String(pathUnderSite || '').replace(/^\//, '');
   if (!p) return { error: 'Path required' };
