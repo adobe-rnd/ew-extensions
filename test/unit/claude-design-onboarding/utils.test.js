@@ -110,4 +110,8 @@ describe('isComplete', () => {
   it('returns false for an empty set', () => {
     expect(isComplete(new Set(), 6)).to.be.false;
   });
+
+  it('returns false when completedSteps has more than totalSteps', () => {
+    expect(isComplete(new Set([0, 1, 2, 3, 4, 5, 6]), 6)).to.be.false;
+  });
 });

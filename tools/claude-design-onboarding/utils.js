@@ -42,5 +42,5 @@ export function getNextActiveStep(completedSteps, currentActiveStep, totalSteps)
 }
 
 export function isComplete(completedSteps, totalSteps) {
-  return completedSteps.size >= totalSteps;
+  return completedSteps.size === totalSteps;
 }
