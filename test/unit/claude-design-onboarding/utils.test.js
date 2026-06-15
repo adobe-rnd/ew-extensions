@@ -6,6 +6,7 @@ import {
   clearProgress,
   getNextActiveStep,
   isComplete,
+  parseWelcomeBlock,
 } from '../../../tools/claude-design-onboarding/utils.js';
 
 const TEST_URL = 'https://da.live/test-page';
@@ -113,5 +114,116 @@ describe('isComplete', () => {
 
   it('returns false when completedSteps has more than totalSteps', () => {
     expect(isComplete(new Set([0, 1, 2, 3, 4, 5, 6]), 6)).to.be.false;
+  });
+});
+
+describe('parseWelcomeBlock', () => {
+  function makeBlock(innerHtml) {
+    const div = document.createElement('div');
+    div.innerHTML = innerHtml;
+    return div;
+  }
+
+  it('extracts welcome row when first column has no h5', () => {
+    const block = makeBlock(`
+      <div>
+        <div></div>
+        <div><h2>Welcome Title</h2><p>Description here.<br><br><em><a href="#">Start</a></em></p></div>
+        <div></div>
+      </div>
+    `);
+    const { welcome, steps } = parseWelcomeBlock(block);
+    expect(welcome.title).to.equal('Welcome Title');
+    expect(welcome.ctaText).to.equal('Start');
+    expect(steps).to.have.length(0);
+  });
+
+  it('extracts step rows with label, title, description and action', () => {
+    const block = makeBlock(`
+      <div>
+        <div><h5>Step 1 / 6</h5></div>
+        <div><h3>Step title</h3><p>Step description.</p><p><strong><a href="#">Next</a></strong></p></div>
+        <div>scroll-to</div>
+      </div>
+    `);
+    const { welcome, steps } = parseWelcomeBlock(block);
+    expect(welcome).to.be.null;
+    expect(steps).to.have.length(1);
+    expect(steps[0].label).to.equal('Step 1 / 6');
+    expect(steps[0].title).to.equal('Step title');
+    expect(steps[0].description).to.equal('Step description.');
+    expect(steps[0].action).to.equal('scroll-to');
+  });
+
+  it('excludes the Next button paragraph from description', () => {
+    const block = makeBlock(`
+      <div>
+        <div><h5>Step 2 / 6</h5></div>
+        <div><h3>Title</h3><p>Real description.</p><p><strong><a href="#">Next</a></strong></p></div>
+        <div></div>
+      </div>
+    `);
+    const { steps } = parseWelcomeBlock(block);
+    expect(steps[0].description).to.equal('Real description.');
+  });
+
+  it('handles mixed welcome row followed by step rows', () => {
+    const block = makeBlock(`
+      <div>
+        <div></div>
+        <div><h2>Welcome</h2><p>Intro text. <em><a href="#">Go</a></em></p></div>
+        <div></div>
+      </div>
+      <div>
+        <div><h5>Step 1 / 2</h5></div>
+        <div><h3>First step</h3><p>Do this.</p></div>
+        <div></div>
+      </div>
+      <div>
+        <div><h5>Step 2 / 2</h5></div>
+        <div><h3>Second step</h3><p>Do that.</p></div>
+        <div>open-chat</div>
+      </div>
+    `);
+    const { welcome, steps } = parseWelcomeBlock(block);
+    expect(welcome.title).to.equal('Welcome');
+    expect(steps).to.have.length(2);
+    expect(steps[1].action).to.equal('open-chat');
+  });
+
+  it('returns null welcome when all rows have a step label', () => {
+    const block = makeBlock(`
+      <div>
+        <div><h5>Step 1 / 1</h5></div>
+        <div><h3>Only step</h3><p>Description.</p></div>
+        <div></div>
+      </div>
+    `);
+    const { welcome } = parseWelcomeBlock(block);
+    expect(welcome).to.be.null;
+  });
+
+  it('uses "Start the tour" as default ctaText when no link found', () => {
+    const block = makeBlock(`
+      <div>
+        <div></div>
+        <div><h2>Welcome</h2><p>No link here.</p></div>
+        <div></div>
+      </div>
+    `);
+    const { welcome } = parseWelcomeBlock(block);
+    expect(welcome.ctaText).to.equal('Start the tour');
+  });
+
+  it('returns empty action string when third column is empty', () => {
+    const block = makeBlock(`
+      <div>
+        <div><h5>Step 1 / 1</h5></div>
+        <div><h3>Title</h3><p>Desc.</p></div>
+        <div></div>
+      </div>
+    `);
+    const { steps } = parseWelcomeBlock(block);
+    expect(steps[0].action).to.equal('');
   });
 });

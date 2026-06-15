@@ -1,35 +1,21 @@
 import { LitElement, html } from 'da-lit';
-import { loadProgress, saveProgress, clearProgress, getNextActiveStep, isComplete } from './utils.js';
+import {
+  loadProgress,
+  saveProgress,
+  clearProgress,
+  getNextActiveStep,
+  isComplete,
+  parseWelcomeBlock,
+} from './utils.js';
 
-const STEPS = [
-  {
-    title: 'Welcome to your demo site',
-    description: 'This is a live demo site. Every section is real and editable, and nothing here touches production. Take a look around, then make it yours.',
-  },
-  {
-    title: 'Edit on the canvas',
-    description: 'Click any text or image to start editing directly on the page. Changes are saved automatically — no publish needed while you explore.',
-  },
-  {
-    title: 'Add a section',
-    description: 'Use the + button between sections to insert a new block. Choose from layouts, media, and more to build out your page.',
-  },
-  {
-    title: 'Ask the AI Assistant',
-    description: 'Open the AI panel and ask it to write, rewrite, or summarize any section. Try: "Make this headline more compelling."',
-  },
-  {
-    title: 'Run a skill',
-    description: 'Skills are reusable AI actions — things like translating a page, generating metadata, or checking for broken links. Open the Skills panel to browse what\'s available.',
-  },
-  {
-    title: 'Preview & publish',
-    description: 'When you\'re happy with your changes, hit Preview to see them live, then Publish to make them public. Your audience sees only published content.',
-  },
-];
+const CONTENT_URL = 'https://adobe--sendto--aemcoder.aem.page/adobe/onboarding/';
 
 class OnboardingApp extends LitElement {
   static properties = {
+    _loading: { state: true },
+    _welcome: { state: true },
+    _steps: { state: true },
+    _showWelcome: { state: true },
     _activeStep: { state: true },
     _completedSteps: { state: true },
     _done: { state: true },
@@ -37,6 +23,10 @@ class OnboardingApp extends LitElement {
 
   constructor() {
     super();
+    this._loading = true;
+    this._welcome = null;
+    this._steps = [];
+    this._showWelcome = true;
     this._activeStep = 0;
     this._completedSteps = new Set();
     this._done = false;
@@ -46,24 +36,49 @@ class OnboardingApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this._loadContent();
+  }
+
+  async _loadContent() {
+    try {
+      const resp = await fetch(CONTENT_URL);
+      const text = await resp.text();
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const block = doc.querySelector('.welcome');
+      if (block) {
+        const { welcome, steps } = parseWelcomeBlock(block);
+        this._welcome = welcome;
+        this._steps = steps;
+      }
+    } catch {
+      // Fetch failed — steps remain empty
+    }
+
     const saved = loadProgress(window.location.href);
     if (saved) {
       this._completedSteps = saved.completedSteps;
       this._activeStep = saved.activeStep;
-      this._done = isComplete(this._completedSteps, STEPS.length);
+      this._done = isComplete(this._completedSteps, this._steps.length);
+      if (saved.completedSteps.size > 0) this._showWelcome = false;
     }
+
+    this._loading = false;
+  }
+
+  _onStartTour() {
+    this._showWelcome = false;
   }
 
   _onMarkComplete() {
     const next = new Set(this._completedSteps);
     next.add(this._activeStep);
-    if (isComplete(next, STEPS.length)) {
+    if (isComplete(next, this._steps.length)) {
       this._completedSteps = next;
       this._done = true;
       saveProgress(window.location.href, next, this._activeStep);
       return;
     }
-    const nextStep = getNextActiveStep(next, this._activeStep, STEPS.length);
+    const nextStep = getNextActiveStep(next, this._activeStep, this._steps.length);
     this._completedSteps = next;
     this._activeStep = nextStep;
     saveProgress(window.location.href, next, nextStep);
@@ -71,6 +86,7 @@ class OnboardingApp extends LitElement {
 
   _onNavigateToStep(index) {
     this._activeStep = index;
+    this._showWelcome = false;
   }
 
   _onStartOver() {
@@ -78,14 +94,32 @@ class OnboardingApp extends LitElement {
     this._completedSteps = new Set();
     this._activeStep = 0;
     this._done = false;
+    this._showWelcome = true;
+  }
+
+  _renderLoading() {
+    return html`<div class="ob-loading"><div class="ob-spinner"></div></div>`;
+  }
+
+  _renderWelcome() {
+    const { title, description, ctaText } = this._welcome || {};
+    return html`
+      <div class="ob-step-card">
+        <p class="ob-step-title">${title}</p>
+        <p class="ob-step-desc">${description}</p>
+        <sl-button class="ob-fill-accent" @click=${() => this._onStartTour()}>
+          ${ctaText || 'Start the tour'}
+        </sl-button>
+      </div>`;
   }
 
   _renderStepCard() {
-    const step = STEPS[this._activeStep];
+    const step = this._steps[this._activeStep];
+    if (!step) return html``;
     const isAlreadyDone = this._completedSteps.has(this._activeStep);
     return html`
       <div class="ob-step-card">
-        <p class="ob-step-label">Step ${this._activeStep + 1} / ${STEPS.length}</p>
+        <p class="ob-step-label">${step.label}</p>
         <p class="ob-step-title">${step.title}</p>
         <p class="ob-step-desc">${step.description}</p>
         <sl-button
@@ -102,9 +136,9 @@ class OnboardingApp extends LitElement {
     return html`
       <p class="ob-lessons-label">All Lessons</p>
       <ul class="ob-lessons-list">
-        ${STEPS.map((step, i) => {
+        ${this._steps.map((step, i) => {
           const completed = this._completedSteps.has(i);
-          const active = this._activeStep === i;
+          const active = !this._showWelcome && this._activeStep === i;
           const cls = `ob-lesson-row${active ? ' active' : ''}${completed ? ' completed' : ''}`;
           const badge = completed ? '✓' : String(i + 1);
           return html`
@@ -122,7 +156,7 @@ class OnboardingApp extends LitElement {
         <span class="ob-completion-icon">🎉</span>
         <p class="ob-completion-title">You're all done!</p>
         <p class="ob-completion-msg">
-          You've completed all ${STEPS.length} lessons. You're ready to make this site your own.
+          You've completed all ${this._steps.length} lessons. You're ready to make this site your own.
         </p>
         <sl-button class="ob-quiet-link" @click=${() => this._onStartOver()}>
           Start over
@@ -131,7 +165,19 @@ class OnboardingApp extends LitElement {
   }
 
   render() {
-    const fillPct = (this._completedSteps.size / STEPS.length) * 100;
+    if (this._loading) return this._renderLoading();
+
+    const fillPct = this._steps.length
+      ? (this._completedSteps.size / this._steps.length) * 100
+      : 0;
+
+    const mainContent = this._done
+      ? this._renderCompletion()
+      : html`
+          ${this._showWelcome ? this._renderWelcome() : this._renderStepCard()}
+          ${this._renderLessonsList()}
+        `;
+
     return html`
       <span class="ob-eyebrow">Guided Onboarding</span>
       <h1 class="ob-title">Make this site yours</h1>
@@ -140,17 +186,14 @@ class OnboardingApp extends LitElement {
       <div class="ob-progress">
         <div class="ob-progress-label">
           <span>Your Progress</span>
-          <span>${this._completedSteps.size} of ${STEPS.length}</span>
+          <span>${this._completedSteps.size} of ${this._steps.length}</span>
         </div>
         <div class="ob-progress-track">
           <div class="ob-progress-fill" style="width: ${fillPct}%"></div>
         </div>
       </div>
 
-      ${this._done ? this._renderCompletion() : html`
-        ${this._renderStepCard()}
-        ${this._renderLessonsList()}
-      `}
+      ${mainContent}
     `;
   }
 }

@@ -45,3 +45,39 @@ export function isComplete(completedSteps, totalSteps) {
   // Use === not >= — a set larger than totalSteps would indicate a bug upstream
   return completedSteps.size === totalSteps;
 }
+
+export function parseWelcomeBlock(block) {
+  const rows = [...block.children];
+  let welcome = null;
+  const steps = [];
+
+  rows.forEach((row) => {
+    const cols = [...row.children];
+    const stepLabelEl = cols[0]?.querySelector('h5');
+    const contentEl = cols[1];
+    const action = cols[2]?.textContent.trim() || '';
+
+    if (!stepLabelEl) {
+      const titleEl = contentEl?.querySelector('h2');
+      const paras = [...(contentEl?.querySelectorAll('p') || [])];
+      const ctaEl = contentEl?.querySelector('a');
+      welcome = {
+        title: titleEl?.textContent.trim() || '',
+        description: paras[0]?.textContent.replace(/\s+/g, ' ').trim() || '',
+        ctaText: ctaEl?.textContent.trim() || 'Start the tour',
+      };
+    } else {
+      const titleEl = contentEl?.querySelector('h3');
+      const paras = [...(contentEl?.querySelectorAll('p') || [])];
+      const descPara = paras.find((p) => !p.querySelector('strong > a'));
+      steps.push({
+        label: stepLabelEl.textContent.trim(),
+        title: titleEl?.textContent.trim() || '',
+        description: descPara?.textContent.trim() || '',
+        action,
+      });
+    }
+  });
+
+  return { welcome, steps };
+}
