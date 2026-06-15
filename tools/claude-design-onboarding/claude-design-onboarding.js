@@ -1,5 +1,5 @@
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
-import { LitElement, html, nothing } from 'da-lit';
+import { LitElement, html } from 'da-lit';
 import { loadProgress, saveProgress, clearProgress, getNextActiveStep, isComplete } from './utils.js';
 
 const STEPS = [

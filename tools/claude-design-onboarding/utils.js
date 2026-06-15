@@ -42,5 +42,6 @@ export function getNextActiveStep(completedSteps, currentActiveStep, totalSteps)
 }
 
 export function isComplete(completedSteps, totalSteps) {
+  // Use === not >= — a set larger than totalSteps would indicate a bug upstream
   return completedSteps.size === totalSteps;
 }
