@@ -1,4 +1,3 @@
-import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { LitElement, html } from 'da-lit';
 import { loadProgress, saveProgress, clearProgress, getNextActiveStep, isComplete } from './utils.js';
 
@@ -47,15 +46,6 @@ class OnboardingApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._init();
-  }
-
-  async _init() {
-    try {
-      await DA_SDK;
-    } catch {
-      // SDK unavailable in standalone/dev
-    }
     const saved = loadProgress(window.location.href);
     if (saved) {
       this._completedSteps = saved.completedSteps;
