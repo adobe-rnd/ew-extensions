@@ -53,7 +53,9 @@ import {
   renderListCol,
 } from './renderers.js';
 import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
-import { createReadOnlyEditor } from './utils/monaco-loader.js';
+import {
+  createReadOnlyViewer, createEditableViewer, replaceDoc, destroyEditor,
+} from './utils/codemirror-loader.js';
 import {
   onMessage,
   sendMessage,
@@ -268,8 +270,9 @@ class NxSkillsEditor extends LitElement {
     window.removeEventListener(DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT, this._onClearFormHandler);
     window.removeEventListener('da-skills-changed', this._onSkillsChangedHandler);
     window.removeEventListener('popstate', this._onPopstateHandler);
-    this._disposeMonacoModal();
-    this._disposeMemoryMonaco();
+    this._disposeCMModal();
+    this._disposeMemoryCM();
+    this._disposeSkillCM();
   }
 
   async updated(changed) {
@@ -296,11 +299,29 @@ class NxSkillsEditor extends LitElement {
       this._loadMemory();
     }
     if (changed?.has('_catalogTab') && this._catalogTab !== 'memory') {
-      this._disposeMemoryMonaco();
+      this._disposeMemoryCM();
     }
     if ((changed?.has('_memory') || changed?.has('_catalogTab')) && this._catalogTab === 'memory' && this._memory) {
-      this.updateComplete.then(() => this._mountMemoryMonaco());
+      this.updateComplete.then(() => this._mountMemoryCM());
     }
+    // ── Skill body CM: mount when skill form appears, dispose when it hides ──
+    const skillFormVisible = this._isEditorOpen && this._catalogTab === 'skills'
+      && !(this._viewingSkillId && !this._isFormEdit);
+    if (changed?.has('_catalogTab') && this._catalogTab !== 'skills') {
+      this._disposeSkillCM();
+    }
+    if (changed?.has('_isEditorOpen') && !this._isEditorOpen) {
+      this._disposeSkillCM();
+    }
+    if (skillFormVisible && !this._skillCM
+      && (changed?.has('_isEditorOpen') || changed?.has('_catalogTab')
+        || changed?.has('_isFormEdit') || changed?.has('_viewingSkillId'))) {
+      this.updateComplete.then(() => this._mountSkillCM());
+    }
+    if (changed?.has('_formSkillBody') && this._skillCM && !this._skillCMUpdating) {
+      replaceDoc(this._skillCM, this._formSkillBody || '');
+    }
+
     if (changed?.has('_catalogTab') && this._catalogTab === 'agents') {
       this._ensureAgentsLoaded();
     }
@@ -312,7 +333,7 @@ class NxSkillsEditor extends LitElement {
       if (this._isEditorOpen) {
         this.updateComplete.then(() => {
           const firstFocusable = this.shadowRoot.querySelector(
-            '.detail-view input:not([disabled]), .detail-view textarea:not([disabled]), .detail-view button:not([disabled])',
+            '.detail-view input:not([disabled]), .detail-view textarea:not([disabled]), .detail-view .cm-content, .detail-view button:not([disabled])',
           );
           firstFocusable?.focus();
         });
@@ -993,20 +1014,20 @@ class NxSkillsEditor extends LitElement {
 
   _openSkillMdModal() {
     this._skillMdModalOpen = true;
-    this._mountMonacoModal();
+    this._mountCMModal();
   }
 
   _closeSkillMdModal() {
     this._skillMdModalOpen = false;
-    this._disposeMonacoModal();
+    this._disposeCMModal();
   }
 
-  async _mountMonacoModal() {
+  async _mountCMModal() {
     const id = this._viewingSkillId;
     const body = this._skills[id] || '';
 
-    this._monacoPortal = document.createElement('div');
-    this._monacoPortal.className = 'skill-md-portal';
+    this._cmPortal = document.createElement('div');
+    this._cmPortal.className = 'skill-md-portal';
 
     const backdrop = document.createElement('div');
     backdrop.className = 'skill-md-backdrop';
@@ -1027,7 +1048,7 @@ class NxSkillsEditor extends LitElement {
     header.appendChild(closeX);
 
     const editorHost = document.createElement('div');
-    editorHost.className = 'skill-md-modal-body skill-md-monaco-host';
+    editorHost.className = 'skill-md-modal-body skill-md-cm-host';
 
     const footer = document.createElement('div');
     footer.className = 'skill-md-modal-footer';
@@ -1042,17 +1063,17 @@ class NxSkillsEditor extends LitElement {
 
     modal.append(header, editorHost, footer);
     backdrop.appendChild(modal);
-    this._monacoPortal.appendChild(backdrop);
+    this._cmPortal.appendChild(backdrop);
 
     const styleLink = document.createElement('link');
     styleLink.rel = 'stylesheet';
     styleLink.href = new URL('./editor-panel.css', import.meta.url).href;
-    this._monacoPortal.appendChild(styleLink);
+    this._cmPortal.appendChild(styleLink);
 
-    document.body.appendChild(this._monacoPortal);
+    document.body.appendChild(this._cmPortal);
 
     try {
-      this._monacoEditor = await createReadOnlyEditor(editorHost, body, 'markdown');
+      this._cmEditor = await createReadOnlyViewer(editorHost, body);
     } catch {
       editorHost.textContent = body;
       editorHost.style.whiteSpace = 'pre-wrap';
@@ -1061,12 +1082,12 @@ class NxSkillsEditor extends LitElement {
     }
   }
 
-  async _mountMemoryMonaco() {
-    this._disposeMemoryMonaco();
-    const host = this.shadowRoot.querySelector('.memory-monaco-host');
+  async _mountMemoryCM() {
+    this._disposeMemoryCM();
+    const host = this.shadowRoot.querySelector('.memory-cm-host');
     if (!host || !this._memory) return;
     try {
-      this._memoryMonaco = await createReadOnlyEditor(host, this._memory, 'markdown');
+      this._memoryCM = await createReadOnlyViewer(host, this._memory);
     } catch {
       host.textContent = this._memory;
       host.style.whiteSpace = 'pre-wrap';
@@ -1075,21 +1096,50 @@ class NxSkillsEditor extends LitElement {
     }
   }
 
-  _disposeMemoryMonaco() {
-    if (this._memoryMonaco) {
-      this._memoryMonaco.dispose();
-      this._memoryMonaco = null;
+  _disposeMemoryCM() {
+    destroyEditor(this._memoryCM);
+    this._memoryCM = null;
+  }
+
+  async _mountSkillCM() {
+    this._disposeSkillCM();
+    const host = this.shadowRoot.querySelector('.skill-body-cm-host');
+    if (!host) return;
+    try {
+      this._skillCM = await createEditableViewer(
+        host,
+        this._formSkillBody || '',
+        (text) => {
+          this._skillCMUpdating = true;
+          this._formSkillBody = text;
+          this._markDirty();
+          this._skillCMUpdating = false;
+        },
+      );
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.placeholder = 'Write or revise skill markdown';
+      ta.value = this._formSkillBody || '';
+      ta.addEventListener('input', (e) => {
+        this._formSkillBody = e.target.value;
+        this._markDirty();
+      });
+      host.appendChild(ta);
     }
   }
 
-  _disposeMonacoModal() {
-    if (this._monacoEditor) {
-      this._monacoEditor.dispose();
-      this._monacoEditor = null;
-    }
-    if (this._monacoPortal) {
-      this._monacoPortal.remove();
-      this._monacoPortal = null;
+  _disposeSkillCM() {
+    destroyEditor(this._skillCM);
+    this._skillCM = null;
+    this._skillCMUpdating = false;
+  }
+
+  _disposeCMModal() {
+    destroyEditor(this._cmEditor);
+    this._cmEditor = null;
+    if (this._cmPortal) {
+      this._cmPortal.remove();
+      this._cmPortal = null;
     }
   }
 
