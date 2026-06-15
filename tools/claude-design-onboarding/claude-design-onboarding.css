@@ -1,0 +1,253 @@
+onboarding-app {
+  --ob-accent: var(--s2-blue-900, #0265dc);
+  --ob-accent-hover: var(--s2-blue-1000, #0054b6);
+
+  display: block;
+  padding: var(--spacing-300, 16px);
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--body-font-family, adobe-clean, 'Source Sans Pro', -apple-system, sans-serif);
+  color: var(--s2-gray-800, #222);
+}
+
+/*
+ * sl-button hosts must NOT use nexter class names (.accent etc.):
+ * nexter buttons.css targets those and paints the host while ::part(base) paints
+ * the inner button — causing a nested double-pill. Use ob- prefixed classes instead.
+ */
+sl-button.ob-fill-accent,
+sl-button.ob-quiet-secondary {
+  background: transparent;
+  border: none;
+  padding: 0;
+  vertical-align: middle;
+}
+
+sl-button.ob-fill-accent::part(base) {
+  background: var(--ob-accent);
+  border-color: var(--ob-accent);
+  color: var(--s2-gray-75, #fff);
+}
+
+sl-button.ob-fill-accent::part(base):hover:not(:disabled) {
+  background: var(--ob-accent-hover);
+  border-color: var(--ob-accent-hover);
+}
+
+sl-button.ob-quiet-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+sl-button.ob-quiet-link::part(base) {
+  background: transparent;
+  border: none;
+  color: var(--ob-accent);
+  font-size: var(--s2-body-s-size, 13px);
+  padding: 0;
+}
+
+sl-button.ob-quiet-link::part(base):hover {
+  text-decoration: underline;
+}
+
+/* Header */
+
+onboarding-app .ob-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ob-accent);
+  margin: 0 0 var(--spacing-100, 8px);
+}
+
+onboarding-app .ob-title {
+  font-size: var(--s2-heading-l-size, 24px);
+  font-weight: 700;
+  margin: 0 0 var(--spacing-75, 6px);
+  color: var(--s2-gray-900, #1a1a1a);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+onboarding-app .ob-subtitle {
+  font-size: var(--s2-body-s-size, 13px);
+  color: var(--s2-gray-600, #767676);
+  margin: 0 0 var(--spacing-400, 24px);
+  line-height: 1.5;
+}
+
+/* Progress */
+
+onboarding-app .ob-progress {
+  margin-bottom: var(--spacing-300, 16px);
+}
+
+onboarding-app .ob-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--s2-gray-600, #767676);
+  margin-bottom: var(--spacing-75, 6px);
+}
+
+onboarding-app .ob-progress-track {
+  height: 4px;
+  background: var(--s2-gray-200, #e0e0e0);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+onboarding-app .ob-progress-fill {
+  height: 100%;
+  background: var(--ob-accent);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+/* Step card */
+
+onboarding-app .ob-step-card {
+  background: #fff;
+  border: 1px solid var(--s2-gray-200, #e0e0e0);
+  border-radius: var(--s2-radius-200, 10px);
+  padding: var(--spacing-300, 16px);
+  margin-bottom: var(--spacing-300, 16px);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.06);
+}
+
+onboarding-app .ob-step-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--s2-gray-600, #767676);
+  margin: 0 0 var(--spacing-75, 6px);
+}
+
+onboarding-app .ob-step-title {
+  font-size: var(--s2-heading-s-size, 18px);
+  font-weight: 700;
+  margin: 0 0 var(--spacing-100, 8px);
+  color: var(--s2-gray-900, #1a1a1a);
+  line-height: 1.3;
+}
+
+onboarding-app .ob-step-desc {
+  font-size: var(--s2-body-s-size, 13px);
+  color: var(--s2-gray-700, #444);
+  line-height: 1.6;
+  margin: 0 0 var(--spacing-300, 16px);
+}
+
+/* Lessons list */
+
+onboarding-app .ob-lessons-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--s2-gray-600, #767676);
+  margin: 0 0 var(--spacing-100, 8px);
+}
+
+onboarding-app .ob-lessons-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-75, 4px);
+}
+
+onboarding-app .ob-lesson-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-200, 12px);
+  padding: var(--spacing-150, 10px) var(--spacing-200, 12px);
+  border-radius: var(--s2-radius-100, 6px);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+onboarding-app .ob-lesson-row:hover {
+  background: var(--s2-gray-75, #f5f5f5);
+}
+
+onboarding-app .ob-lesson-row.active {
+  background: var(--s2-blue-100, #e8f4fd);
+}
+
+onboarding-app .ob-lesson-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--s2-body-s-size, 13px);
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid var(--s2-gray-300, #ccc);
+  color: var(--s2-gray-500, #999);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+onboarding-app .ob-lesson-row.active .ob-lesson-badge {
+  background: var(--ob-accent);
+  border-color: var(--ob-accent);
+  color: #fff;
+}
+
+onboarding-app .ob-lesson-row.completed .ob-lesson-badge {
+  background: transparent;
+  border-color: var(--s2-green-700, #2d9e4f);
+  color: var(--s2-green-700, #2d9e4f);
+  font-size: 14px;
+}
+
+onboarding-app .ob-lesson-title {
+  font-size: var(--s2-body-m-size, 14px);
+  color: var(--s2-gray-800, #222);
+}
+
+onboarding-app .ob-lesson-row.completed .ob-lesson-title {
+  color: var(--s2-gray-500, #999);
+}
+
+/* Completion screen */
+
+onboarding-app .ob-completion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-600, 40px) var(--spacing-300, 16px);
+  gap: var(--spacing-200, 12px);
+}
+
+onboarding-app .ob-completion-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+onboarding-app .ob-completion-title {
+  font-size: var(--s2-heading-l-size, 24px);
+  font-weight: 700;
+  color: var(--s2-gray-900, #1a1a1a);
+  margin: 0;
+}
+
+onboarding-app .ob-completion-msg {
+  font-size: var(--s2-body-m-size, 14px);
+  color: var(--s2-gray-600, #767676);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 260px;
+}
