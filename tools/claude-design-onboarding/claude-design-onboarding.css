@@ -16,7 +16,7 @@ onboarding-app {
  * the inner button — causing a nested double-pill. Use ob- prefixed classes instead.
  */
 sl-button.ob-fill-accent,
-sl-button.ob-quiet-secondary {
+sl-button.ob-quiet-link {
   background: transparent;
   border: none;
   padding: 0;
@@ -27,6 +27,11 @@ sl-button.ob-fill-accent::part(base) {
   background: var(--ob-accent);
   border-color: var(--ob-accent);
   color: var(--s2-gray-75, #fff);
+}
+
+sl-button.ob-fill-accent::part(base):disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 sl-button.ob-fill-accent::part(base):hover:not(:disabled) {
