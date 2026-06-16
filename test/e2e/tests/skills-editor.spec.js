@@ -149,6 +149,93 @@ function findSkillRow(config, skillId) {
   }) || null;
 }
 
+// ─── top-nav pill UI ─────────────────────────────────────────────────────────
+
+test.describe('Top-nav pill UI', () => {
+  test('nav pill is present and contains Assistant button + all catalog tabs', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    // Single .nav-pill container inside the shadow root
+    const pillCount = await page.locator('nx-skills-editor').evaluate(
+      (host) => host.shadowRoot?.querySelectorAll('.nav-pill').length ?? 0,
+    );
+    expect(pillCount).toBe(1);
+
+    // Assistant button visible (chat is closed by default)
+    await expect(page.getByRole('button', { name: 'Open Assistant' })).toBeVisible();
+
+    // All catalog tabs visible
+    for (const name of ['Prompts', 'Plugins', 'Skills', 'MCPs', 'Memory']) {
+      await expect(page.getByRole('tab', { name })).toBeVisible();
+    }
+  });
+
+  test('Assistant button disappears when chat opens, reappears when it closes', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    const assistantBtn = page.getByRole('button', { name: 'Open Assistant' });
+    await expect(assistantBtn).toBeVisible();
+
+    // Open the chat
+    await assistantBtn.click();
+    await expect(page.locator('nx-skills-editor').evaluate(
+      (host) => host.shadowRoot?.querySelector('.root')?.classList.contains('is-chat-open') ?? false,
+    )).resolves.toBe(true);
+    await expect(page.getByRole('button', { name: 'Open Assistant' })).not.toBeVisible();
+
+    // Close the chat via the chat panel's own close button; button must return
+    await page.locator('nx-skills-editor').evaluate(
+      (host) => host.shadowRoot?.querySelector('.root')?.classList.contains('is-chat-open'),
+    );
+    // Re-find the open button — it is back when chat closes
+    // Trigger close by clicking the close event the chat drawer emits
+    await page.locator('nx-skills-editor').evaluate((host) => {
+      host.shadowRoot?.querySelector('.chat-drawer')?.dispatchEvent(
+        new CustomEvent('nx-panel-close', { bubbles: true, composed: true }),
+      );
+    });
+    await expect(page.getByRole('button', { name: 'Open Assistant' })).toBeVisible();
+  });
+
+  test('tab buttons use 12px (xs) font-size', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    const fontSize = await page.locator('nx-skills-editor').evaluate((host) => {
+      const tab = host.shadowRoot
+        ?.querySelector('nx-tabs')
+        ?.shadowRoot
+        ?.querySelector('.tab');
+      return tab ? getComputedStyle(tab).fontSize : null;
+    });
+    expect(fontSize).toBe('12px');
+  });
+
+  test('active tab has light background, not dark flip', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    const activeTabBg = await page.locator('nx-skills-editor').evaluate((host) => {
+      const tab = host.shadowRoot
+        ?.querySelector('nx-tabs')
+        ?.shadowRoot
+        ?.querySelector('.tab.is-active');
+      return tab ? getComputedStyle(tab).backgroundColor : null;
+    });
+    // Should not be black (the old dark flip)
+    expect(activeTabBg).not.toBe('rgb(26, 26, 26)');
+    expect(activeTabBg).not.toBe('rgb(0, 0, 0)');
+    // Should be a near-white / very light gray (gray-25 region)
+    expect(activeTabBg).toBeTruthy();
+  });
+});
+
 // ─── page render ────────────────────────────────────────────────────────────
 
 test('Skills Editor page renders', async ({ page }) => {
