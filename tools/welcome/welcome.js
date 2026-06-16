@@ -10,7 +10,7 @@ import {
 
 const CONTENT_URL = 'https://adobe--sendto--aemcoder.aem.page/adobe/onboarding/';
 
-class OnboardingApp extends LitElement {
+class WelcomeApp extends LitElement {
   static properties = {
     _loading: { state: true },
     _welcome: { state: true },
@@ -98,19 +98,22 @@ class OnboardingApp extends LitElement {
   }
 
   _renderLoading() {
-    return html`<div class="ob-loading"><div class="ob-spinner"></div></div>`;
+    return html`
+      <div class="ob-panel">
+        <div class="ob-hero">
+          <div class="ob-loading"><div class="ob-spinner"></div></div>
+        </div>
+      </div>`;
   }
 
   _renderWelcome() {
     const { title, description, ctaText } = this._welcome || {};
     return html`
-      <div class="ob-step-card">
-        <p class="ob-step-title">${title}</p>
-        <p class="ob-step-desc">${description}</p>
-        <sl-button class="ob-fill-accent" @click=${() => this._onStartTour()}>
-          ${ctaText || 'Start the tour'}
-        </sl-button>
-      </div>`;
+      <h1 class="ob-hero-title">${title}</h1>
+      <p class="ob-hero-desc">${description}</p>
+      <button class="ob-cta-btn" @click=${() => this._onStartTour()}>
+        ${ctaText || 'Get Started'}
+      </button>`;
   }
 
   _renderStepCard() {
@@ -118,84 +121,70 @@ class OnboardingApp extends LitElement {
     if (!step) return html``;
     const isAlreadyDone = this._completedSteps.has(this._activeStep);
     return html`
-      <div class="ob-step-card">
-        <p class="ob-step-label">${step.label}</p>
-        <p class="ob-step-title">${step.title}</p>
-        <p class="ob-step-desc">${step.description}</p>
-        <sl-button
-          class="ob-fill-accent"
-          ?disabled=${isAlreadyDone}
-          @click=${() => this._onMarkComplete()}
-        >
-          ${isAlreadyDone ? 'Completed ✓' : 'Mark complete →'}
-        </sl-button>
-      </div>`;
+      <p class="ob-step-label">${step.label}</p>
+      <h2 class="ob-step-title">${step.title}</h2>
+      <p class="ob-step-desc">${step.description}</p>
+      <button
+        class="ob-cta-btn"
+        ?disabled=${isAlreadyDone}
+        @click=${() => this._onMarkComplete()}
+      >
+        ${isAlreadyDone ? 'Completed ✓' : 'Next →'}
+      </button>`;
   }
 
   _renderLessonsList() {
     return html`
-      <p class="ob-lessons-label">All Lessons</p>
-      <ul class="ob-lessons-list">
-        ${this._steps.map((step, i) => {
-          const completed = this._completedSteps.has(i);
-          const active = !this._showWelcome && this._activeStep === i;
-          const cls = `ob-lesson-row${active ? ' active' : ''}${completed ? ' completed' : ''}`;
-          const badge = completed ? '✓' : String(i + 1);
-          return html`
-            <li class=${cls} @click=${() => this._onNavigateToStep(i)}>
-              <span class="ob-lesson-badge">${badge}</span>
-              <span class="ob-lesson-title">${step.title}</span>
-            </li>`;
-        })}
-      </ul>`;
+      <div class="ob-lessons-card">
+        <p class="ob-lessons-label">All lessons</p>
+        <ul class="ob-lessons-list">
+          ${this._steps.map((step, i) => {
+            const completed = this._completedSteps.has(i);
+            const active = !this._showWelcome && this._activeStep === i;
+            const cls = `ob-lesson-row${active ? ' active' : ''}${completed ? ' completed' : ''}`;
+            const badge = completed ? '✓' : String(i + 1);
+            return html`
+              <li class=${cls} @click=${() => this._onNavigateToStep(i)}>
+                <span class="ob-lesson-badge">${badge}</span>
+                <span class="ob-lesson-title">${step.title}</span>
+              </li>`;
+          })}
+        </ul>
+      </div>`;
   }
 
   _renderCompletion() {
     return html`
-      <div class="ob-completion">
-        <span class="ob-completion-icon">🎉</span>
-        <p class="ob-completion-title">You're all done!</p>
-        <p class="ob-completion-msg">
-          You've completed all ${this._steps.length} lessons. You're ready to make this site your own.
-        </p>
-        <sl-button class="ob-quiet-link" @click=${() => this._onStartOver()}>
-          Start over
-        </sl-button>
-      </div>`;
+      <span class="ob-completion-icon">🎉</span>
+      <p class="ob-completion-title">You're all done!</p>
+      <p class="ob-completion-msg">
+        You've completed all ${this._steps.length} lessons. You're ready to make this site your own.
+      </p>
+      <button class="ob-cta-btn" @click=${() => this._onStartOver()}>
+        Start over
+      </button>`;
   }
 
   render() {
     if (this._loading) return this._renderLoading();
 
-    const fillPct = this._steps.length
-      ? (this._completedSteps.size / this._steps.length) * 100
-      : 0;
+    if (this._done) {
+      return html`
+        <div class="ob-panel">
+          <div class="ob-hero">${this._renderCompletion()}</div>
+        </div>`;
+    }
 
-    const mainContent = this._done
-      ? this._renderCompletion()
-      : html`
-          ${this._showWelcome ? this._renderWelcome() : this._renderStepCard()}
-          ${this._renderLessonsList()}
-        `;
+    const heroContent = this._showWelcome
+      ? this._renderWelcome()
+      : this._renderStepCard();
 
     return html`
-      <span class="ob-eyebrow">Guided Onboarding</span>
-      <h1 class="ob-title">Make this site yours</h1>
-      <p class="ob-subtitle">Follow these lessons to get started — everything here is a safe sandbox.</p>
-
-      <div class="ob-progress">
-        <div class="ob-progress-label">
-          <span>Your Progress</span>
-          <span>${this._completedSteps.size} of ${this._steps.length}</span>
-        </div>
-        <div class="ob-progress-track">
-          <div class="ob-progress-fill" style="width: ${fillPct}%"></div>
-        </div>
-      </div>
-
-      ${mainContent}
-    `;
+      <div class="ob-panel">
+        <div class="ob-hero">${heroContent}</div>
+        <div class="ob-bottom-card">${this._renderLessonsList()}</div>
+      </div>`;
   }
 }
 
-customElements.define('onboarding-app', OnboardingApp);
+customElements.define('welcome-app', WelcomeApp);

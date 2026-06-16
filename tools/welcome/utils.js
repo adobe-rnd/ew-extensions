@@ -61,9 +61,11 @@ export function parseWelcomeBlock(block) {
       const titleEl = contentEl?.querySelector('h2');
       const paras = [...(contentEl?.querySelectorAll('p') || [])];
       const ctaEl = contentEl?.querySelector('a');
+      const descClone = paras[0]?.cloneNode(true);
+      descClone?.querySelectorAll('a').forEach((a) => a.remove());
       welcome = {
         title: titleEl?.textContent.trim() || '',
-        description: paras[0]?.textContent.replace(/\s+/g, ' ').trim() || '',
+        description: descClone?.textContent.replace(/\s+/g, ' ').trim() || '',
         ctaText: ctaEl?.textContent.trim() || 'Start the tour',
       };
     } else {

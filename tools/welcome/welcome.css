@@ -1,0 +1,216 @@
+welcome-app {
+  display: block;
+  box-sizing: border-box;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--body-font-family, adobe-clean, 'Source Sans Pro', -apple-system, sans-serif);
+}
+
+/* Panel layout */
+
+welcome-app .ob-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 2px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.08);
+}
+
+/* Hero */
+
+welcome-app .ob-hero {
+  flex: 1;
+  background: #5424db;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
+  min-height: 0;
+}
+
+welcome-app .ob-hero-title {
+  font-family: 'Adobe Clean Display', 'Adobe Clean', sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  color: white;
+  line-height: 1.15;
+  margin: 0;
+}
+
+welcome-app .ob-hero-desc {
+  font-size: 20px;
+  color: rgb(255 255 255 / 0.85);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* CTA button */
+
+welcome-app .ob-cta-btn {
+  align-self: flex-start;
+  background: rgb(255 255 255 / 0.94);
+  color: black;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+welcome-app .ob-cta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+welcome-app .ob-cta-btn:hover:not(:disabled) {
+  background: white;
+}
+
+/* Step card content (rendered inside hero) */
+
+welcome-app .ob-step-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.6);
+  margin: 0;
+}
+
+welcome-app .ob-step-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  line-height: 1.3;
+}
+
+welcome-app .ob-step-desc {
+  font-size: 14px;
+  color: rgb(255 255 255 / 0.85);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Completion (rendered inside hero) */
+
+welcome-app .ob-completion-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+welcome-app .ob-completion-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+welcome-app .ob-completion-msg {
+  font-size: 16px;
+  color: rgb(255 255 255 / 0.85);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Bottom card */
+
+welcome-app .ob-bottom-card {
+  background: white;
+  flex-shrink: 0;
+}
+
+/* Lessons list */
+
+welcome-app .ob-lessons-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+welcome-app .ob-lessons-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #131313;
+  margin: 0;
+}
+
+welcome-app .ob-lessons-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+welcome-app .ob-lesson-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+welcome-app .ob-lesson-row:hover {
+  background: #f5f5f5;
+}
+
+welcome-app .ob-lesson-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: #d8deff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #292929;
+  flex-shrink: 0;
+}
+
+welcome-app .ob-lesson-row.completed .ob-lesson-badge {
+  color: #2d9e4f;
+}
+
+welcome-app .ob-lesson-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #292929;
+}
+
+welcome-app .ob-lesson-row.completed .ob-lesson-title {
+  color: #767676;
+}
+
+/* Loading */
+
+welcome-app .ob-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+welcome-app .ob-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgb(255 255 255 / 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: ob-spin 0.85s linear infinite;
+}
+
+@keyframes ob-spin { to { transform: rotate(360deg); } }
