@@ -130,7 +130,6 @@ class WelcomeApp extends LitElement {
     if (!step) return html``;
     const isAlreadyDone = this._completedSteps.has(this._activeStep);
     return html`
-      ${this._renderStepDots()}
       <h2 class="ob-step-title">${step.title}</h2>
       <p class="ob-step-desc">${step.description}</p>
       <button
@@ -197,7 +196,10 @@ class WelcomeApp extends LitElement {
 
     return html`
       <div class="ob-panel">
-        <div class="ob-hero">${heroContent}</div>
+        <div class="ob-hero">
+          ${!this._showWelcome ? this._renderStepDots() : ''}
+          ${heroContent}
+        </div>
         <div class="ob-bottom-card">${this._renderLessonsList()}</div>
       </div>`;
   }

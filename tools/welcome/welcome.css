@@ -29,6 +29,7 @@ welcome-app .ob-hero {
   gap: 16px;
   padding: 40px;
   min-height: 0;
+  position: relative;
 }
 
 welcome-app .ob-hero-title {
@@ -76,6 +77,10 @@ welcome-app .ob-cta-btn:hover:not(:disabled) {
 /* Step dot indicator */
 
 welcome-app .ob-step-dots {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 6px;
   align-items: center;
