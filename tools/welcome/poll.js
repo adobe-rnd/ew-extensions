@@ -1,15 +1,22 @@
 const WORKER_URL = 'https://vibemig-migration-backend-worker.franklin-prod.workers.dev/jobs/snowflake/';
-const CANVAS_URL = 'https://da.live/'; // TODO: replace with real canvas URL
-const JOB_ID = '5723fb1b0227'; // TODO: replace with dynamic job ID from service
-
+const CANVAS_URL = 'https://da.live/canvas#';
 const POLL_INTERVAL_MS = 30_000;
 
+function getJobId() {
+  const [org, site, ...parts] = window.location.hash.slice(2).split('/');
+  const jobId = parts[0];
+  return { org, site, jobId };
+}
+
 export function startPolling(onReady) {
-  const siteUrl = `${CANVAS_URL}${JOB_ID}/index`;
+  const { org, site, jobId } = getJobId();
+  if (!jobId) return;
+
+  const siteUrl = `${CANVAS_URL}/${org}/${site}/${jobId}/index`;
 
   async function poll() {
     try {
-      const res = await fetch(`${WORKER_URL}${encodeURIComponent(JOB_ID)}`, { cache: 'no-store' });
+      const res = await fetch(`${WORKER_URL}${encodeURIComponent(jobId)}`, { cache: 'no-store' });
       if (res.status === 201) {
         onReady(siteUrl);
         return;
