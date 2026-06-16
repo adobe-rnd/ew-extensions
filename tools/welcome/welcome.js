@@ -116,12 +116,21 @@ class WelcomeApp extends LitElement {
       </button>`;
   }
 
+  _renderStepDots() {
+    return html`
+      <div class="ob-step-dots">
+        ${this._steps.map((_, i) => html`
+          <span class="ob-step-dot${i === this._activeStep ? ' active' : ''}"></span>
+        `)}
+      </div>`;
+  }
+
   _renderStepCard() {
     const step = this._steps[this._activeStep];
     if (!step) return html``;
     const isAlreadyDone = this._completedSteps.has(this._activeStep);
     return html`
-      <p class="ob-step-label">${step.label}</p>
+      ${this._renderStepDots()}
       <h2 class="ob-step-title">${step.title}</h2>
       <p class="ob-step-desc">${step.description}</p>
       <button
