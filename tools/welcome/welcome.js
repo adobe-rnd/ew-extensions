@@ -150,6 +150,13 @@ class WelcomeApp extends LitElement {
               </li>`;
           })}
         </ul>
+      </div>
+      <div class="ob-page-status">
+        <p class="ob-page-status-title">Your page is on its way.</p>
+        <p class="ob-page-status-desc">Follow the lessons while your page loads.</p>
+        <div class="ob-page-progress-track">
+          <div class="ob-page-progress-fill"></div>
+        </div>
       </div>`;
   }
 

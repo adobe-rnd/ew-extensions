@@ -120,16 +120,21 @@ welcome-app .ob-completion-msg {
   margin: 0;
 }
 
-/* Bottom card */
+/* Bottom card — indigo-300 background bleeds through as 1px divider */
 
 welcome-app .ob-bottom-card {
-  background: white;
+  background: #d8deff;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
 }
 
 /* Lessons list */
 
 welcome-app .ob-lessons-card {
+  background: white;
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -193,6 +198,54 @@ welcome-app .ob-lesson-title {
 
 welcome-app .ob-lesson-row.completed .ob-lesson-title {
   color: #767676;
+}
+
+/* Page status */
+
+welcome-app .ob-page-status {
+  background: white;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+welcome-app .ob-page-status-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #131313;
+  margin: 0;
+}
+
+welcome-app .ob-page-status-desc {
+  font-size: 14px;
+  color: #292929;
+  line-height: 1.5;
+  margin: 0;
+}
+
+welcome-app .ob-page-progress-track {
+  height: 6px;
+  background: #dadada;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+welcome-app .ob-page-progress-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 40%;
+  background: #3b63fb;
+  border-radius: 3px;
+  animation: ob-progress-slide 1.6s ease-in-out infinite;
+}
+
+@keyframes ob-progress-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
 }
 
 /* Loading */
