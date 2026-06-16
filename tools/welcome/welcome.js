@@ -171,8 +171,14 @@ class WelcomeApp extends LitElement {
       </div>` : ''}
       <div class="ob-page-status">
         ${this._pageReady ? html`
-          <p class="ob-page-status-title">Your page is ready!</p>
-          <a class="ob-page-ready-btn" href=${this._siteUrl} target="_blank">View your site →</a>
+          <div class="ob-page-status-row">
+            <p class="ob-page-status-title">Your page is ready.</p>
+            <a class="ob-page-ready-btn" href=${this._siteUrl} target="_blank">Open your page</a>
+          </div>
+          <p class="ob-page-status-desc">Your page is live in Experience Workspace.</p>
+          <div class="ob-page-progress-track">
+            <div class="ob-page-progress-fill ob-page-progress-complete"></div>
+          </div>
         ` : html`
           <p class="ob-page-status-title">Your page is on its way.</p>
           <p class="ob-page-status-desc">Follow the lessons while your page loads.</p>
@@ -181,6 +187,19 @@ class WelcomeApp extends LitElement {
           </div>
         `}
       </div>`;
+  }
+
+  _renderPageReady() {
+    return html`
+      <div class="ob-ready-check">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="32" cy="32" r="30" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+          <path d="M20 32l9 9 15-18" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="ob-hero-title">You're ready to edit.</h1>
+      <p class="ob-hero-desc">Your page has been imported. Everything you learned is live. Open your page and start editing.</p>
+      <a class="ob-cta-btn" href=${this._siteUrl} target="_blank">Open your page</a>`;
   }
 
   _renderCompletion() {
@@ -198,9 +217,10 @@ class WelcomeApp extends LitElement {
   render() {
     if (this._loading) return this._renderLoading();
 
-    const showDots = !this._showWelcome;
+    const showDots = !this._showWelcome && !this._pageReady;
     let heroContent;
-    if (this._done) heroContent = this._renderCompletion();
+    if (this._pageReady) heroContent = this._renderPageReady();
+    else if (this._done) heroContent = this._renderCompletion();
     else if (this._showWelcome) heroContent = this._renderWelcome();
     else heroContent = this._renderStepCard();
 

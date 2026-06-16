@@ -100,6 +100,19 @@ welcome-app .ob-step-dot.active {
   background: white;
 }
 
+/* Page ready hero */
+
+welcome-app .ob-ready-check {
+  width: 64px;
+  height: 64px;
+  align-self: center;
+}
+
+welcome-app .ob-ready-check svg {
+  width: 100%;
+  height: 100%;
+}
+
 /* Step card content (rendered inside hero) */
 
 welcome-app .ob-step-title {
@@ -242,20 +255,35 @@ welcome-app .ob-page-status-desc {
   margin: 0;
 }
 
+welcome-app .ob-page-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 welcome-app .ob-page-ready-btn {
   display: inline-block;
-  background: #5424db;
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
+  background: #e9e9e9;
+  color: #131313;
+  font-size: 13px;
+  font-weight: 600;
   text-decoration: none;
   border-radius: 20px;
-  padding: 8px 16px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background 0.15s ease;
 }
 
 welcome-app .ob-page-ready-btn:hover {
-  background: #4518c0;
+  background: #d9d9d9;
+}
+
+welcome-app .ob-page-progress-complete {
+  width: 100%;
+  left: 0;
+  animation: none;
 }
 
 welcome-app .ob-page-progress-track {
