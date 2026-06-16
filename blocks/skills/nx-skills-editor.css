@@ -23,14 +23,17 @@
   --s2-corner-radius-500: var(--s2-radius-300, 16px);
 
   /* Font sizes — host uses --s2-body-{t}-size, we alias to --s2-body-size-{t} */
-  --s2-body-size-l: var(--s2-body-l-size, 22px);
-  --s2-body-size-m: var(--s2-body-m-size, 19px);
-  --s2-body-size-s: var(--s2-body-s-size, 17px);
-  --s2-body-size-xs: var(--s2-body-xs-size, 15px);
-  --s2-body-size-xxs: var(--s2-body-xxs-size, 13px);
+  /* Fallbacks use the desktop/≥600px scale from sl/styles.css (not the mobile large scale).
+     sl/styles.css is not loaded on the skills page, so we can't rely on the host token
+     being defined at all — the fallback IS the intended value for this always-desktop UI. */
+  --s2-body-size-l: var(--s2-body-l-size, 18px);
+  --s2-body-size-m: var(--s2-body-m-size, 16px);
+  --s2-body-size-s: var(--s2-body-s-size, 14px);
+  --s2-body-size-xs: var(--s2-body-xs-size, 12px);
+  --s2-body-size-xxs: var(--s2-body-xxs-size, 11px);
 
   /* Heading — host has --s2-heading-s-size but not --s2-heading-size-s */
-  --s2-heading-size-s: var(--s2-heading-s-size, 24px);
+  --s2-heading-size-s: var(--s2-heading-s-size, 20px);
   --s2-heading-font-weight: 700;
 
   /* Font family — host uses --font-family */
@@ -219,7 +222,7 @@
   background: transparent;
   color: var(--s2-gray-700);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--s2-body-size-xs);
   font-weight: var(--s2-component-s-medium-font-weight, 500);
   line-height: 16px;
   cursor: pointer;
