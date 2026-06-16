@@ -499,7 +499,7 @@ function renderDetailView(vm) {
       <div class="editor-header">
         <h3 class="editor-title">${title}</h3>
       </div>
-      ${vm.isFormDirty ? html`
+      ${vm.isFormDirty && !isMcp ? html`
         <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
       ` : nothing}
       <div class="editor-body ${isMemory ? 'editor-body-memory' : ''}">
@@ -744,16 +744,22 @@ export function renderMcpForm(vm) {
   const hasSecret = headers.some((h) => isSensitiveHeaderName(h.name) && String(h.value || '').trim());
   return html`
     <form class="form" @submit=${(e) => e.preventDefault()}>
-      <input type="text" placeholder="server-id (not API key)" aria-label="MCP server id"
-        .value=${vm.mcpKey}
-        ?readonly=${Boolean(vm.editingMcpKey)}
-        @input=${(e) => vm.setMcpKey(e.target.value)}
-      >
-      <p class="form-hint">Identifier only. Do not paste secrets or API keys here.</p>
-      <input type="text" placeholder="SSE endpoint URL" aria-label="MCP server URL"
-        .value=${vm.mcpUrl}
-        @input=${(e) => vm.setMcpUrl(e.target.value)}
-      >
+      <div class="form-field">
+        <label class="form-label" for="mcp-server-id">Server ID</label>
+        <input id="mcp-server-id" type="text" placeholder="e.g. my-server" aria-label="MCP server id"
+          .value=${vm.mcpKey}
+          ?readonly=${Boolean(vm.editingMcpKey)}
+          @input=${(e) => vm.setMcpKey(e.target.value)}
+        >
+        <p class="form-hint">Identifier only. Do not paste secrets or API keys here.</p>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="mcp-server-url">SSE Endpoint URL</label>
+        <input id="mcp-server-url" type="text" placeholder="https://…/sse" aria-label="MCP server URL"
+          .value=${vm.mcpUrl}
+          @input=${(e) => vm.setMcpUrl(e.target.value)}
+        >
+      </div>
       <textarea
         class="textarea-sm"
         placeholder="Description — what this server does (optional)"
@@ -789,7 +795,7 @@ export function renderMcpForm(vm) {
             </div>
           `;
         })}
-        <button type="button" class="mcp-header-add"
+        <button type="button" class="action-btn mcp-header-add"
           @click=${() => vm.addMcpHeader()}
         >+ Add header</button>
         ${hasSecret ? html`
