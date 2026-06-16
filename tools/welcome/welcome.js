@@ -143,6 +143,7 @@ class WelcomeApp extends LitElement {
 
   _renderLessonsList() {
     return html`
+      ${!this._done ? html`
       <div class="ob-lessons-card">
         <p class="ob-lessons-label">All lessons</p>
         <ul class="ob-lessons-list">
@@ -158,7 +159,7 @@ class WelcomeApp extends LitElement {
               </li>`;
           })}
         </ul>
-      </div>
+      </div>` : ''}
       <div class="ob-page-status">
         <p class="ob-page-status-title">Your page is on its way.</p>
         <p class="ob-page-status-desc">Follow the lessons while your page loads.</p>
