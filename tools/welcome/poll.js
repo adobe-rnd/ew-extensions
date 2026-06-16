@@ -10,7 +10,7 @@ function getJobId() {
 
 export function startPolling(onReady) {
   const { org, site, jobId } = getJobId();
-  if (!jobId) return;
+  if (!jobId) return false;
 
   const siteUrl = `${CANVAS_URL}/${org}/${site}/${jobId}/index`;
 
@@ -28,4 +28,5 @@ export function startPolling(onReady) {
   }
 
   poll();
+  return true;
 }

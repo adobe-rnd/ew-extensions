@@ -22,6 +22,7 @@ class WelcomeApp extends LitElement {
     _done: { state: true },
     _pageReady: { state: true },
     _siteUrl: { state: true },
+    _hasJob: { state: true },
   };
 
   constructor() {
@@ -35,6 +36,7 @@ class WelcomeApp extends LitElement {
     this._done = false;
     this._pageReady = false;
     this._siteUrl = '';
+    this._hasJob = false;
   }
 
   createRenderRoot() { return this; }
@@ -42,7 +44,7 @@ class WelcomeApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadContent();
-    startPolling((siteUrl) => {
+    this._hasJob = startPolling((siteUrl) => {
       this._siteUrl = siteUrl;
       this._pageReady = true;
     });
@@ -169,7 +171,7 @@ class WelcomeApp extends LitElement {
           })}
         </ul>
       </div>` : ''}
-      <div class="ob-page-status">
+      ${this._hasJob ? html`<div class="ob-page-status">
         ${this._pageReady ? html`
           <div class="ob-page-status-row">
             <p class="ob-page-status-title">Your page is ready.</p>
@@ -186,7 +188,7 @@ class WelcomeApp extends LitElement {
             <div class="ob-page-progress-fill"></div>
           </div>
         `}
-      </div>`;
+      </div>` : ''}`;
   }
 
   _renderPageReady() {
