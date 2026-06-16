@@ -280,7 +280,7 @@ welcome-app .ob-page-ready-btn:hover {
   background: #d9d9d9;
 }
 
-welcome-app .ob-page-progress-complete {
+welcome-app .ob-page-progress-fill.ob-page-progress-complete {
   width: 100%;
   left: 0;
   animation: none;
