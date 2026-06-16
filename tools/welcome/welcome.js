@@ -7,6 +7,7 @@ import {
   isComplete,
   parseWelcomeBlock,
 } from './utils.js';
+import { startPolling } from './poll.js';
 
 const CONTENT_URL = 'https://adobe--sendto--aemcoder.aem.page/adobe/onboarding/';
 
@@ -19,6 +20,8 @@ class WelcomeApp extends LitElement {
     _activeStep: { state: true },
     _completedSteps: { state: true },
     _done: { state: true },
+    _pageReady: { state: true },
+    _siteUrl: { state: true },
   };
 
   constructor() {
@@ -30,6 +33,8 @@ class WelcomeApp extends LitElement {
     this._activeStep = 0;
     this._completedSteps = new Set();
     this._done = false;
+    this._pageReady = false;
+    this._siteUrl = '';
   }
 
   createRenderRoot() { return this; }
@@ -37,6 +42,10 @@ class WelcomeApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadContent();
+    startPolling((siteUrl) => {
+      this._siteUrl = siteUrl;
+      this._pageReady = true;
+    });
   }
 
   async _loadContent() {
@@ -161,11 +170,16 @@ class WelcomeApp extends LitElement {
         </ul>
       </div>` : ''}
       <div class="ob-page-status">
-        <p class="ob-page-status-title">Your page is on its way.</p>
-        <p class="ob-page-status-desc">Follow the lessons while your page loads.</p>
-        <div class="ob-page-progress-track">
-          <div class="ob-page-progress-fill"></div>
-        </div>
+        ${this._pageReady ? html`
+          <p class="ob-page-status-title">Your page is ready!</p>
+          <a class="ob-page-ready-btn" href=${this._siteUrl} target="_blank">View your site →</a>
+        ` : html`
+          <p class="ob-page-status-title">Your page is on its way.</p>
+          <p class="ob-page-status-desc">Follow the lessons while your page loads.</p>
+          <div class="ob-page-progress-track">
+            <div class="ob-page-progress-fill"></div>
+          </div>
+        `}
       </div>`;
   }
 

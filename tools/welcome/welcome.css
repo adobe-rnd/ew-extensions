@@ -242,6 +242,22 @@ welcome-app .ob-page-status-desc {
   margin: 0;
 }
 
+welcome-app .ob-page-ready-btn {
+  display: inline-block;
+  background: #5424db;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  transition: background 0.15s ease;
+}
+
+welcome-app .ob-page-ready-btn:hover {
+  background: #4518c0;
+}
+
 welcome-app .ob-page-progress-track {
   height: 6px;
   background: #dadada;
