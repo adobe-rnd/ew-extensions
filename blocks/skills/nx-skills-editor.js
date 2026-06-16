@@ -33,11 +33,9 @@ import {
   fetchSiteSourceText,
   DA_SKILLS_EDITOR_SUGGESTION_HANDOFF,
   DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT,
-  DA_SKILLS_EDITOR_FORM_DISMISS,
   DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_SUGGESTION_HANDOFF,
   DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT,
-  DA_SKILLS_LAB_FORM_DISMISS,
   DA_SKILLS_LAB_PROMPT_SEND,
 } from './skills-editor-api.js';
 import {
@@ -54,13 +52,12 @@ import {
 } from './renderers.js';
 import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
 import {
-  createReadOnlyViewer, createEditableViewer, replaceDoc, destroyEditor,
+  createReadOnlyViewer, createEditor, replaceDoc, destroyEditor,
 } from './utils/codemirror-loader.js';
 import {
   onMessage,
   sendMessage,
   consumeSuggestionFromStorage,
-  consumeNavHint,
   onStorageSuggestion,
 } from './utils/skills-channel.js';
 
@@ -318,9 +315,10 @@ class NxSkillsEditor extends LitElement {
         || changed?.has('_isFormEdit') || changed?.has('_viewingSkillId'))) {
       this.updateComplete.then(() => this._mountSkillCM());
     }
-    if (changed?.has('_formSkillBody') && this._skillCM && !this._skillCMUpdating) {
+    if (changed?.has('_formSkillBody') && this._skillCM && !this._isSkillCMUpdating) {
       replaceDoc(this._skillCM, this._formSkillBody || '');
     }
+    this._isSkillCMUpdating = false;
 
     if (changed?.has('_catalogTab') && this._catalogTab === 'agents') {
       this._ensureAgentsLoaded();
@@ -1106,14 +1104,13 @@ class NxSkillsEditor extends LitElement {
     const host = this.shadowRoot.querySelector('.skill-body-cm-host');
     if (!host) return;
     try {
-      this._skillCM = await createEditableViewer(
+      this._skillCM = await createEditor(
         host,
         this._formSkillBody || '',
         (text) => {
-          this._skillCMUpdating = true;
+          this._isSkillCMUpdating = true;
           this._formSkillBody = text;
           this._markDirty();
-          this._skillCMUpdating = false;
         },
       );
     } catch {
@@ -1131,7 +1128,7 @@ class NxSkillsEditor extends LitElement {
   _disposeSkillCM() {
     destroyEditor(this._skillCM);
     this._skillCM = null;
-    this._skillCMUpdating = false;
+    this._isSkillCMUpdating = false;
   }
 
   _disposeCMModal() {

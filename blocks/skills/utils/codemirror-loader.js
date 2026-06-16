@@ -13,7 +13,10 @@ let cmPromise = null;
 
 function loadCM() {
   if (cmPromise) return cmPromise;
-  cmPromise = import(`${resolveNxOrigin()}${CM_PATH}`);
+  cmPromise = import(`${resolveNxOrigin()}${CM_PATH}`).catch((err) => {
+    cmPromise = null;
+    throw err;
+  });
   return cmPromise;
 }
 
@@ -47,7 +50,7 @@ export async function createReadOnlyViewer(container, content) {
  * Calls `onChange(text)` on every document change so the host can sync state.
  * Returns the EditorView instance.
  */
-export async function createEditableViewer(container, content, onChange) {
+export async function createEditor(container, content, onChange) {
   const { EditorView, basicSetup, markdown, githubLight, githubDark } = await loadCM();
   const theme = prefersDark() ? githubDark : githubLight;
   const extensions = [

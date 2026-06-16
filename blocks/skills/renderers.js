@@ -597,7 +597,7 @@ export function renderSkillForm(vm) {
         @input=${(e) => vm.setFormSkillId(e.target.value)}
       >
       <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''}">
-        <div class="skill-body-cm-host" role="textbox" aria-label="Skill markdown"></div>
+        <div class="skill-body-cm-host"></div>
       </div>
     </form>
   `;
