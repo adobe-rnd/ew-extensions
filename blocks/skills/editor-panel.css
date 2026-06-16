@@ -305,7 +305,7 @@
 .skill-detail-action-btn {
   all: unset;
   cursor: pointer;
-  padding: var(--s2-spacing-50) var(--s2-spacing-200);
+  padding: var(--s2-spacing-75) var(--s2-spacing-200);
   border-radius: var(--s2-corner-radius-100);
   font-size: var(--s2-body-size-s);
   color: var(--s2-gray-800);
