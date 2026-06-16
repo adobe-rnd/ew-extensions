@@ -44,10 +44,10 @@ class WelcomeApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadContent();
-    this._hasJob = startPolling((siteUrl) => {
+    startPolling((siteUrl) => {
       this._siteUrl = siteUrl;
       this._pageReady = true;
-    });
+    }).then((started) => { this._hasJob = started; });
   }
 
   async _loadContent() {

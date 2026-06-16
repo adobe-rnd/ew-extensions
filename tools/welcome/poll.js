@@ -1,18 +1,16 @@
+import DA_SDK from 'https://da.live/nx/utils/sdk.js';
+
 const WORKER_URL = 'https://vibemig-migration-backend-worker.franklin-prod.workers.dev/jobs/snowflake/';
 const CANVAS_URL = 'https://da.live/canvas#';
 const POLL_INTERVAL_MS = 30_000;
 
-function getJobId() {
-  const [org, site, ...parts] = window.location.hash.slice(2).split('/');
-  const jobId = parts[0];
-  return { org, site, jobId };
-}
+export async function startPolling(onReady) {
+  const { context } = await DA_SDK;
+  const { org, repo, path } = context;
+  const jobId = path?.split('/').filter(Boolean)[0];
+  if (!org || !repo || !jobId) return false;
 
-export function startPolling(onReady) {
-  const { org, site, jobId } = getJobId();
-  if (!jobId) return false;
-
-  const siteUrl = `${CANVAS_URL}/${org}/${site}/${jobId}/index`;
+  const siteUrl = `${CANVAS_URL}/${org}/${repo}/${jobId}/index`;
 
   async function poll() {
     try {
