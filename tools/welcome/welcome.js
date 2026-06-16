@@ -217,9 +217,9 @@ class WelcomeApp extends LitElement {
   render() {
     if (this._loading) return this._renderLoading();
 
-    const showDots = !this._showWelcome && !this._pageReady;
+    const showDots = !this._showWelcome && !this._done;
     let heroContent;
-    if (this._pageReady) heroContent = this._renderPageReady();
+    if (this._done && this._pageReady) heroContent = this._renderPageReady();
     else if (this._done) heroContent = this._renderCompletion();
     else if (this._showWelcome) heroContent = this._renderWelcome();
     else heroContent = this._renderStepCard();
