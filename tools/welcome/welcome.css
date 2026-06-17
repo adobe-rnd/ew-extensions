@@ -128,27 +128,6 @@ welcome-app .ob-step-desc {
   margin: 0;
 }
 
-/* Completion (rendered inside hero) */
-
-welcome-app .ob-completion-icon {
-  font-size: 48px;
-  line-height: 1;
-}
-
-welcome-app .ob-completion-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: white;
-  margin: 0;
-}
-
-welcome-app .ob-completion-msg {
-  font-size: 16px;
-  color: rgb(255 255 255 / 0.85);
-  line-height: 1.6;
-  margin: 0;
-}
-
 /* Bottom card — indigo-300 background bleeds through as 1px divider */
 
 welcome-app .ob-bottom-card {
@@ -244,7 +223,6 @@ welcome-app .ob-page-status {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-radius: 12px;
 }
 
 welcome-app .ob-page-status-title {

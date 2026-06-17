@@ -206,9 +206,14 @@ class WelcomeApp extends LitElement {
 
   _renderCompletion() {
     return html`
-      <span class="ob-completion-icon">🎉</span>
-      <p class="ob-completion-title">You're all done!</p>
-      <p class="ob-completion-msg">
+      <div class="ob-ready-check">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="32" cy="32" r="30" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+          <path d="M20 32l9 9 15-18" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="ob-hero-title">You're all done!</h1>
+      <p class="ob-hero-desc">
         You've completed all ${this._steps.length} lessons. You're ready to make this site your own.
       </p>
       <button class="ob-cta-btn" @click=${() => this._onStartOver()}>
