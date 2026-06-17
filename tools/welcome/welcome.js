@@ -1,4 +1,5 @@
 import { LitElement, html } from 'da-lit';
+import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import {
   loadProgress,
   saveProgress,
@@ -37,7 +38,6 @@ class WelcomeApp extends LitElement {
     this._pageReady = false;
     this._siteUrl = '';
     this._hasJob = false;
-    // Set by the host to provide chat integration: { setPrompt(prompt, opts) {} }
     this._actions = null;
   }
 
@@ -46,6 +46,7 @@ class WelcomeApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadContent();
+    DA_SDK.then(({ actions }) => { this._actions = actions; });
     startPolling((siteUrl) => {
       this._siteUrl = siteUrl;
       this._pageReady = true;
