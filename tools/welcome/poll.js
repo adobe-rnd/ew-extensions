@@ -7,10 +7,16 @@ const POLL_INTERVAL_MS = 30_000;
 export async function startPolling(onReady) {
   const { context } = await DA_SDK;
   const { org, repo, path } = context;
-  const jobId = path?.split('/').filter(Boolean)[0];
+  const pathParts = path?.split('/').filter(Boolean) || [];
+  const jobId = pathParts[0];
   if (!org || !repo || !jobId) return false;
 
   const siteUrl = `${CANVAS_URL}/${org}/${repo}/${jobId}/index`;
+
+  if (pathParts[pathParts.length - 1] === 'index') {
+    onReady(siteUrl);
+    return true;
+  }
 
   async function poll() {
     try {
