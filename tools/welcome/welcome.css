@@ -13,16 +13,13 @@ welcome-app .ob-panel {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 0 2px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.08);
+  background-color: #5424db;
 }
 
 /* Hero */
 
 welcome-app .ob-hero {
   flex: 1;
-  background: #5424db;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -160,6 +157,7 @@ welcome-app .ob-bottom-card {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  border-radius: 16px 16px 0 0;
   overflow: hidden;
 }
 
@@ -218,8 +216,14 @@ welcome-app .ob-lesson-badge {
   flex-shrink: 0;
 }
 
+welcome-app .ob-lesson-row.active .ob-lesson-badge {
+  background: #5424db;
+  color: white;
+}
+
 welcome-app .ob-lesson-row.completed .ob-lesson-badge {
-  color: #2d9e4f;
+  background: #2d9e4f;
+  color: white;
 }
 
 welcome-app .ob-lesson-title {
@@ -240,6 +244,7 @@ welcome-app .ob-page-status {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border-radius: 12px;
 }
 
 welcome-app .ob-page-status-title {
