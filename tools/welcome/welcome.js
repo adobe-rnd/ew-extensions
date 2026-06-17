@@ -37,6 +37,8 @@ class WelcomeApp extends LitElement {
     this._pageReady = false;
     this._siteUrl = '';
     this._hasJob = false;
+    // Set by the host to provide chat integration: { setPrompt(prompt, opts) {} }
+    this._actions = null;
   }
 
   createRenderRoot() { return this; }
@@ -76,8 +78,23 @@ class WelcomeApp extends LitElement {
     this._loading = false;
   }
 
+  _executeStepAction(step) {
+    const action = step?.action || '';
+    if (!action || action === 'scroll-to') return;
+
+    const match = action.match(/^open-chat\("(.*)"\)$/s);
+    if (match) {
+      const prompt = match[1];
+      window.parent.postMessage({ type: 'nx-open-chat' }, '*');
+      if (this._actions?.setPrompt) {
+        this._actions.setPrompt(prompt, { autoSend: true });
+      }
+    }
+  }
+
   _onStartTour() {
     this._showWelcome = false;
+    this._executeStepAction(this._steps[this._activeStep]);
   }
 
   _onMarkComplete() {
@@ -93,11 +110,13 @@ class WelcomeApp extends LitElement {
     this._completedSteps = next;
     this._activeStep = nextStep;
     saveProgress(window.location.href, next, nextStep);
+    this._executeStepAction(this._steps[nextStep]);
   }
 
   _onNavigateToStep(index) {
     this._activeStep = index;
     this._showWelcome = false;
+    this._executeStepAction(this._steps[index]);
   }
 
   _onStartOver() {
