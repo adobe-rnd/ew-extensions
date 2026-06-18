@@ -88,7 +88,7 @@ class WelcomeApp extends LitElement {
       const prompt = match[1];
       window.parent.postMessage({ type: 'nx-open-chat' }, '*');
       if (this._actions?.setPrompt) {
-        this._actions.setPrompt(prompt, { autoSend: true });
+        this._actions.setPrompt(prompt, { autoSend: false });
       }
     }
   }
