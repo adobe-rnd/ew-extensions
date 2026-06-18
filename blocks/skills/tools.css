@@ -345,12 +345,21 @@
   align-self: flex-start;
 }
 
-/* ─── memory Monaco host ─────────────────────────────────────────────────────── */
+/* ─── memory CodeMirror host ──────────────────────────────────────────────────── */
 
-.memory-monaco-host {
+.memory-cm-host {
   flex: 1;
-  min-height: 300px;
+  min-height: 0;
   border: 1px solid var(--s2-gray-200);
   border-radius: var(--s2-corner-radius-200);
   overflow: hidden;
+}
+
+/* Let the CodeMirror editor fill the host and scroll internally */
+.memory-cm-host .cm-editor {
+  height: 100%;
+}
+
+.memory-cm-host .cm-scroller {
+  overflow-y: auto;
 }
