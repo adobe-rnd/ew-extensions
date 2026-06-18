@@ -543,7 +543,7 @@ function renderCatalogView(vm) {
           </div>
           ${TAB_ACTIONS[tab] ? html`
             <button type="button" class="new-btn"
-              ?disabled=${TAB_ACTIONS[tab].disabled}
+              ?disabled=${TAB_ACTIONS[tab].disabled || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])}
               @click=${() => {
                 const { opener } = TAB_ACTIONS[tab];
                 if (opener && typeof vm[opener] === 'function') vm[opener]();
