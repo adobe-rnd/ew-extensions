@@ -7,6 +7,8 @@ import {
   skillsRowsToMapAndStatuses,
   markSkillDeleted,
   isSkillRecentlyDeleted,
+  parseActionsHasWrite,
+  fetchSkillsPermission,
 } from '../../blocks/skills/skills-editor-api.js';
 
 describe('skillRowStatus', () => {
@@ -221,5 +223,63 @@ describe('isSensitiveHeaderName', () => {
     expect(isSensitiveHeaderName('')).to.be.false;
     expect(isSensitiveHeaderName(null)).to.be.false;
     expect(isSensitiveHeaderName(undefined)).to.be.false;
+  });
+});
+
+describe('parseActionsHasWrite', () => {
+  it('returns true when write is present', () => {
+    expect(parseActionsHasWrite('/author-kit=read,write')).to.be.true;
+  });
+
+  it('returns false when write is absent', () => {
+    expect(parseActionsHasWrite('/author-kit=read')).to.be.false;
+  });
+
+  it('handles multiple path entries', () => {
+    expect(parseActionsHasWrite('/other=read /author-kit=write')).to.be.true;
+    expect(parseActionsHasWrite('/other=read /author-kit=read')).to.be.false;
+  });
+
+  it('is not fooled by "write" in a path name', () => {
+    expect(parseActionsHasWrite('/write-only=read')).to.be.false;
+  });
+
+  it('returns false for empty or missing header', () => {
+    expect(parseActionsHasWrite('')).to.be.false;
+    expect(parseActionsHasWrite(null)).to.be.false;
+    expect(parseActionsHasWrite(undefined)).to.be.false;
+  });
+});
+
+describe('fetchSkillsPermission', () => {
+  const realFetch = window.fetch;
+  afterEach(() => { window.fetch = realFetch; });
+
+  function mockFetch({ status = 200, headers = {} } = {}) {
+    window.fetch = async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: (name) => headers[name.toLowerCase()] ?? null },
+    });
+  }
+
+  it('returns true when x-da-actions includes write', async () => {
+    mockFetch({ headers: { 'x-da-actions': '/da/skills=read,write' } });
+    expect(await fetchSkillsPermission('org', 'site')).to.be.true;
+  });
+
+  it('returns false when x-da-actions excludes write', async () => {
+    mockFetch({ headers: { 'x-da-actions': '/da/skills=read' } });
+    expect(await fetchSkillsPermission('org', 'site')).to.be.false;
+  });
+
+  it('returns true (optimistic) when no x-da-actions header', async () => {
+    mockFetch({ headers: {} });
+    expect(await fetchSkillsPermission('org', 'site')).to.be.true;
+  });
+
+  it('returns true (optimistic) on network error', async () => {
+    window.fetch = async () => { throw new Error('network'); };
+    expect(await fetchSkillsPermission('org', 'site')).to.be.true;
   });
 });
