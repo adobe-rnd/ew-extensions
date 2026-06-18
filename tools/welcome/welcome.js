@@ -195,7 +195,7 @@ class WelcomeApp extends LitElement {
         ${this._pageReady ? html`
           <div class="ob-page-status-row">
             <p class="ob-page-status-title">Your page is ready.</p>
-            <a class="ob-page-ready-btn" href=${this._siteUrl} target="_blank">Open your page</a>
+            <a class="ob-page-ready-btn" href=${this._siteUrl}>Open your page</a>
           </div>
           <p class="ob-page-status-desc">Your page is live in Experience Workspace.</p>
           <div class="ob-page-progress-track">
@@ -221,7 +221,7 @@ class WelcomeApp extends LitElement {
       </div>
       <h1 class="ob-hero-title">You're ready to edit.</h1>
       <p class="ob-hero-desc">Your page has been imported. Everything you learned is live. Open your page and start editing.</p>
-      <a class="ob-cta-btn" href=${this._siteUrl} target="_blank">Open your page</a>`;
+      <a class="ob-cta-btn" href=${this._siteUrl}>Open your page</a>`;
   }
 
   _renderCompletion() {
