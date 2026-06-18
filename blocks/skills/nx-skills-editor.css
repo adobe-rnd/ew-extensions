@@ -23,14 +23,17 @@
   --s2-corner-radius-500: var(--s2-radius-300, 16px);
 
   /* Font sizes — host uses --s2-body-{t}-size, we alias to --s2-body-size-{t} */
-  --s2-body-size-l: var(--s2-body-l-size, 22px);
-  --s2-body-size-m: var(--s2-body-m-size, 19px);
-  --s2-body-size-s: var(--s2-body-s-size, 17px);
-  --s2-body-size-xs: var(--s2-body-xs-size, 15px);
-  --s2-body-size-xxs: var(--s2-body-xxs-size, 13px);
+  /* Fallbacks use the desktop/≥600px scale from sl/styles.css (not the mobile large scale).
+     sl/styles.css is not loaded on the skills page, so we can't rely on the host token
+     being defined at all — the fallback IS the intended value for this always-desktop UI. */
+  --s2-body-size-l: var(--s2-body-l-size, 18px);
+  --s2-body-size-m: var(--s2-body-m-size, 16px);
+  --s2-body-size-s: var(--s2-body-s-size, 14px);
+  --s2-body-size-xs: var(--s2-body-xs-size, 12px);
+  --s2-body-size-xxs: var(--s2-body-xxs-size, 11px);
 
   /* Heading — host has --s2-heading-s-size but not --s2-heading-size-s */
-  --s2-heading-size-s: var(--s2-heading-s-size, 24px);
+  --s2-heading-size-s: var(--s2-heading-s-size, 20px);
   --s2-heading-font-weight: 700;
 
   /* Font family — host uses --font-family */
@@ -184,40 +187,57 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  min-height: 40px;
+  height: 48px;
+  padding: 0 var(--s2-spacing-400);
   background: light-dark(var(--s2-gray-25), var(--s2-gray-75));
   border-bottom: 1px solid var(--s2-gray-200);
+  box-sizing: border-box;
 }
 
-.top-nav nx-tabs { flex: 1; min-width: 0; }
+.top-nav nx-tabs { flex: 0 0 auto; }
+
+/* ─── nav pill (Assistant button + tabs in one segmented container) ──────── */
+
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2-spacing-50);
+  padding: var(--s2-spacing-50);
+  border-radius: calc(var(--s2-corner-radius-400) + var(--s2-spacing-50));
+  background-color: var(--s2-gray-100);
+}
 
 /* ─── chat toggle (visible in top-nav when chat is closed) ───────────────── */
 
 .chat-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--ew-spacing-75);
-  padding: var(--ew-spacing-75) var(--s2-spacing-200);
+  justify-content: center;
+  gap: var(--s2-spacing-75);
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 9px;
   border: none;
-  border-radius: var(--s2-corner-radius-100);
-  background: none;
+  border-radius: var(--s2-corner-radius-400);
+  background: transparent;
   color: var(--s2-gray-700);
   font-family: inherit;
-  font-size: var(--s2-body-size-s);
-  font-weight: var(--s2-heading-font-weight);
+  font-size: var(--s2-body-size-xs);
+  font-weight: var(--s2-component-s-medium-font-weight, 500);
+  line-height: 16px;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.12s ease, background-color 0.12s ease;
 }
 
 .chat-toggle-btn:hover {
   color: var(--s2-gray-900);
-  background: var(--s2-gray-100);
+  background-color: var(--s2-gray-200);
 }
 
 .chat-toggle-btn svg {
-  width: var(--ew-icon-size-l);
-  height: var(--ew-icon-size-l);
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
@@ -407,8 +427,6 @@
 
 @media (width <= 900px) {
   .top-nav { flex-wrap: wrap; }
-
-  .chat-toggle-btn { padding: var(--s2-spacing-75) var(--ew-spacing-125); }
 
   .content-area {
     flex-direction: column;

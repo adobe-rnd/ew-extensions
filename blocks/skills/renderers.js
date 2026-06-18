@@ -418,18 +418,18 @@ const CHAT_TOGGLE_ICON = html`<svg viewBox="0 0 20 20" fill="none"><path d="M16.
 export function renderTopNav(vm) {
   return html`
     <nav class="top-nav" aria-label="Skills Editor navigation">
-      ${!vm.isChatOpen ? html`
-        <button type="button"
+      <div class="nav-pill">
+        ${!vm.isChatOpen ? html`<button type="button"
           class="chat-toggle-btn"
           aria-label="Open Assistant"
           @click=${() => vm.onToggleChat()}
-        >${CHAT_TOGGLE_ICON}<span>Assistant</span></button>
-      ` : nothing}
-      <nx-tabs
-        .items=${TAB_ITEMS}
-        .active=${vm.catalogTab}
-        @tab-change=${(e) => vm.onTabChange(e.detail.id)}
-      ></nx-tabs>
+        >${CHAT_TOGGLE_ICON}<span>Assistant</span></button>` : nothing}
+        <nx-tabs
+          .items=${TAB_ITEMS}
+          .active=${vm.catalogTab}
+          @tab-change=${(e) => vm.onTabChange(e.detail.id)}
+        ></nx-tabs>
+      </div>
     </nav>
   `;
 }
