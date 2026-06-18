@@ -502,7 +502,7 @@ function renderDetailView(vm) {
       ${vm.isFormDirty ? html`
         <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
       ` : nothing}
-      <div class="editor-body ${isMemory ? 'editor-body-memory' : ''}">
+      <div class="editor-body ${isMemory ? 'editor-body-memory' : ''} ${isSkill ? 'editor-body-skill' : ''}">
         ${isSkill ? renderSkillForm(vm) : nothing}
         ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
         ${isPrompt ? renderPromptForm(vm) : nothing}
@@ -597,12 +597,7 @@ export function renderSkillForm(vm) {
         @input=${(e) => vm.setFormSkillId(e.target.value)}
       >
       <div class="textarea-wrap ${vm.hasSuggestion ? 'is-suggestion' : ''}">
-        <textarea
-          placeholder="Write or revise skill markdown"
-          aria-label="Skill markdown"
-          .value=${vm.formSkillBody}
-          @input=${(e) => vm.setFormSkillBody(e.target.value)}
-        ></textarea>
+        <div class="skill-body-cm-host"></div>
       </div>
     </form>
   `;
@@ -1295,5 +1290,5 @@ export function renderMemoryContent(vm) {
   if (vm.memory === '') {
     return html`<div class="empty">No project memory yet. The DA agent writes here as it learns about your site.</div>`;
   }
-  return html`<div class="memory-monaco-host" data-memory-content=${vm.memory}></div>`;
+  return html`<div class="memory-cm-host"></div>`;
 }

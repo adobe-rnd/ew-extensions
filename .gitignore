@@ -8,3 +8,5 @@ private-docs/
 playwright-report/
 test-results/
 .playwright/
+.tmp-fix-my-pr-*.json
+serve-local.mjs
