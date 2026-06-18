@@ -449,6 +449,7 @@ export function renderChatDrawer(vm) {
 // TAB_LABEL_MAP and TAB_DESCRIPTIONS are imported from constants.js
 
 const BACK_ARROW_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>`;
+const TRASH_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5 4V2.5A.5.5 0 0 1 5.5 2h5a.5.5 0 0 1 .5.5V4M6 7v5M10 7v5M3 4l1 9.5A.5.5 0 0 0 4.5 14h7a.5.5 0 0 0 .5-.5L13 4"/></svg>`;
 const SEARCH_ICON = html`<svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>`;
 
 function renderDetailView(vm) {
@@ -1004,6 +1005,12 @@ export function renderEditorFooter(vm, tab) {
           ?disabled=${vm.isSaveBusy || !vm.mcpKey.trim() || !vm.mcpUrl.trim()}
           @click=${vm.onRegisterMcp}
         >${vm.editingMcpKey ? 'Update' : 'Register'}</button>
+        ${vm.editingMcpKey ? html`
+          <button type="button" data-variant="negative"
+            ?disabled=${vm.isSaveBusy}
+            @click=${() => vm.onDeleteMcpDirect({ key: vm.editingMcpKey })}
+          >Delete</button>
+        ` : nothing}
       </div>
       ${statusTpl}
     `;
@@ -1225,6 +1232,13 @@ function renderMcpCard(vm, s, isBuiltin) {
       <footer class="plugin-card-meta">
         <span class="plugin-card-badge">${badge}</span>
         <span class="plugin-card-count">${toolCount} tools</span>
+        ${!isBuiltin ? html`
+          <button type="button" class="plugin-card-action is-uninstall"
+            aria-label="Delete MCP server ${key}"
+            data-testid="mcp-delete-btn"
+            @click=${(e) => { e.stopPropagation(); vm.onDeleteMcpDirect(s); }}
+          >${TRASH_ICON}</button>
+        ` : nothing}
       </footer>
     </article>
   `;
@@ -1247,6 +1261,13 @@ function renderMcpRow(vm, s, isBuiltin) {
           <span class="catalog-row-meta">${desc} · ${transport || 'built-in'}</span>
         </div>
       </div>
+      ${!isBuiltin ? html`
+        <button type="button" class="plugin-row-action is-uninstall"
+          aria-label="Delete MCP server ${key}"
+          data-testid="mcp-delete-btn"
+          @click=${(e) => { e.stopPropagation(); vm.onDeleteMcpDirect(s); }}
+        >${TRASH_ICON}</button>
+      ` : nothing}
       ${DRILL_CHEVRON}
     </div>
   `;

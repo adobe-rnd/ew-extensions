@@ -785,6 +785,111 @@ test.describe('MCPs', () => {
     await expect(page.locator('.editor-title')).toContainText('Edit:');
     await expect(page.getByLabel('MCP server id')).toBeVisible();
   });
+
+  // ─── Delete action ────────────────────────────────────────────────────────
+
+  test('Delete button absent on built-in MCP cards', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await page.getByRole('tab', { name: 'MCPs' }).click();
+    const builtinCard = page.getByTestId('mcp-builtin-card').first();
+    await expect(builtinCard).toBeVisible({ timeout: 10000 });
+    await expect(builtinCard.getByTestId('mcp-delete-btn')).not.toBeVisible();
+  });
+
+  test('Delete button present on custom MCP cards', async ({ page }) => {
+    test.setTimeout(30000);
+
+    const cfg = stubs.getConfig();
+    cfg['mcp-servers'].data.push({ key: 'pw-delete-visible', url: 'https://example.invalid/mcp', status: 'approved', enabled: true });
+    cfg['mcp-servers'].total = cfg['mcp-servers'].data.length;
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await page.getByRole('tab', { name: 'MCPs' }).click();
+    const customCard = page.getByTestId('mcp-card').first();
+    await expect(customCard).toBeVisible({ timeout: 10000 });
+    await expect(customCard.getByTestId('mcp-delete-btn')).toBeVisible();
+  });
+
+  test('Cancelling delete confirmation leaves MCP intact', async ({ page }) => {
+    test.setTimeout(30000);
+
+    const cfg = stubs.getConfig();
+    cfg['mcp-servers'].data.push({ key: 'pw-cancel-delete', url: 'https://example.invalid/mcp', status: 'approved', enabled: true });
+    cfg['mcp-servers'].total = cfg['mcp-servers'].data.length;
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await page.getByRole('tab', { name: 'MCPs' }).click();
+    const customCard = page.getByTestId('mcp-card').first();
+    await expect(customCard).toBeVisible({ timeout: 10000 });
+
+    await customCard.getByTestId('mcp-delete-btn').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(dialog).not.toBeVisible();
+    await expect(customCard).toBeVisible();
+  });
+
+  test('Confirming delete removes MCP from UI', async ({ page }) => {
+    test.setTimeout(30000);
+
+    const cfg = stubs.getConfig();
+    cfg['mcp-servers'].data.push({ key: 'pw-confirm-delete', url: 'https://example.invalid/mcp', status: 'approved', enabled: true });
+    cfg['mcp-servers'].total = cfg['mcp-servers'].data.length;
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await page.getByRole('tab', { name: 'MCPs' }).click();
+    const customCard = page.getByTestId('mcp-card').first();
+    await expect(customCard).toBeVisible({ timeout: 10000 });
+
+    await customCard.getByTestId('mcp-delete-btn').click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Confirm' }).click();
+
+    await expect(page.getByTestId('mcp-card')).not.toBeVisible({ timeout: 10000 });
+  });
+
+  test('Delete from editor footer removes MCP and closes editor', async ({ page }) => {
+    test.setTimeout(30000);
+
+    const cfg = stubs.getConfig();
+    cfg['mcp-servers'].data.push({ key: 'pw-editor-delete', url: 'https://example.invalid/mcp', status: 'approved', enabled: true });
+    cfg['mcp-servers'].total = cfg['mcp-servers'].data.length;
+
+    await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
+    await waitForReady(page);
+
+    await page.getByRole('tab', { name: 'MCPs' }).click();
+    const customCard = page.getByTestId('mcp-card').first();
+    await expect(customCard).toBeVisible({ timeout: 10000 });
+
+    // Open editor by clicking the card body (not the delete button)
+    await customCard.click();
+    await expect(page.locator('.editor-title')).toContainText('Edit:', { timeout: 5000 });
+
+    // Delete button in footer only appears when editing an existing server
+    const footer = page.getByRole('toolbar', { name: 'MCP actions' });
+    await expect(footer.getByRole('button', { name: 'Delete' })).toBeVisible({ timeout: 5000 });
+    await footer.getByRole('button', { name: 'Delete' }).click();
+
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Confirm' }).click();
+
+    await expect(page.locator('.detail-view')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('mcp-card')).not.toBeVisible({ timeout: 5000 });
+  });
 });
 
 // ─── Accessibility / keyboard navigation ────────────────────────────────────
