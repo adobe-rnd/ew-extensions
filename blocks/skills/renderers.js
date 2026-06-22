@@ -143,7 +143,8 @@ function renderSkillCard(vm, id) {
   const isViewing = vm.viewingSkillId === id;
   const isDraft = status === STATUS.DRAFT;
   const usedBy = agentsUsingSkill(vm, id);
-  const lineCount = body.split('\n').length;
+  const approxTokens = Math.round(body.length / 4);
+  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
 
   return html`
     <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
@@ -167,7 +168,7 @@ function renderSkillCard(vm, id) {
           ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
         <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
-        <span class="plugin-card-count">${lineCount}L</span>
+        <span class="plugin-card-count" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
       </footer>
     </article>
   `;
@@ -178,6 +179,8 @@ function renderSkillRow(vm, id) {
   const title = extractTitle(body);
   const isViewing = vm.viewingSkillId === id;
   const usedBy = agentsUsingSkill(vm, id);
+  const approxTokens = Math.round(body.length / 4);
+  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
 
   return html`
     <div class="catalog-row ${isViewing ? 'is-selected' : ''}" role="button"
@@ -198,6 +201,7 @@ function renderSkillRow(vm, id) {
         </div>
         ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
+      <span class="catalog-row-meta" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
       ${DRILL_CHEVRON}
     </div>
   `;
