@@ -276,12 +276,56 @@
   line-height: 1.2;
 }
 
+/* ─── form field group (label + input + optional hint, visually bound together) ── */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-75);
+}
+
+.form-label {
+  font-size: var(--s2-body-size-xs);
+  font-weight: 600;
+  color: var(--s2-gray-700);
+  margin: 0;
+}
+
 /* ─── form hints ──────────────────────────────────────────────────────────────── */
 
 .form-hint {
   font-size: var(--s2-body-size-xs);
   color: var(--s2-gray-600);
   margin: 0;
+}
+
+/* ─── generic action button (used for inline form actions like "Add header") ── */
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2-spacing-75);
+  padding: var(--s2-spacing-75) var(--s2-spacing-200);
+  border: 1px solid var(--s2-gray-300);
+  border-radius: var(--s2-corner-radius-200);
+  background: transparent;
+  color: var(--s2-gray-700);
+  font-family: inherit;
+  font-size: var(--s2-body-size-s);
+  font-weight: var(--s2-component-s-medium-font-weight, 500);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.action-btn:hover {
+  background: var(--s2-gray-100);
+  border-color: var(--s2-gray-400);
+  color: var(--s2-gray-900);
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--s2-blue-900);
+  outline-offset: 2px;
 }
 
 /* ─── chat suggestion animation ──────────────────────────────────────────────── */
