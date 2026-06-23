@@ -1113,7 +1113,6 @@ export function renderAgentsCatalog(vm) {
   const filtered = filterMap[filter] || allAgents;
 
   return html`
-    <h3 class="section-h">Installed <span class="section-h-count">${totalCount}</span></h3>
     <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
       <div class="filter-pills" role="tablist" aria-label="Filter plugins">
         <button type="button" class="filter-pill ${filter === 'all' ? 'is-active' : ''}"
