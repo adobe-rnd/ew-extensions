@@ -33,10 +33,8 @@ import {
   fetchSiteSourceText,
   DA_SKILLS_EDITOR_SUGGESTION_HANDOFF,
   DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT,
-  DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_SUGGESTION_HANDOFF,
   DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT,
-  DA_SKILLS_LAB_PROMPT_SEND,
   fetchSkillsPermission,
 } from './skills-editor-api.js';
 import {
@@ -1302,8 +1300,8 @@ class NxSkillsEditor extends LitElement {
   _onRunPrompt() {
     const prompt = this._formPromptBody.trim();
     if (!prompt) return;
-    this._dispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_SEND, prompt);
-    this._dispatchPromptToChat(DA_SKILLS_LAB_PROMPT_SEND, prompt);
+    const chat = document.querySelector('nx-chat');
+    chat?.setPrompt(prompt, { autoSend: true });
     this._setStatus('Sent to chat');
   }
 
