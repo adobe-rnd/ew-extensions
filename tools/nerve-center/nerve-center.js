@@ -371,12 +371,12 @@ class NerveCenterApp extends LitElement {
             </div>
             <div class="obs-insights">
               <p class="obs-insights-label">💡 Insights</p>
-              <p class="obs-insights-summary">One week after the public announcement of Contentful acquisition by Salesforce, the newly created page "how to migrate from Contentful to AEM" shows promising signals of engagement:</p>
+              <p class="obs-insights-summary">One week after the Axios AI+NY Summit — where marketing and comms leaders discussed how AI is reshaping content discovery and brand visibility — the newly created page "how to make your brand discoverable in the AI era" shows promising signals of engagement:</p>
               <ul class="obs-insights-metrics">
                 <li><span class="obs-metric-name">Page Visits</span><span class="obs-metric-value">0 → several thousand</span></li>
                 <li><span class="obs-metric-name">Referrals</span><span class="obs-metric-value">200 visits · 45% from LLMs, 55% from Social</span></li>
                 <li><span class="obs-metric-name">Agentic visits</span><span class="obs-metric-value">0 → hundreds (potential citations)</span></li>
-                <li><span class="obs-metric-name">AI citations</span><span class="obs-metric-value">Referenced in 6 of 15 prompts on CMS modernization</span></li>
+                <li><span class="obs-metric-name">AI citations</span><span class="obs-metric-value">Referenced in 6 of 15 prompts on AI content discovery</span></li>
               </ul>
             </div>
           </div>
