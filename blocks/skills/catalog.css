@@ -445,6 +445,12 @@
   font-weight: 500;
 }
 
+.plugin-card-badge.is-marketplace {
+  background: light-dark(var(--s2-blue-100, #e8f0fe), var(--s2-blue-800, #1a3a6b));
+  color: light-dark(var(--s2-blue-800, #1a3a6b), var(--s2-blue-200, #aecbfa));
+  font-weight: 500;
+}
+
 .plugin-card-count {
   font-size: var(--s2-body-size-xxs);
   color: var(--s2-gray-500);
