@@ -62,6 +62,12 @@ import {
   onStorageSuggestion,
 } from './utils/skills-channel.js';
 
+// DEMO marketplace source — built-in, the single place to swap it.
+// Prod: this list should come from the config sheet / shared config (see the
+// skill-script-runtime migration plan); target repo is adobe/skills.
+const MARKETPLACE_INDEX_URL = 'https://api.github.com/repos/exp-workspace/skills/contents/ew?ref=main';
+const MARKETPLACE_RAW_BASE = 'https://raw.githubusercontent.com/exp-workspace/skills/main/ew';
+
 const [styles, catalogStyles, editorStyles, toolsStyles] = await Promise.all([
   loadStyle(import.meta.url),
   loadStyle(new URL('./catalog.css', import.meta.url).href),
@@ -1589,13 +1595,10 @@ class NxSkillsEditor extends LitElement {
   async _loadMarketplaceSkills() {
     if (this._marketplaceLoading) return;
     this._marketplaceLoading = true;
-    // DEMO: built-in marketplace source. Replace with config-sheet URL in prod.
-    const INDEX_URL = 'https://api.github.com/repos/exp-workspace/skills/contents/ew?ref=main';
-    const RAW_BASE = 'https://raw.githubusercontent.com/exp-workspace/skills/main/ew';
     const UA_HEADER = { 'User-Agent': 'da-skills-panel/1.0' };
 
     try {
-      const indexRes = await fetch(INDEX_URL, { headers: UA_HEADER });
+      const indexRes = await fetch(MARKETPLACE_INDEX_URL, { headers: UA_HEADER });
       if (!indexRes.ok) throw new Error(`index fetch ${indexRes.status}`);
 
       const entries = await indexRes.json();
@@ -1603,7 +1606,7 @@ class NxSkillsEditor extends LitElement {
 
       const results = await Promise.allSettled(
         folders.map(async ({ name: id }) => {
-          const mdRes = await fetch(`${RAW_BASE}/${id}/skill.md`, { headers: UA_HEADER });
+          const mdRes = await fetch(`${MARKETPLACE_RAW_BASE}/${id}/skill.md`, { headers: UA_HEADER });
           if (!mdRes.ok) return null;
           const text = await mdRes.text();
           // Parse frontmatter inline — avoids importing parseFrontmatter into this module
