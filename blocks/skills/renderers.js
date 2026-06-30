@@ -26,9 +26,7 @@ import {
   skillRowEnabled,
   skillRowStatus,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
-  DA_SKILLS_EDITOR_PROMPT_SEND,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
-  DA_SKILLS_LAB_PROMPT_SEND,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -980,6 +978,7 @@ export function renderEditorFooter(vm, tab) {
           >${pIsDraft ? 'Approve' : 'Move to Draft'}</button>
         ` : nothing}
         <button type="button" data-variant="secondary"
+          title="Insert prompt text into the chat input without sending"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => {
             vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
@@ -987,16 +986,10 @@ export function renderEditorFooter(vm, tab) {
           }}
         >Add to Chat</button>
         <button type="button" data-variant="secondary"
-          ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
-          @click=${() => {
-            vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_SEND, vm.formPromptBody);
-            vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_SEND, vm.formPromptBody);
-          }}
-        >Send to Chat</button>
-        <button type="button" data-variant="secondary"
+          title="Send prompt to the assistant immediately"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => vm.onRunPrompt()}
-        >Run / Test</button>
+        >Send to Chat</button>
         ${vm.isFormPromptEdit ? html`
           <button type="button" data-variant="negative"
             ?disabled=${vm.isSaveBusy}
