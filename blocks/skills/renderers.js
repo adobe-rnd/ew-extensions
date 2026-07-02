@@ -413,8 +413,10 @@ function renderPluginDetail(vm) {
 
 const TAB_ITEMS = CATALOG_TABS.map((t) => ({ ...t, icon: TAB_ICON_MAP[t.id] }));
 
+// Split-left glyph — the exact s2-icon-splitleft-20-n path the canvas uses for
+// its chat toggle. Inlined so it renders regardless of environment.
 /* eslint-disable max-len */
-const CHAT_TOGGLE_ICON = html`<svg viewBox="0 0 20 20" fill="none"><path d="M16.75 3H3.25C2.00928 3 1 4.00977 1 5.25V14.75C1 15.9902 2.00928 17 3.25 17H16.75C17.9907 17 19 15.9902 19 14.75V5.25C19 4.00977 17.9907 3 16.75 3ZM5.5 15.5H3.25C2.83643 15.5 2.5 15.1631 2.5 14.75V5.25C2.5 4.83691 2.83643 4.5 3.25 4.5H5.5V15.5ZM17.5 14.75C17.5 15.1631 17.1636 15.5 16.75 15.5H7V4.5H16.75C17.1636 4.5 17.5 4.83691 17.5 5.25V14.75Z" fill="currentColor"/></svg>`;
+const CHAT_TOGGLE_ICON = html`<svg class="chat-toggle-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.75 3H3.25C2.00928 3 1 4.00977 1 5.25V14.75C1 15.9902 2.00928 17 3.25 17H16.75C17.9907 17 19 15.9902 19 14.75V5.25C19 4.00977 17.9907 3 16.75 3ZM5.5 15.5H3.25C2.83643 15.5 2.5 15.1631 2.5 14.75V5.25C2.5 4.83691 2.83643 4.5 3.25 4.5H5.5V15.5ZM17.5 14.75C17.5 15.1631 17.1636 15.5 16.75 15.5H7V4.5H16.75C17.1636 4.5 17.5 4.83691 17.5 5.25V14.75Z" fill="currentColor"/></svg>`;
 /* eslint-enable max-len */
 
 // ─── exported render functions ────────────────────────────────────────────────
@@ -422,12 +424,12 @@ const CHAT_TOGGLE_ICON = html`<svg viewBox="0 0 20 20" fill="none"><path d="M16.
 export function renderTopNav(vm) {
   return html`
     <nav class="top-nav" aria-label="Skills Editor navigation">
+      ${!vm.isChatOpen ? html`<button type="button"
+        class="chat-toggle-btn"
+        aria-label="Open Assistant"
+        @click=${() => vm.onToggleChat()}
+      >${CHAT_TOGGLE_ICON}</button>` : nothing}
       <div class="nav-pill">
-        ${!vm.isChatOpen ? html`<button type="button"
-          class="chat-toggle-btn"
-          aria-label="Open Assistant"
-          @click=${() => vm.onToggleChat()}
-        >${CHAT_TOGGLE_ICON}<span>Assistant</span></button>` : nothing}
         <nx-tabs
           .items=${TAB_ITEMS}
           .active=${vm.catalogTab}
