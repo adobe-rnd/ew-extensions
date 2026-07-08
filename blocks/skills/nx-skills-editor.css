@@ -225,7 +225,7 @@
   padding: 0 4px;
   margin: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--s2-corner-radius-100);
   background: transparent;
   color: var(--s2-gray-800);
   font: inherit;
