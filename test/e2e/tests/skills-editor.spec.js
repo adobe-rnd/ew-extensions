@@ -152,7 +152,7 @@ function findSkillRow(config, skillId) {
 // ─── top-nav pill UI ─────────────────────────────────────────────────────────
 
 test.describe('Top-nav pill UI', () => {
-  test('nav pill is present and contains Assistant button + all catalog tabs', async ({ page }) => {
+  test('nav has standalone Assistant button + pill with all catalog tabs', async ({ page }) => {
     test.setTimeout(30000);
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
@@ -162,6 +162,13 @@ test.describe('Top-nav pill UI', () => {
       (host) => host.shadowRoot?.querySelectorAll('.nav-pill').length ?? 0,
     );
     expect(pillCount).toBe(1);
+
+    // Assistant button is icon-only and sits outside the pill (like the canvas)
+    const btnOutsidePill = await page.locator('nx-skills-editor').evaluate((host) => {
+      const btn = host.shadowRoot?.querySelector('.chat-toggle-btn');
+      return !!btn && !btn.closest('.nav-pill');
+    });
+    expect(btnOutsidePill).toBe(true);
 
     // Assistant button visible (chat is closed by default)
     await expect(page.getByRole('button', { name: 'Open Assistant' })).toBeVisible();
