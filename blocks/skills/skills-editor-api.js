@@ -64,12 +64,10 @@ export const DA_SKILLS_EDITOR_SUGGESTION_HANDOFF = 'da-skills-editor-suggestion-
 export const DA_SKILLS_EDITOR_FORM_DISMISS = 'da-skills-editor-form-column-dismiss';
 export const DA_SKILLS_EDITOR_CLEAR_FORM_FROM_CHAT = 'da-skills-editor-clear-form-from-chat';
 export const DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT = 'da-skills-editor-prompt-add-to-chat';
-export const DA_SKILLS_EDITOR_PROMPT_SEND = 'da-skills-editor-prompt-send';
 export const DA_SKILLS_LAB_SUGGESTION_HANDOFF = 'da-skills-lab-suggestion-handoff';
 export const DA_SKILLS_LAB_FORM_DISMISS = 'da-skills-lab-form-column-dismiss';
 export const DA_SKILLS_LAB_CLEAR_FORM_FROM_CHAT = 'da-skills-lab-clear-form-from-chat';
 export const DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT = 'da-skills-lab-prompt-add-to-chat';
-export const DA_SKILLS_LAB_PROMPT_SEND = 'da-skills-lab-prompt-send';
 
 export function setSkillChatProse(text) {
   try {
