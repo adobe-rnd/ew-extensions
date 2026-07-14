@@ -20,24 +20,21 @@ function loadCM() {
   return cmPromise;
 }
 
-function prefersDark() {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-}
-
 /**
  * Creates a read-only CodeMirror markdown viewer inside `container`.
- * Picks github-light or github-dark based on the system color scheme.
- * Returns the EditorView instance so the caller can destroy it later.
+ * Pinned to github-light to match the Skills Editor, which is locked to light
+ * mode until the UI fully supports dark. Intentionally does not read
+ * prefers-color-scheme. Returns the EditorView instance so the caller can
+ * destroy it later.
  */
 export async function createReadOnlyViewer(container, content) {
-  const { EditorView, basicSetup, markdown, githubLight, githubDark } = await loadCM();
-  const theme = prefersDark() ? githubDark : githubLight;
+  const { EditorView, basicSetup, markdown, githubLight } = await loadCM();
   return new EditorView({
     doc: content,
     extensions: [
       basicSetup,
       markdown(),
-      theme,
+      githubLight,
       EditorView.editable.of(false),
       EditorView.lineWrapping,
     ],
@@ -48,15 +45,15 @@ export async function createReadOnlyViewer(container, content) {
 /**
  * Creates an editable CodeMirror markdown editor inside `container`.
  * Calls `onChange(text)` on every document change so the host can sync state.
+ * Pinned to github-light for the same reason as createReadOnlyViewer.
  * Returns the EditorView instance.
  */
 export async function createEditor(container, content, onChange) {
-  const { EditorView, basicSetup, markdown, githubLight, githubDark } = await loadCM();
-  const theme = prefersDark() ? githubDark : githubLight;
+  const { EditorView, basicSetup, markdown, githubLight } = await loadCM();
   const extensions = [
     basicSetup,
     markdown(),
-    theme,
+    githubLight,
     EditorView.lineWrapping,
   ];
   if (onChange) {
