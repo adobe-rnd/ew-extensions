@@ -1297,11 +1297,23 @@ class NxSkillsEditor extends LitElement {
     await this._reload();
   }
 
-  _onRunPrompt() {
+  async _onRunPrompt() {
     const prompt = this._formPromptBody.trim();
     if (!prompt) return;
-    const chat = document.querySelector('nx-chat');
-    chat?.setPrompt(prompt, { autoSend: true });
+    // The chat we render lives in the drawer inside this component's shadow
+    // root, so document.querySelector never reaches it. Open the drawer if it's
+    // closed (that also imports + mounts nx-chat), wait for Lit to render, then
+    // prefer the shadow-DOM chat and fall back to a document-level one
+    // (canvas/browse mount nx-chat at the document level).
+    if (this.chatImportUrl && !this._isChatOpen) await this._toggleChat();
+    await this.updateComplete;
+    const chat = this.shadowRoot.querySelector('nx-chat')
+      ?? document.querySelector('nx-chat');
+    if (!chat) {
+      this._setStatus('Chat is not available', STATUS_TYPE.ERR);
+      return;
+    }
+    chat.setPrompt(prompt, { autoSend: true });
     this._setStatus('Sent to chat');
   }
 
