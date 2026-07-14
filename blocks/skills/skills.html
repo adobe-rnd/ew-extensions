@@ -15,6 +15,15 @@
     <link rel="stylesheet" href="https://use.typekit.net/pfo1jpc.css" />
     <script src="/blocks/skills/skills.js" type="module"></script>
     <style>
+      /*
+       * Pin the Skills Editor to light mode until the rest of the UI supports
+       * dark. da.live styles.css sets ':root { color-scheme: light dark }', which
+       * makes every light-dark() S2 variable follow the OS. Forcing 'light' here
+       * (unlayered and after the external stylesheet, so it wins) resolves all of
+       * them to their light value; color-scheme is inherited, so it also reaches
+       * the editor's shadow DOM. Remove once dark mode is fully supported.
+       */
+      :root { color-scheme: light; }
       body { margin: 0; font-family: adobe-clean, 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif; }
       nx-skills-editor { display: block; min-height: 100vh; }
     </style>

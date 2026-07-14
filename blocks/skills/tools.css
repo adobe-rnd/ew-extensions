@@ -343,20 +343,6 @@
 
 .mcp-header-add {
   align-self: flex-start;
-  padding: var(--s2-spacing-50) var(--s2-spacing-100);
-  border: 1px dashed var(--s2-gray-400);
-  border-radius: var(--s2-corner-radius-200);
-  background: none;
-  color: var(--s2-gray-700);
-  font-family: inherit;
-  font-size: var(--s2-body-size-xs);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.mcp-header-add:hover {
-  border-color: var(--s2-blue-900);
-  color: var(--s2-blue-900);
 }
 
 /* ─── memory CodeMirror host ──────────────────────────────────────────────────── */

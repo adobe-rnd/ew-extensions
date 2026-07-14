@@ -110,9 +110,9 @@ function isPluginSkill(skillId) {
 // ─── shared icon constants (used in catalog cards and detail views) ───────────
 const DRILL_CHEVRON = html`<svg class="drill-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>`;
 const PROMPT_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`;
-const PLUGIN_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v3M10 2v3M4 5h8a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M6 10h4"/></svg>`;
-const MCP_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7h1M5 9.5h1M10 7h1M10 9.5h1"/></svg>`;
-const SKILL_ICON = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>`;
+const PLUGIN_ICON = TAB_ICON_MAP[TAB_AGENTS];
+const MCP_ICON = TAB_ICON_MAP[TAB_MCPS];
+const SKILL_ICON = TAB_ICON_MAP[TAB_SKILLS];
 const GRID_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`;
 const LIST_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 3h10M4 8h10M4 13h10M2 3h0M2 8h0M2 13h0"/></svg>`;
 
@@ -141,7 +141,8 @@ function renderSkillCard(vm, id) {
   const isViewing = vm.viewingSkillId === id;
   const isDraft = status === STATUS.DRAFT;
   const usedBy = agentsUsingSkill(vm, id);
-  const lineCount = body.split('\n').length;
+  const approxTokens = Math.round(body.length / 4);
+  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
 
   return html`
     <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
@@ -165,7 +166,7 @@ function renderSkillCard(vm, id) {
           ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
         <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
-        <span class="plugin-card-count">${lineCount}L</span>
+        <span class="plugin-card-count" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
       </footer>
     </article>
   `;
@@ -176,6 +177,8 @@ function renderSkillRow(vm, id) {
   const title = extractTitle(body);
   const isViewing = vm.viewingSkillId === id;
   const usedBy = agentsUsingSkill(vm, id);
+  const approxTokens = Math.round(body.length / 4);
+  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
 
   return html`
     <div class="catalog-row ${isViewing ? 'is-selected' : ''}" role="button"
@@ -196,6 +199,7 @@ function renderSkillRow(vm, id) {
         </div>
         ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
+      <span class="catalog-row-meta" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
       ${DRILL_CHEVRON}
     </div>
   `;
@@ -407,8 +411,10 @@ function renderPluginDetail(vm) {
 
 const TAB_ITEMS = CATALOG_TABS.map((t) => ({ ...t, icon: TAB_ICON_MAP[t.id] }));
 
+// Split-left glyph — same asset and relative path the canvas header uses, so it
+// resolves against the da-live page origin (no inlined SVG, no da-nx dependency).
 /* eslint-disable max-len */
-const CHAT_TOGGLE_ICON = html`<svg viewBox="0 0 20 20" fill="none"><path d="M16.75 3H3.25C2.00928 3 1 4.00977 1 5.25V14.75C1 15.9902 2.00928 17 3.25 17H16.75C17.9907 17 19 15.9902 19 14.75V5.25C19 4.00977 17.9907 3 16.75 3ZM5.5 15.5H3.25C2.83643 15.5 2.5 15.1631 2.5 14.75V5.25C2.5 4.83691 2.83643 4.5 3.25 4.5H5.5V15.5ZM17.5 14.75C17.5 15.1631 17.1636 15.5 16.75 15.5H7V4.5H16.75C17.1636 4.5 17.5 4.83691 17.5 5.25V14.75Z" fill="currentColor"/></svg>`;
+const CHAT_TOGGLE_ICON = html`<svg class="chat-toggle-icon" viewBox="0 0 20 20" aria-hidden="true"><use href="/img/icons/s2-icon-splitleft-20-n.svg#icon"></use></svg>`;
 /* eslint-enable max-len */
 
 // ─── exported render functions ────────────────────────────────────────────────
@@ -416,12 +422,12 @@ const CHAT_TOGGLE_ICON = html`<svg viewBox="0 0 20 20" fill="none"><path d="M16.
 export function renderTopNav(vm) {
   return html`
     <nav class="top-nav" aria-label="Skills Editor navigation">
+      ${!vm.isChatOpen ? html`<button type="button"
+        class="chat-toggle-btn"
+        aria-label="Open Assistant"
+        @click=${() => vm.onToggleChat()}
+      >${CHAT_TOGGLE_ICON}</button>` : nothing}
       <div class="nav-pill">
-        ${!vm.isChatOpen ? html`<button type="button"
-          class="chat-toggle-btn"
-          aria-label="Open Assistant"
-          @click=${() => vm.onToggleChat()}
-        >${CHAT_TOGGLE_ICON}<span>Assistant</span></button>` : nothing}
         <nx-tabs
           .items=${TAB_ITEMS}
           .active=${vm.catalogTab}
@@ -498,7 +504,7 @@ function renderDetailView(vm) {
       <div class="editor-header">
         <h3 class="editor-title">${title}</h3>
       </div>
-      ${vm.isFormDirty ? html`
+      ${vm.isFormDirty && !isMcp ? html`
         <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
       ` : nothing}
       <div class="editor-body ${isMemory ? 'editor-body-memory' : ''} ${isSkill ? 'editor-body-skill' : ''}">
@@ -738,16 +744,22 @@ export function renderMcpForm(vm) {
   const hasSecret = headers.some((h) => isSensitiveHeaderName(h.name) && String(h.value || '').trim());
   return html`
     <form class="form" @submit=${(e) => e.preventDefault()}>
-      <input type="text" placeholder="server-id (not API key)" aria-label="MCP server id"
-        .value=${vm.mcpKey}
-        ?readonly=${Boolean(vm.editingMcpKey)}
-        @input=${(e) => vm.setMcpKey(e.target.value)}
-      >
-      <p class="form-hint">Identifier only. Do not paste secrets or API keys here.</p>
-      <input type="text" placeholder="SSE endpoint URL" aria-label="MCP server URL"
-        .value=${vm.mcpUrl}
-        @input=${(e) => vm.setMcpUrl(e.target.value)}
-      >
+      <div class="form-field">
+        <label class="form-label" for="mcp-server-id">Server ID</label>
+        <input id="mcp-server-id" type="text" placeholder="e.g. my-server" aria-label="MCP server id"
+          .value=${vm.mcpKey}
+          ?readonly=${Boolean(vm.editingMcpKey)}
+          @input=${(e) => vm.setMcpKey(e.target.value)}
+        >
+        <p class="form-hint">Identifier only. Do not paste secrets or API keys here.</p>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="mcp-server-url">SSE Endpoint URL</label>
+        <input id="mcp-server-url" type="text" placeholder="https://…/sse" aria-label="MCP server URL"
+          .value=${vm.mcpUrl}
+          @input=${(e) => vm.setMcpUrl(e.target.value)}
+        >
+      </div>
       <textarea
         class="textarea-sm"
         placeholder="Description — what this server does (optional)"
@@ -783,7 +795,7 @@ export function renderMcpForm(vm) {
             </div>
           `;
         })}
-        <button type="button" class="mcp-header-add"
+        <button type="button" class="action-btn mcp-header-add"
           @click=${() => vm.addMcpHeader()}
         >+ Add header</button>
         ${hasSecret ? html`
@@ -1106,7 +1118,6 @@ export function renderAgentsCatalog(vm) {
   const filtered = filterMap[filter] || allAgents;
 
   return html`
-    <h3 class="section-h">Installed <span class="section-h-count">${totalCount}</span></h3>
     <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
       <div class="filter-pills" role="tablist" aria-label="Filter plugins">
         <button type="button" class="filter-pill ${filter === 'all' ? 'is-active' : ''}"

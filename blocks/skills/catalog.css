@@ -78,7 +78,7 @@
 
 /* ─── tab header (title + description above the list) ──────────────────────── */
 
-.tab-header { margin-bottom: var(--s2-spacing-300); }
+.tab-header { margin-bottom: 0; }
 
 .tab-header-row {
   display: flex;
@@ -142,7 +142,6 @@
 
 .list-search {
   position: relative;
-  margin-bottom: var(--s2-spacing-300);
 }
 
 .list-search .search-icon {
@@ -175,7 +174,7 @@
 .catalog-scroll {
   display: flex;
   flex-direction: column;
-  gap: var(--s2-spacing-100);
+  gap: var(--s2-spacing-200);
   padding: var(--s2-spacing-400);
 }
 
@@ -185,7 +184,6 @@
   justify-content: space-between;
   gap: var(--s2-spacing-200);
   flex-wrap: wrap;
-  padding: var(--s2-spacing-100) 0 var(--s2-spacing-200);
 }
 
 .filter-chip {
@@ -380,6 +378,11 @@
   color: var(--s2-gray-600);
 }
 
+.plugin-card-pill svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .plugin-card-identity {
   display: flex;
   flex-direction: column;
@@ -567,7 +570,6 @@
   display: flex;
   align-items: center;
   gap: var(--s2-spacing-100);
-  margin-bottom: var(--s2-spacing-300);
 }
 
 .filter-pill {
@@ -649,6 +651,11 @@
   border-radius: 50%;
   background: var(--s2-gray-200);
   color: var(--s2-gray-600);
+}
+
+.catalog-row-pill svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .catalog-row-body {
