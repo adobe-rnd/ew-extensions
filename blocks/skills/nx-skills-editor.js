@@ -62,6 +62,12 @@ import {
   onStorageSuggestion,
 } from './utils/skills-channel.js';
 
+// DEMO marketplace source — built-in, the single place to swap it.
+// Prod: this list should come from the config sheet / shared config (see the
+// skill-script-runtime migration plan); target repo is adobe/skills.
+const MARKETPLACE_INDEX_URL = 'https://api.github.com/repos/exp-workspace/skills/contents/ew?ref=main';
+const MARKETPLACE_RAW_BASE = 'https://raw.githubusercontent.com/exp-workspace/skills/main/ew';
+
 const [styles, catalogStyles, editorStyles, toolsStyles] = await Promise.all([
   loadStyle(import.meta.url),
   loadStyle(new URL('./catalog.css', import.meta.url).href),
@@ -127,6 +133,8 @@ class NxSkillsEditor extends LitElement {
     _gateSite: { state: true },
     _canWrite: { state: true },
     _confirmDialog: { state: true },
+    _marketplaceSkills: { state: true },
+    _marketplaceLoading: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
@@ -202,6 +210,8 @@ class NxSkillsEditor extends LitElement {
     this._agentFilter = 'all';
     this._formPromptTools = [];
     this._isChatOpen = false;
+    this._marketplaceSkills = [];
+    this._marketplaceLoading = false;
   }
 
   get _org() { return this._hash.value?.org; }
@@ -330,6 +340,10 @@ class NxSkillsEditor extends LitElement {
     }
     if (changed?.has('_catalogTab') && this._catalogTab === 'mcps') {
       this._ensureMcpToolsLoaded();
+    }
+    if (changed?.has('_catalogTab') && this._catalogTab === 'marketplace'
+      && !this._marketplaceSkills.length && !this._marketplaceLoading) {
+      this._loadMarketplaceSkills();
     }
     // Move focus into the detail view on open; restore it to the trigger on close.
     if (changed?.has('_isEditorOpen')) {
@@ -1567,6 +1581,68 @@ class NxSkillsEditor extends LitElement {
     this._memory = got.error ? null : (got.text || '');
   }
 
+  // ─── marketplace ──────────────────────────────────────────────────────────
+
+  /**
+   * Fetch the curated skill index from the GitHub marketplace and parse each
+   * skill's frontmatter (name, description, execution_* fields).
+   *
+   * DEMO: built-in marketplace; later this list comes from config sheet /
+   * shared config. Prod target: adobe/skills.
+   *
+   * Fails silently — if the fetch fails, local skills are shown unaffected.
+   */
+  async _loadMarketplaceSkills() {
+    if (this._marketplaceLoading) return;
+    this._marketplaceLoading = true;
+    const UA_HEADER = { 'User-Agent': 'da-skills-panel/1.0' };
+
+    try {
+      const indexRes = await fetch(MARKETPLACE_INDEX_URL, { headers: UA_HEADER });
+      if (!indexRes.ok) throw new Error(`index fetch ${indexRes.status}`);
+
+      const entries = await indexRes.json();
+      const folders = entries.filter((e) => e.type === 'dir');
+
+      const results = await Promise.allSettled(
+        folders.map(async ({ name: id }) => {
+          const mdRes = await fetch(`${MARKETPLACE_RAW_BASE}/${id}/skill.md`, { headers: UA_HEADER });
+          if (!mdRes.ok) return null;
+          const text = await mdRes.text();
+          // Parse frontmatter inline — avoids importing parseFrontmatter into this module
+          // (parseFrontmatter lives in utils/skill-frontmatter.js and is already used by renderers)
+          const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+          const fields = {};
+          if (match) {
+            match[1].split(/\r?\n/).forEach((line) => {
+              const colon = line.indexOf(':');
+              if (colon < 1) return;
+              const key = line.slice(0, colon).trim();
+              const val = line.slice(colon + 1).trim().replace(/^["']|["']$/g, '');
+              fields[key] = val;
+            });
+          }
+          return {
+            id,
+            name: fields.name || id,
+            description: fields.description || '',
+            body: text,
+            source: 'marketplace',
+          };
+        }),
+      );
+
+      this._marketplaceSkills = results
+        .filter((r) => r.status === 'fulfilled' && r.value)
+        .map((r) => r.value);
+    } catch {
+      // Non-fatal: marketplace unavailable — local skills still show.
+      this._marketplaceSkills = [];
+    } finally {
+      this._marketplaceLoading = false;
+    }
+  }
+
   _onGateSubmit(e) {
     e.preventDefault();
     const org = this._gateOrg.trim();
@@ -1634,6 +1710,8 @@ class NxSkillsEditor extends LitElement {
       mcpDescription: this._mcpDescription,
       mcpHeaders: this._mcpHeaders,
       memory: this._memory,
+      marketplaceSkills: this._marketplaceSkills,
+      marketplaceLoading: this._marketplaceLoading,
       // ── form setters ───────────────────────────────────────────────────────
       setPromptSearch: (v) => { this._promptSearch = v; },
       setFormSkillId: (v) => { this._formSkillId = v; this._markDirty(); },

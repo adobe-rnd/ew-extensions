@@ -536,7 +536,7 @@ function renderDetailView(vm) {
 
 function renderCatalogView(vm) {
   const { catalogTab: tab } = vm;
-  const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
+  const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS, TAB_MARKETPLACE].includes(tab);
   const tabLabel = TAB_LABEL_MAP[tab] || '';
   const tabDesc = TAB_DESCRIPTIONS[tab] || '';
 
@@ -575,7 +575,7 @@ function renderCatalogView(vm) {
       ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
       ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
       ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
-      ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
+      ${tab === TAB_MARKETPLACE ? renderMarketplaceCatalog(vm) : nothing}
     </div>
   `;
 }
@@ -1029,6 +1029,79 @@ export function renderEditorFooter(vm, tab) {
   }
 
   return nothing;
+}
+
+// ─── Marketplace catalog (read-only) ─────────────────────────────────────────
+
+const MARKETPLACE_ICON = TAB_ICON_MAP[TAB_MARKETPLACE];
+
+function renderMarketplaceCard(skill) {
+  return html`
+    <article class="plugin-card plugin-card-marketplace" data-testid="marketplace-skill-card">
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${MARKETPLACE_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${skill.name || skill.id}</span>
+        </div>
+      </header>
+      ${skill.description ? html`<p class="plugin-card-desc">${skill.description}</p>` : nothing}
+      <footer class="plugin-card-meta">
+        <span class="plugin-card-badge is-marketplace">Marketplace</span>
+      </footer>
+    </article>
+  `;
+}
+
+function renderMarketplaceRow(skill) {
+  return html`
+    <div class="catalog-row catalog-row-marketplace" data-testid="marketplace-skill-row">
+      <span class="catalog-row-pill">${MARKETPLACE_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${skill.name || skill.id}</span>
+          <span class="catalog-row-meta">marketplace</span>
+        </div>
+        ${skill.description ? html`<span class="catalog-row-desc">${skill.description}</span>` : nothing}
+      </div>
+      <span class="plugin-card-badge is-marketplace">Marketplace</span>
+    </div>
+  `;
+}
+
+function renderMarketplaceCatalog(vm) {
+  const { marketplaceSkills: skills, marketplaceLoading, catalogViewMode, promptSearch } = vm;
+  const searchQuery = (promptSearch || '').trim().toLowerCase();
+
+  if (marketplaceLoading) {
+    return html`<div class="empty">Loading marketplace skills…</div>`;
+  }
+
+  let filtered = skills || [];
+  if (searchQuery) {
+    filtered = filtered.filter((s) => (s.id || '').toLowerCase().includes(searchQuery)
+      || (s.name || '').toLowerCase().includes(searchQuery)
+      || (s.description || '').toLowerCase().includes(searchQuery));
+  }
+
+  if (!filtered.length) {
+    return html`
+      <div class="catalog-toolbar" role="toolbar" aria-label="Marketplace view">
+        ${renderViewToggle(vm)}
+      </div>
+      <div class="empty">${skills.length ? 'No skills match your search.' : 'No marketplace skills found.'}</div>
+    `;
+  }
+
+  const isGrid = catalogViewMode === 'grid';
+  return html`
+    <div class="catalog-toolbar" role="toolbar" aria-label="Marketplace view">
+      ${renderViewToggle(vm)}
+    </div>
+    ${isGrid
+      ? html`<div class="plugin-grid">${filtered.map((s) => renderMarketplaceCard(s))}</div>`
+      : html`<div class="catalog-list">${filtered.map((s) => renderMarketplaceRow(s))}</div>`
+    }
+  `;
 }
 
 export function renderSkillsCatalog(vm) {
