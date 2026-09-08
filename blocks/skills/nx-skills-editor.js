@@ -44,7 +44,6 @@ import {
   STATUS,
   STATUS_TYPE,
   TAB_CONTEXT,
-  TAB_MEMORY,
 } from './constants.js';
 import {
   renderTopNav,
@@ -301,13 +300,13 @@ class NxSkillsEditor extends LitElement {
       // Restore panel state after data is available (must come after _reload)
       await this._restoreNavState();
     }
-    if (changed?.has('_catalogTab') && this._catalogTab === TAB_MEMORY && this._memory === null) {
+    if (changed?.has('_catalogTab') && this._catalogTab === 'memory' && this._memory === null) {
       this._loadMemory();
     }
-    if (changed?.has('_catalogTab') && this._catalogTab !== TAB_MEMORY) {
+    if (changed?.has('_catalogTab') && this._catalogTab !== 'memory') {
       this._disposeMemoryCM();
     }
-    if ((changed?.has('_memory') || changed?.has('_catalogTab')) && this._catalogTab === TAB_MEMORY && this._memory) {
+    if ((changed?.has('_memory') || changed?.has('_catalogTab')) && this._catalogTab === 'memory' && this._memory) {
       this.updateComplete.then(() => this._mountMemoryCM());
     }
     if (changed?.has('_catalogTab') && this._catalogTab === TAB_CONTEXT && !this._egovBridge) {
@@ -466,7 +465,7 @@ class NxSkillsEditor extends LitElement {
 
     if (!editorOpen) return;
 
-    if (tab === TAB_MEMORY) {
+    if (tab === 'memory') {
       this._isEditorOpen = true;
       return;
     }
@@ -727,7 +726,7 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = true;
     } else {
       this._clearForm();
-      this._isEditorOpen = newTab === TAB_MEMORY || newTab === TAB_CONTEXT;
+      this._isEditorOpen = newTab === 'memory' || newTab === TAB_CONTEXT;
     }
 
     this._pushTabState(newTab);
@@ -757,7 +756,7 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = true;
     } else {
       this._clearForm();
-      this._isEditorOpen = skillsEditorTab === TAB_MEMORY;
+      this._isEditorOpen = skillsEditorTab === 'memory';
     }
   }
 
