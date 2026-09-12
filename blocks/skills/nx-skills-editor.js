@@ -10,6 +10,7 @@ import {
   fetchSkillFileFromAo,
   uploadSkillFileToAo,
   removePersonalSkillSource,
+  setSkillsBackend,
   AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
   deleteSkillFromConfig,
@@ -82,6 +83,7 @@ class NxSkillsEditor extends LitElement {
     _skillDescriptions: { state: true },
     _skillDisplayNames: { state: true },
     _skillLineCounts: { state: true },
+    _skillIds: { state: true },
     _prompts: { state: true },
     _agents: { state: true },
     _agentRows: { state: true },
@@ -180,6 +182,7 @@ class NxSkillsEditor extends LitElement {
     this._skillDescriptions = {};
     this._skillDisplayNames = {};
     this._skillLineCounts = {};
+    this._skillIds = {};
     this._prompts = [];
     this._agents = [];
     this._agentRows = [];
@@ -386,6 +389,7 @@ class NxSkillsEditor extends LitElement {
       skillDescriptions: this._skillDescriptions,
       skillDisplayNames: this._skillDisplayNames,
       skillLineCounts: this._skillLineCounts,
+      skillIds: this._skillIds,
       prompts: this._prompts,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -412,6 +416,7 @@ class NxSkillsEditor extends LitElement {
       this._skillDescriptions = snap.skillDescriptions || {};
       this._skillDisplayNames = snap.skillDisplayNames || {};
       this._skillLineCounts = snap.skillLineCounts || {};
+      this._skillIds = snap.skillIds || {};
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
@@ -503,6 +508,14 @@ class NxSkillsEditor extends LitElement {
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
+      // Mirrors da-nx's ewFlags.js: flags live in the `flags` sheet, keyed
+      // `ew.*`, and are read as the literal string 'true'.
+      const flagRows = configResult.json?.flags?.data ?? [];
+      const altHarness = flagRows.some(
+        (r) => r?.key === 'ew.altHarness' && r?.value === 'true',
+      );
+      setSkillsBackend({ altHarness });
+
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
         loadSkillsFromAo(this._org, this._site, configResult),
@@ -521,6 +534,7 @@ class NxSkillsEditor extends LitElement {
       this._skillDescriptions = skillsResult.descriptions || {};
       this._skillDisplayNames = skillsResult.displayNames || {};
       this._skillLineCounts = skillsResult.lineCounts || {};
+      this._skillIds = skillsResult.skillIds || {};
       this._prompts = configResult.json?.prompts?.data || [];
       this._agentRows = configResult.agentRows || [];
       this._mcpRows = configResult.mcpRows || [];
@@ -981,7 +995,7 @@ class NxSkillsEditor extends LitElement {
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    const result = await removePersonalSkillSource(id);
+    const result = await removePersonalSkillSource(id, this._skillIds[id]);
     this._isSaveBusy = false;
 
     if (!result.ok) {
@@ -1037,7 +1051,7 @@ class NxSkillsEditor extends LitElement {
     const id = this._viewingSkillId;
     let body = this._skills[id] || '';
     if (!body) {
-      body = await fetchSkillFileFromAo(id) || '';
+      body = await fetchSkillFileFromAo(id, 'SKILL.md', this._skillIds[id]) || '';
       if (body) this._skills = { ...this._skills, [id]: body };
     }
 

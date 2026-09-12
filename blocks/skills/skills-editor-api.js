@@ -479,7 +479,22 @@ const AO_HTTP_BASE = {
   stage: 'https://agent-orchestrator-stage-va7.adobe.io',
 };
 
+// CMA "claudebridge" REST plane — used instead of AO when the site config flag
+// `ew.altHarness` is true (see setSkillsBackend below). Bridge skills endpoints
+// are keyed by Managed Agents skill_id and always require x-user-id.
+const BRIDGE_HTTP_BASE = 'https://aem-sites-claudebridge-va6.adobe.io';
+
 const AO_MANIFEST_ID = 'experience-workspace';
+
+// Module-level backend switch, set once by nx-skills-editor.js after it reads
+// the `ew.altHarness` site-config flag (mirrors da-nx's ewFlags.js pattern:
+// flags['ew.*'] === 'true'). Defaults to AO so every existing caller that
+// never calls this keeps behaving exactly as before.
+let altHarnessEnabled = false;
+
+export function setSkillsBackend({ altHarness } = {}) {
+  altHarnessEnabled = altHarness === true;
+}
 
 function aoEnv() {
   const { hostname } = window.location;
@@ -501,6 +516,7 @@ function parseAoSkillsResponse(json) {
     .filter((s) => !s?.hidden && s?.user_invocable !== false)
     .map((s) => ({
       id: String(s?.name || '').trim(),
+      skillId: s?.id,
       scope: s?.scope,
       description: String(s?.description || '').trim(),
       displayName: String(s?.display_name || '').trim(),
@@ -517,7 +533,10 @@ async function aoAuthContext() {
     token,
     orgId: getImsOrgId(profile?.projectedProductContext),
     userId: profile?.userId,
-    base: AO_HTTP_BASE[aoEnv()] || AO_HTTP_BASE.stage,
+    bridge: altHarnessEnabled,
+    base: altHarnessEnabled
+      ? BRIDGE_HTTP_BASE
+      : (AO_HTTP_BASE[aoEnv()] || AO_HTTP_BASE.stage),
   };
 }
 
@@ -525,12 +544,12 @@ export async function fetchSkillsFromAo() {
   const ctx = await aoAuthContext();
   if (!ctx) return null;
   try {
-    const resp = await fetch(`${ctx.base}/api/v1/skills?manifest_id=${AO_MANIFEST_ID}`, {
-      headers: {
-        authorization: `Bearer ${ctx.token}`,
-        'x-tenant-id': ctx.orgId,
-      },
-    });
+    const headers = {
+      authorization: `Bearer ${ctx.token}`,
+      'x-tenant-id': ctx.orgId,
+    };
+    if (ctx.bridge) headers['x-user-id'] = ctx.userId || '';
+    const resp = await fetch(`${ctx.base}/api/v1/skills?manifest_id=${AO_MANIFEST_ID}`, { headers });
     if (!resp.ok) return null;
     return parseAoSkillsResponse(await resp.json());
   } catch {
@@ -544,10 +563,40 @@ export async function fetchSkillsFromAo() {
  * confirmed against aep-ai's read_skill_file handler. Returns the raw file
  * text (frontmatter included) or null on any failure.
  */
-export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md') {
+// Resolves a skill name to its Managed Agents skill_id via the bridge catalog,
+// used when a caller doesn't already have the id handed to it.
+async function resolveBridgeSkillId(skillName) {
+  const skills = await fetchSkillsFromAo();
+  return skills?.find((s) => s.id === skillName)?.skillId || null;
+}
+
+function base64ToText(base64) {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
   const ctx = await aoAuthContext();
   if (!ctx) return null;
   try {
+    if (ctx.bridge) {
+      const id = skillId || await resolveBridgeSkillId(skillName);
+      if (!id) return null;
+      const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(id)}`, {
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const files = Array.isArray(json?.files) ? json.files : [];
+      const file = files.find((f) => String(f?.path || '').split('/').pop() === path);
+      if (!file || typeof file.content !== 'string') return null;
+      return base64ToText(file.content);
+    }
     const url = `${ctx.base}/api/v1/skills/${encodeURIComponent(skillName)}/files`
       + `?path=${encodeURIComponent(path)}&manifest_id=${AO_MANIFEST_ID}`;
     const resp = await fetch(url, {
@@ -576,6 +625,33 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md') {
 export async function uploadSkillFileToAo(file) {
   const ctx = await aoAuthContext();
   if (!ctx) return { ok: false, error: 'Not signed in' };
+
+  if (ctx.bridge) {
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      form.append('display_title', file.name.replace(/\.md$/i, ''));
+      const resp = await fetch(`${ctx.base}/api/v1/skills`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+        body: form,
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        if (resp.status === 409) {
+          return { ok: false, error: body?.detail || `A skill named "${file.name}" already exists.` };
+        }
+        return { ok: false, error: body?.detail || `Upload failed (${resp.status})` };
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
 
   try {
     const initResp = await fetch(`${ctx.base}/api/v1/files/upload`, {
@@ -646,9 +722,29 @@ export async function uploadSkillFileToAo(file) {
  * the source in place), this actually removes the personal skill's source
  * entry — the real "delete", confirmed against Coworker's own network calls.
  */
-export async function removePersonalSkillSource(id) {
+export async function removePersonalSkillSource(id, skillId = null) {
   const ctx = await aoAuthContext();
   if (!ctx) return { ok: false, error: 'Not signed in' };
+
+  if (ctx.bridge) {
+    try {
+      const bridgeId = skillId || await resolveBridgeSkillId(id);
+      if (!bridgeId) return { ok: false, error: 'Skill not found' };
+      const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(bridgeId)}`, {
+        method: 'DELETE',
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+      });
+      if (!resp.ok) return { ok: false, error: `Delete failed (${resp.status})` };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
   const headers = {
     authorization: `Bearer ${ctx.token}`,
     'x-tenant-id': ctx.orgId,
@@ -690,7 +786,7 @@ export async function loadSkillsFromAo(org, site, loadedConfig = null) {
   ]);
   if (!aoSkills) {
     return {
-      ...daResult, scopes: {}, descriptions: {}, displayNames: {}, lineCounts: {},
+      ...daResult, scopes: {}, descriptions: {}, displayNames: {}, lineCounts: {}, skillIds: {},
     };
   }
 
@@ -700,15 +796,21 @@ export async function loadSkillsFromAo(org, site, loadedConfig = null) {
   const descriptions = {};
   const displayNames = {};
   const lineCounts = {};
-  aoSkills.forEach(({ id, scope, description, displayName, lineCount }) => {
+  const skillIds = {};
+  aoSkills.forEach(({
+    id, skillId, scope, description, displayName, lineCount,
+  }) => {
     map[id] = daResult.map[id] || '';
     statuses[id] = daResult.statuses[id] || 'approved';
     scopes[id] = scope;
     descriptions[id] = description;
     displayNames[id] = displayName || id;
     lineCounts[id] = lineCount;
+    if (skillId) skillIds[id] = skillId;
   });
-  return { map, statuses, scopes, descriptions, displayNames, lineCounts };
+  return {
+    map, statuses, scopes, descriptions, displayNames, lineCounts, skillIds,
+  };
 }
 
 export const AO_SCOPE_PERSONAL = 'owner';

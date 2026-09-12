@@ -9,7 +9,13 @@ import {
   isSkillRecentlyDeleted,
   parseActionsHasWrite,
   fetchSkillsPermission,
+  setSkillsBackend,
+  fetchSkillsFromAo,
+  fetchSkillFileFromAo,
+  uploadSkillFileToAo,
+  removePersonalSkillSource,
 } from '../../blocks/skills/skills-editor-api.js';
+import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
 describe('skillRowStatus', () => {
   it('returns "approved" for null/undefined/non-object', () => {
@@ -281,5 +287,184 @@ describe('fetchSkillsPermission', () => {
   it('returns true (optimistic) on network error', async () => {
     window.fetch = async () => { throw new Error('network'); };
     expect(await fetchSkillsPermission('org', 'site')).to.be.true;
+  });
+});
+
+describe('AO / bridge backend switch', () => {
+  const realFetch = window.fetch;
+  const realAdobeIMS = window.adobeIMS;
+
+  const AO_SKILLS_RESPONSE = {
+    skills: [
+      {
+        name: 'my-skill', scope: 'owner', description: 'desc', display_name: 'My Skill', lineCount: 3,
+      },
+    ],
+  };
+  const BRIDGE_SKILLS_RESPONSE = {
+    data: [{ id: 'skill-uuid-1' }],
+    skills: [
+      {
+        id: 'skill-uuid-1', name: 'my-skill', scope: 'owner', description: 'desc', display_name: 'My Skill', lineCount: 3,
+      },
+    ],
+  };
+
+  function mockAuth() {
+    initAuth('test-ims-token');
+    window.adobeIMS = {
+      getAccessToken: () => ({ token: 'test-ims-token' }),
+      getProfile: async () => ({
+        userId: 'user-123',
+        projectedProductContext: [{ prodCtx: { owningEntity: 'ORGID123@AdobeOrg' } }],
+      }),
+    };
+  }
+
+  function trackFetch(handler) {
+    const calls = [];
+    window.fetch = async (url, opts = {}) => {
+      calls.push({ url, opts });
+      return handler(url, opts);
+    };
+    return calls;
+  }
+
+  beforeEach(() => {
+    mockAuth();
+  });
+
+  afterEach(() => {
+    window.fetch = realFetch;
+    window.adobeIMS = realAdobeIMS;
+    setSkillsBackend({ altHarness: false });
+    initAuth(null);
+  });
+
+  describe('altHarness off (AO, byte-for-byte unchanged)', () => {
+    it('fetchSkillsFromAo hits the AO base with no x-user-id header', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
+      const result = await fetchSkillsFromAo();
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://agent-orchestrator-stage-va7.adobe.io/api/v1/skills?manifest_id=experience-workspace');
+      expect(calls[0].opts.headers['x-user-id']).to.be.undefined;
+      expect(calls[0].opts.headers.authorization).to.equal('Bearer test-ims-token');
+      expect(result[0].id).to.equal('my-skill');
+      expect(result[0].skillId).to.be.undefined;
+    });
+
+    it('fetchSkillFileFromAo hits the per-skill files endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ content: '# Hello' }) }));
+      const text = await fetchSkillFileFromAo('my-skill');
+      expect(calls[0].url).to.include('/api/v1/skills/my-skill/files');
+      expect(calls[0].opts.headers['x-user-id']).to.be.undefined;
+      expect(text).to.equal('# Hello');
+    });
+
+    it('removePersonalSkillSource rewrites overrides via GET+PUT with x-user-id (AO contract)', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => ({ settings: { skills: { sources: [{ name: 'my-skill' }] } } }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await removePersonalSkillSource('my-skill');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(2);
+      expect(calls[0].url).to.equal('https://agent-orchestrator-stage-va7.adobe.io/api/v1/overrides/user');
+      expect(calls[1].opts.method).to.equal('PUT');
+      // AO branch always sent x-user-id already — unchanged either way.
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('uploadSkillFileToAo uses the presigned initiate/PUT/finalize flow', async () => {
+      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const calls = trackFetch((url) => {
+        if (url.includes('/api/v1/files/upload')) {
+          return { ok: true, json: async () => ({ upload_url: 'https://blob.example/x', file_id: 'f1' }) };
+        }
+        if (url === 'https://blob.example/x') return { ok: true };
+        if (url.includes('/finalize')) return { ok: true, json: async () => ({ skill_registration_ok: true }) };
+        return { ok: false };
+      });
+      const result = await uploadSkillFileToAo(file);
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(3);
+      expect(calls[0].url).to.include('/api/v1/files/upload');
+    });
+  });
+
+  describe('altHarness on (bridge)', () => {
+    beforeEach(() => setSkillsBackend({ altHarness: true }));
+
+    it('fetchSkillsFromAo hits the bridge base with x-user-id and maps skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => BRIDGE_SKILLS_RESPONSE }));
+      const result = await fetchSkillsFromAo();
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills?manifest_id=experience-workspace');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+      expect(result[0].id).to.equal('my-skill');
+      expect(result[0].skillId).to.equal('skill-uuid-1');
+    });
+
+    it('fetchSkillFileFromAo resolves skill_id then GETs /api/v1/skills/:skillId', async () => {
+      const b64 = btoa('# Hello bridge');
+      const calls = trackFetch((url) => {
+        if (url.includes('?manifest_id=')) return { ok: true, json: async () => BRIDGE_SKILLS_RESPONSE };
+        return {
+          ok: true,
+          json: async () => ({ files: [{ path: 'skills/my-skill/SKILL.md', content: b64 }] }),
+        };
+      });
+      const text = await fetchSkillFileFromAo('my-skill', 'SKILL.md');
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+      expect(text).to.equal('# Hello bridge');
+    });
+
+    it('fetchSkillFileFromAo uses a provided skillId without a catalog lookup', async () => {
+      const b64 = btoa('# Direct');
+      const calls = trackFetch(() => ({
+        ok: true,
+        json: async () => ({ files: [{ path: 'SKILL.md', content: b64 }] }),
+      }));
+      const text = await fetchSkillFileFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(text).to.equal('# Direct');
+    });
+
+    it('uploadSkillFileToAo posts multipart/form-data to /api/v1/skills', async () => {
+      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ id: 'skill-uuid-2' }) }));
+      const result = await uploadSkillFileToAo(file);
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills');
+      expect(calls[0].opts.method).to.equal('POST');
+      expect(calls[0].opts.body).to.be.instanceOf(FormData);
+      expect(calls[0].opts.body.get('file').name).to.equal('my-skill.md');
+      expect(calls[0].opts.body.get('display_title')).to.equal('my-skill');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('removePersonalSkillSource resolves skill_id then DELETEs /api/v1/skills/:skillId', async () => {
+      const calls = trackFetch((url) => {
+        if (url.includes('?manifest_id=')) return { ok: true, json: async () => BRIDGE_SKILLS_RESPONSE };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await removePersonalSkillSource('my-skill');
+      expect(result.ok).to.be.true;
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[1].opts.method).to.equal('DELETE');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('removePersonalSkillSource uses a provided skillId without a catalog lookup', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await removePersonalSkillSource('my-skill', 'skill-uuid-9');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-9');
+    });
   });
 });
