@@ -6,8 +6,12 @@ import './shared/card/card.js';
 import './shared/popover/popover.js';
 import {
   fetchDaConfigSheets,
-  loadSkillsWithStatuses,
-  syncOrphanSkillsToConfig,
+  loadSkillsFromAo,
+  fetchSkillFileFromAo,
+  uploadSkillFileToAo,
+  removePersonalSkillSource,
+  setSkillsBackend,
+  AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
   deleteSkillFromConfig,
   writeSkillMdFile,
@@ -79,6 +83,11 @@ class NxSkillsEditor extends LitElement {
     _catalogFilter: { state: true },
     _skills: { state: true },
     _skillStatuses: { state: true },
+    _skillScopes: { state: true },
+    _skillDescriptions: { state: true },
+    _skillDisplayNames: { state: true },
+    _skillLineCounts: { state: true },
+    _skillIds: { state: true },
     _prompts: { state: true },
     _agents: { state: true },
     _agentRows: { state: true },
@@ -147,8 +156,6 @@ class NxSkillsEditor extends LitElement {
 
   _chatLoaded = false;
 
-  _syncOrphansInFlight = false;
-
   _agentsLoadInFlight = false;
 
   _mcpToolsLoadInFlight = false;
@@ -177,6 +184,11 @@ class NxSkillsEditor extends LitElement {
     this._catalogFilter = 'all';
     this._skills = {};
     this._skillStatuses = {};
+    this._skillScopes = {};
+    this._skillDescriptions = {};
+    this._skillDisplayNames = {};
+    this._skillLineCounts = {};
+    this._skillIds = {};
     this._prompts = [];
     this._agents = [];
     this._agentRows = [];
@@ -294,7 +306,6 @@ class NxSkillsEditor extends LitElement {
         await this._reload({
           silent: true,
           showRefreshIndicator: true,
-          includeMdFiles: false,
         });
       } else {
         await this._reload();
@@ -391,6 +402,11 @@ class NxSkillsEditor extends LitElement {
     const snapshot = {
       skills: this._skills,
       skillStatuses: this._skillStatuses,
+      skillScopes: this._skillScopes,
+      skillDescriptions: this._skillDescriptions,
+      skillDisplayNames: this._skillDisplayNames,
+      skillLineCounts: this._skillLineCounts,
+      skillIds: this._skillIds,
       prompts: this._prompts,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -413,6 +429,11 @@ class NxSkillsEditor extends LitElement {
       if (!snap || typeof snap !== 'object') return false;
       this._skills = snap.skills || {};
       this._skillStatuses = snap.skillStatuses || {};
+      this._skillScopes = snap.skillScopes || {};
+      this._skillDescriptions = snap.skillDescriptions || {};
+      this._skillDisplayNames = snap.skillDisplayNames || {};
+      this._skillLineCounts = snap.skillLineCounts || {};
+      this._skillIds = snap.skillIds || {};
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
@@ -493,43 +514,28 @@ class NxSkillsEditor extends LitElement {
 
   // ─── data loading ─────────────────────────────────────────────────────────
 
-  _scheduleOrphanSkillSync() {
-    if (this._syncOrphansInFlight || !this._org || !this._site) return;
-    const loadKey = this._loadedKey;
-    this._syncOrphansInFlight = true;
-    syncOrphanSkillsToConfig(this._org, this._site)
-      .then((backfilled) => {
-        const changed = backfilled?.configBackfilled?.length || backfilled?.filesWritten?.length;
-        if (!changed) return;
-        // eslint-disable-next-line no-console
-        console.info('[skills-editor] background sync:', backfilled);
-        if (`${this._org}/${this._site}` === loadKey) {
-          this._reload({
-            silent: true,
-            showRefreshIndicator: true,
-            includeMdFiles: true,
-          }).catch(() => {});
-        }
-      })
-      .catch(() => { /* non-fatal */ })
-      .finally(() => { this._syncOrphansInFlight = false; });
-  }
-
   async _reload(options = {}) {
     if (!this._org || !this._site) return;
     const {
       silent = false,
       showRefreshIndicator = false,
-      includeMdFiles = true,
     } = options;
     if (!silent) this._isLoading = true;
     if (showRefreshIndicator) this._refreshingCount += 1;
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
+      // Mirrors da-nx's ewFlags.js: flags live in the `flags` sheet, keyed
+      // `ew.*`, and are read as the literal string 'true'.
+      const flagRows = configResult.json?.flags?.data ?? [];
+      const altHarness = flagRows.some(
+        (r) => r?.key === 'ew.altHarness' && r?.value === 'true',
+      );
+      setSkillsBackend({ altHarness });
+
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
-        loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles }),
+        loadSkillsFromAo(this._org, this._site, configResult),
         this._canWriteKey === permKey
           ? Promise.resolve(this._canWrite)
           : fetchSkillsPermission(this._org, this._site),
@@ -551,6 +557,11 @@ class NxSkillsEditor extends LitElement {
       if (configResult.ok) {
         this._skills = skillsResult.map;
         this._skillStatuses = skillsResult.statuses;
+        this._skillScopes = skillsResult.scopes || {};
+        this._skillDescriptions = skillsResult.descriptions || {};
+        this._skillDisplayNames = skillsResult.displayNames || {};
+        this._skillLineCounts = skillsResult.lineCounts || {};
+        this._skillIds = skillsResult.skillIds || {};
         this._prompts = configResult.json?.prompts?.data || [];
         this._agentRows = configResult.agentRows || [];
         this._mcpRows = configResult.mcpRows || [];
@@ -818,11 +829,28 @@ class NxSkillsEditor extends LitElement {
     this._isEditorOpen = true;
   }
 
-  _openNewSkillEditor() {
-    this._editorTriggerSelector = this._captureTriggerSelector();
-    this._clearForm();
-    if (this._catalogTab !== 'agents') this._catalogTab = 'skills';
-    this._isEditorOpen = true;
+  _onPickSkillFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.md,text/markdown';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (file) this._onSkillFileSelected(file);
+    }, { once: true });
+    input.click();
+  }
+
+  async _onSkillFileSelected(file) {
+    this._isSaveBusy = true;
+    const result = await uploadSkillFileToAo(file);
+    this._isSaveBusy = false;
+
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to upload skill', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus('Skill uploaded');
+    await this._reload();
   }
 
   _openNewMcpEditor() {
@@ -992,26 +1020,15 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onDeleteSkillById(id) {
+    if (this._skillScopes[id] !== AO_SCOPE_PERSONAL) return;
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
-
-    const fileResult = await deleteSkillMdFile(this._org, this._site, id);
-    if (!fileResult.ok) {
-      this._setStatus('Failed to delete skill file', STATUS_TYPE.ERR);
-      this._isSaveBusy = false;
-      return;
-    }
-
-    const configResult = await deleteSkillFromConfig(this._org, this._site, id);
+    const result = await removePersonalSkillSource(id, this._skillIds[id]);
     this._isSaveBusy = false;
 
-    if (!configResult.ok) {
-      if (rollbackBody) {
-        writeSkillMdFile(this._org, this._site, id, rollbackBody).catch(() => {});
-      }
-      this._setStatus(configResult.error || 'Failed to delete skill', STATUS_TYPE.ERR);
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
       return;
     }
     this._viewingSkillId = null;
@@ -1061,7 +1078,11 @@ class NxSkillsEditor extends LitElement {
 
   async _mountCMModal() {
     const id = this._viewingSkillId;
-    const body = this._skills[id] || '';
+    let body = this._skills[id] || '';
+    if (!body) {
+      body = await fetchSkillFileFromAo(id, 'SKILL.md', this._skillIds[id]) || '';
+      if (body) this._skills = { ...this._skills, [id]: body };
+    }
 
     this._cmPortal = document.createElement('div');
     this._cmPortal.className = 'skill-md-portal';
@@ -1673,6 +1694,10 @@ class NxSkillsEditor extends LitElement {
       promptSearch: this._promptSearch,
       skills: this._skills,
       skillStatuses: this._skillStatuses,
+      skillScopes: this._skillScopes,
+      skillDescriptions: this._skillDescriptions,
+      skillDisplayNames: this._skillDisplayNames,
+      skillLineCounts: this._skillLineCounts,
       prompts: this._prompts,
       agents: this._agents,
       agentRows: this._agentRows,
@@ -1785,7 +1810,7 @@ class NxSkillsEditor extends LitElement {
       getAgentToolIds: (agent, isBuiltin) => this._agentToolIds(agent, isBuiltin),
       parseToolId: (toolId) => this._parseToolId(toolId),
       // ── TAB_ACTIONS openers ────────────────────────────────────────────────
-      openNewSkillEditor: () => this._openNewSkillEditor(),
+      onPickSkillFile: () => this._onPickSkillFile(),
       openNewAgentEditor: () => this._openNewAgentEditor(),
       openNewEditor: () => this._openNewEditor(),
       openNewMcpEditor: () => this._openNewMcpEditor(),

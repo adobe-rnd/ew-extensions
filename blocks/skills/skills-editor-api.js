@@ -6,7 +6,7 @@
  * adapted for nx2 imports and the skills-editor naming convention.
  */
 
-import { DA_ORIGIN, daFetch, getToken } from './utils/da-fetch.js';
+import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
@@ -467,6 +467,353 @@ export async function loadSkillsWithStatuses(org, site, loadedConfig = null, opt
   }
   return mergeSkillsWithMdFiles(loaded.json[SKILLS_SHEET]?.data, org, site);
 }
+
+// ─── AO skills catalog (read-only id list — replaces the config-sheet list) ─
+// Mirrors chat-controller-ao.js's _fetchSkillsFromApi()/parseSkillsListResponse()
+// in da-nx: GET /api/v1/skills?manifest_id=experience-workspace, IMS bearer +
+// x-tenant-id (IMS Org ID, not the DA org slug). Content/status still come from
+// DA (config sheet + .da/skills/*.md) — AO only tells us which ids to show.
+
+const AO_HTTP_BASE = {
+  prod: 'https://agent-orchestrator-prod-va7.adobe.io',
+  stage: 'https://agent-orchestrator-stage-va7.adobe.io',
+};
+
+// CMA "claudebridge" REST plane — used instead of AO when the site config flag
+// `ew.altHarness` is true (see setSkillsBackend below). Bridge skills endpoints
+// are keyed by Managed Agents skill_id and always require x-user-id.
+const BRIDGE_HTTP_BASE = 'https://aem-sites-claudebridge-va6.adobe.io';
+
+const AO_MANIFEST_ID = 'experience-workspace';
+
+// Module-level backend switch, set once by nx-skills-editor.js after it reads
+// the `ew.altHarness` site-config flag (mirrors da-nx's ewFlags.js pattern:
+// flags['ew.*'] === 'true'). Defaults to AO so every existing caller that
+// never calls this keeps behaving exactly as before.
+let altHarnessEnabled = false;
+
+export function setSkillsBackend({ altHarness } = {}) {
+  altHarnessEnabled = altHarness === true;
+}
+
+function aoEnv() {
+  const { hostname } = window.location;
+  if (hostname.endsWith('.aem.live')) return 'prod';
+  if (!['--', 'local'].some((check) => hostname.includes(check))) return 'prod';
+  return 'stage';
+}
+
+// ims.js's own tenantId is a human-readable label, not the "ORGID@AdobeOrg" shape
+// AO's x-tenant-id expects — pull that from owningEntity instead, same as da-nx.
+function getImsOrgId(projectedProductContext) {
+  return projectedProductContext?.find((p) => p.prodCtx?.owningEntity)?.prodCtx.owningEntity;
+}
+
+function parseAoSkillsResponse(json) {
+  const skills = Array.isArray(json?.skills) ? json.skills : null;
+  if (!skills) return null;
+  return skills
+    .filter((s) => !s?.hidden && s?.user_invocable !== false)
+    .map((s) => ({
+      id: String(s?.name || '').trim(),
+      skillId: s?.id,
+      scope: s?.scope,
+      description: String(s?.description || '').trim(),
+      displayName: String(s?.display_name || '').trim(),
+      lineCount: Number.isFinite(s?.lineCount) ? s.lineCount : 0,
+    }))
+    .filter((s) => /^[a-z0-9][a-z0-9_-]{1,60}$/i.test(s.id));
+}
+
+async function aoAuthContext() {
+  const token = await waitForImsToken();
+  if (!token) return null;
+  const profile = await window.adobeIMS?.getProfile();
+  return {
+    token,
+    orgId: getImsOrgId(profile?.projectedProductContext),
+    userId: profile?.userId,
+    bridge: altHarnessEnabled,
+    base: altHarnessEnabled
+      ? BRIDGE_HTTP_BASE
+      : (AO_HTTP_BASE[aoEnv()] || AO_HTTP_BASE.stage),
+  };
+}
+
+export async function fetchSkillsFromAo() {
+  const ctx = await aoAuthContext();
+  if (!ctx) return null;
+  try {
+    const headers = {
+      authorization: `Bearer ${ctx.token}`,
+      'x-tenant-id': ctx.orgId,
+    };
+    if (ctx.bridge) headers['x-user-id'] = ctx.userId || '';
+    const resp = await fetch(`${ctx.base}/api/v1/skills?manifest_id=${AO_MANIFEST_ID}`, { headers });
+    if (!resp.ok) return null;
+    return parseAoSkillsResponse(await resp.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads a file out of a skill's directory via AO — mirrors Coworker's own
+ * "view SKILL.md" call (GET /api/v1/skills/{skill_name}/files?path=...&manifest_id=...),
+ * confirmed against aep-ai's read_skill_file handler. Returns the raw file
+ * text (frontmatter included) or null on any failure.
+ */
+// Resolves a skill name to its Managed Agents skill_id via the bridge catalog,
+// used when a caller doesn't already have the id handed to it.
+async function resolveBridgeSkillId(skillName) {
+  const skills = await fetchSkillsFromAo();
+  return skills?.find((s) => s.id === skillName)?.skillId || null;
+}
+
+function base64ToText(base64) {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return null;
+  try {
+    if (ctx.bridge) {
+      const id = skillId || await resolveBridgeSkillId(skillName);
+      if (!id) return null;
+      const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(id)}`, {
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const files = Array.isArray(json?.files) ? json.files : [];
+      const file = files.find((f) => String(f?.path || '').split('/').pop() === path);
+      if (!file || typeof file.content !== 'string') return null;
+      return base64ToText(file.content);
+    }
+    const url = `${ctx.base}/api/v1/skills/${encodeURIComponent(skillName)}/files`
+      + `?path=${encodeURIComponent(path)}&manifest_id=${AO_MANIFEST_ID}`;
+    const resp = await fetch(url, {
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+        'x-tenant-id': ctx.orgId,
+      },
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return typeof json?.content === 'string' ? json.content : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Uploads a SKILL.md file as a new personal skill via AO's presigned-upload
+ * flow — mirrors aep-ai's reference web client (services/web/lib/upload-presigned.ts
+ * uploadToPresignedUrl with category: "skill"): initiate (POST /api/v1/files/upload),
+ * PUT the raw bytes to the returned presigned URL, then finalize
+ * (POST /api/v1/files/{file_id}/finalize?manifest_id=...), which installs the
+ * skill server-side. A 409 with needs_confirmation means a skill of that name
+ * already exists for this user (not auto-overwritten here).
+ */
+export async function uploadSkillFileToAo(file) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+
+  if (ctx.bridge) {
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      form.append('display_title', file.name.replace(/\.md$/i, ''));
+      const resp = await fetch(`${ctx.base}/api/v1/skills`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+        body: form,
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        if (resp.status === 409) {
+          return { ok: false, error: body?.detail || `A skill named "${file.name}" already exists.` };
+        }
+        return { ok: false, error: body?.detail || `Upload failed (${resp.status})` };
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
+  try {
+    const initResp = await fetch(`${ctx.base}/api/v1/files/upload`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+        'x-tenant-id': ctx.orgId,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        content_type: file.type || 'text/markdown',
+        scope: 'user',
+        category: 'skill',
+        item_name: file.name.replace(/\.md$/i, ''),
+      }),
+    });
+    if (!initResp.ok) return { ok: false, error: `Upload failed (${initResp.status})` };
+    const { upload_url: uploadUrl, file_id: fileId } = await initResp.json();
+    if (!uploadUrl || !fileId) return { ok: false, error: 'Upload service returned an invalid response' };
+
+    const putResp = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'content-type': file.type || 'text/markdown',
+        ...(uploadUrl.includes('.blob.core.windows.net') ? { 'x-ms-blob-type': 'BlockBlob' } : {}),
+      },
+      body: file,
+    });
+    if (!putResp.ok) return { ok: false, error: `Storage upload failed (${putResp.status})` };
+
+    const finalizeResp = await fetch(
+      `${ctx.base}/api/v1/files/${fileId}/finalize?manifest_id=${AO_MANIFEST_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+        },
+      },
+    );
+    if (!finalizeResp.ok) {
+      const body = await finalizeResp.json().catch(() => ({}));
+      if (finalizeResp.status === 409 && body?.needs_confirmation) {
+        return { ok: false, error: `A skill named "${body.skill_name || file.name}" already exists.` };
+      }
+      return { ok: false, error: body?.detail || `Finalize failed (${finalizeResp.status})` };
+    }
+    const finalizeData = await finalizeResp.json();
+    if (finalizeData?.skill_registration_ok === false) {
+      return { ok: false, error: finalizeData.detail || 'Skill could not be registered.' };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+/**
+ * Deletes a personal ("owner"-scope) skill by rewriting the user's `skills`
+ * override settings with that skill's entry removed from `sources` — mirrors
+ * aep-ai's reference web client (services/web/hooks/use-skill-sources.ts
+ * removeSource + use-user-overrides.ts setSetting): GET /api/v1/overrides/user
+ * to read the current sources array, then PUT
+ * /api/v1/overrides/user/settings/skills with { value: { ...skills, sources } }
+ * minus the deleted entry. Unlike the dedicated .../skills/{name}/disable
+ * route (which only hides a skill by adding it to disabled_skills, leaving
+ * the source in place), this actually removes the personal skill's source
+ * entry — the real "delete", confirmed against Coworker's own network calls.
+ */
+export async function removePersonalSkillSource(id, skillId = null) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+
+  if (ctx.bridge) {
+    try {
+      const bridgeId = skillId || await resolveBridgeSkillId(id);
+      if (!bridgeId) return { ok: false, error: 'Skill not found' };
+      const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(bridgeId)}`, {
+        method: 'DELETE',
+        headers: {
+          authorization: `Bearer ${ctx.token}`,
+          'x-tenant-id': ctx.orgId,
+          'x-user-id': ctx.userId || '',
+        },
+      });
+      if (!resp.ok) return { ok: false, error: `Delete failed (${resp.status})` };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
+  const headers = {
+    authorization: `Bearer ${ctx.token}`,
+    'x-tenant-id': ctx.orgId,
+    'x-user-id': ctx.userId || '',
+  };
+  try {
+    const getResp = await fetch(`${ctx.base}/api/v1/overrides/user`, { headers });
+    if (!getResp.ok) return { ok: false, error: `Could not load overrides (${getResp.status})` };
+    const overrides = await getResp.json();
+    const skills = overrides?.settings?.skills || {};
+    const sources = Array.isArray(skills.sources)
+      ? skills.sources.filter((s) => s?.name !== id)
+      : [];
+
+    const putResp = await fetch(`${ctx.base}/api/v1/overrides/user/settings/skills`, {
+      method: 'PUT',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ value: { ...skills, sources } }),
+    });
+    if (!putResp.ok) return { ok: false, error: `Delete failed (${putResp.status})` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+/**
+ * Extends loadSkillsWithStatuses' { map, statuses } shape with AO-only fields:
+ * `scopes` ("owner" | "application" | ... — identifies personal skills),
+ * `descriptions`, `displayNames`, and `lineCounts`. The id list comes from
+ * AO's catalog; falls back to the plain DA-only shape (empty AO fields) if AO
+ * is unreachable. Content/status still come from the config sheet only — no
+ * .da/skills/*.md reads.
+ */
+export async function loadSkillsFromAo(org, site, loadedConfig = null) {
+  const [aoSkills, daResult] = await Promise.all([
+    fetchSkillsFromAo(),
+    loadSkillsWithStatuses(org, site, loadedConfig, { includeMdFiles: false }),
+  ]);
+  if (!aoSkills) {
+    return {
+      ...daResult, scopes: {}, descriptions: {}, displayNames: {}, lineCounts: {}, skillIds: {},
+    };
+  }
+
+  const map = {};
+  const statuses = {};
+  const scopes = {};
+  const descriptions = {};
+  const displayNames = {};
+  const lineCounts = {};
+  const skillIds = {};
+  aoSkills.forEach(({
+    id, skillId, scope, description, displayName, lineCount,
+  }) => {
+    map[id] = daResult.map[id] || '';
+    statuses[id] = daResult.statuses[id] || 'approved';
+    scopes[id] = scope;
+    descriptions[id] = description;
+    displayNames[id] = displayName || id;
+    lineCounts[id] = lineCount;
+    if (skillId) skillIds[id] = skillId;
+  });
+  return {
+    map, statuses, scopes, descriptions, displayNames, lineCounts, skillIds,
+  };
+}
+
+export const AO_SCOPE_PERSONAL = 'owner';
 
 function skillKeyMatch(id) {
   return (r) => normaliseRowKey(r) === id;
