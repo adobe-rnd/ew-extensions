@@ -47,6 +47,7 @@ import {
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
+  TAB_CONTEXT,
 } from './constants.js';
 import {
   renderTopNav,
@@ -57,6 +58,9 @@ import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
 import {
   createReadOnlyViewer, createEditor, replaceDoc, destroyEditor,
 } from './utils/codemirror-loader.js';
+import { setupEgovBridge } from './utils/egov-bridge.js';
+import { resolveEgovMfeEnv, resolveEgovPath, setEgovPath } from './utils/egov-embed.js';
+import { getToken } from './utils/da-fetch.js';
 import {
   onMessage,
   sendMessage,
@@ -134,6 +138,7 @@ class NxSkillsEditor extends LitElement {
     _gateSite: { state: true },
     _canWrite: { state: true },
     _confirmDialog: { state: true },
+    _configError: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
@@ -174,6 +179,7 @@ class NxSkillsEditor extends LitElement {
     this._hash = new HashController(this);
     this._isLoading = true;
     this._refreshingCount = 0;
+    this._configError = null;
     this._catalogTab = 'skills';
     this._catalogFilter = 'all';
     this._skills = {};
@@ -285,6 +291,7 @@ class NxSkillsEditor extends LitElement {
     this._disposeCMModal();
     this._disposeMemoryCM();
     this._disposeSkillCM();
+    this._disposeEgovBridge();
   }
 
   async updated(changed) {
@@ -314,6 +321,16 @@ class NxSkillsEditor extends LitElement {
     }
     if ((changed?.has('_memory') || changed?.has('_catalogTab')) && this._catalogTab === 'memory' && this._memory) {
       this.updateComplete.then(() => this._mountMemoryCM());
+    }
+    if (changed?.has('_catalogTab') && this._catalogTab === TAB_CONTEXT && !this._egovBridge) {
+      this.updateComplete.then(() => this._mountEgovBridge());
+    }
+    // The `_egovBridge` check narrows this to a genuine tab exit. No bridge
+    // exists on the initial tab assignment, where clearing `?egovPath=` would
+    // wipe an incoming deep link before it is read.
+    if (changed?.has('_catalogTab') && this._catalogTab !== TAB_CONTEXT && this._egovBridge) {
+      this._disposeEgovBridge();
+      setEgovPath('/');
     }
     // ── Skill body CM: mount when skill form appears, dispose when it hides ──
     const skillFormVisible = this._isEditorOpen && this._catalogTab === 'skills'
@@ -528,22 +545,34 @@ class NxSkillsEditor extends LitElement {
         this._canWriteKey = permKey;
         this._canWrite = hasWritePermission;
       }
-      this._skills = skillsResult.map;
-      this._skillStatuses = skillsResult.statuses;
-      this._skillScopes = skillsResult.scopes || {};
-      this._skillDescriptions = skillsResult.descriptions || {};
-      this._skillDisplayNames = skillsResult.displayNames || {};
-      this._skillLineCounts = skillsResult.lineCounts || {};
-      this._skillIds = skillsResult.skillIds || {};
-      this._prompts = configResult.json?.prompts?.data || [];
-      this._agentRows = configResult.agentRows || [];
-      this._mcpRows = configResult.mcpRows || [];
-      this._configuredMcpServers = configResult.configuredMcpServers || {};
-      this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
-      this._toolOverrides = configResult.toolOverrides || {};
-      this._saveDataSnapshot();
 
-      this._applySuggestion();
+      this._configError = configResult.ok ? null : {
+        status: configResult.status,
+        message: configResult.status === 401 || configResult.status === 403
+          ? "You don't have access to this organization or site."
+          : 'Could not load configuration for this organization or site.',
+      };
+
+      // On failure, keep whatever was previously loaded instead of collapsing it to empty.
+      if (configResult.ok) {
+        this._skills = skillsResult.map;
+        this._skillStatuses = skillsResult.statuses;
+        this._skillScopes = skillsResult.scopes || {};
+        this._skillDescriptions = skillsResult.descriptions || {};
+        this._skillDisplayNames = skillsResult.displayNames || {};
+        this._skillLineCounts = skillsResult.lineCounts || {};
+        this._skillIds = skillsResult.skillIds || {};
+        this._prompts = configResult.json?.prompts?.data || [];
+        this._agentRows = configResult.agentRows || [];
+        this._mcpRows = configResult.mcpRows || [];
+        this._configuredMcpServers = configResult.configuredMcpServers || {};
+        this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
+        this._toolOverrides = configResult.toolOverrides || {};
+        this._saveDataSnapshot();
+
+        this._applySuggestion();
+        this._scheduleOrphanSkillSync();
+      }
     } finally {
       if (!silent) this._isLoading = false;
       if (showRefreshIndicator) this._refreshingCount = Math.max(0, this._refreshingCount - 1);
@@ -721,7 +750,7 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = true;
     } else {
       this._clearForm();
-      this._isEditorOpen = newTab === 'memory';
+      this._isEditorOpen = newTab === 'memory' || newTab === TAB_CONTEXT;
     }
 
     this._pushTabState(newTab);
@@ -1128,6 +1157,39 @@ class NxSkillsEditor extends LitElement {
   _disposeMemoryCM() {
     destroyEditor(this._memoryCM);
     this._memoryCM = null;
+  }
+
+  async _mountEgovBridge() {
+    this._disposeEgovBridge();
+    const iframe = this.shadowRoot.querySelector('.egov-mfe-iframe');
+    if (!iframe) return;
+    let imsOrg;
+    try { imsOrg = (await window.adobeIMS?.getProfile?.())?.ownerOrg; } catch { /* anonymous session */ }
+    this._egovBridge = setupEgovBridge({
+      iframe,
+      getProps: () => ({
+        path: resolveEgovPath(),
+        env: resolveEgovMfeEnv(),
+        imsToken: getToken(),
+        imsOrg,
+      }),
+      // The MFE says whether each navigation deserves its own history entry.
+      // We ignore that and always replace, so Back never lands inside this tab.
+      // Adding entries first needs a popstate listener that feeds the path back
+      // into the MFE. Without one, Back would change the URL while the iframe
+      // kept showing the same screen.
+      onNavigate: (path) => setEgovPath(path),
+    });
+  }
+
+  /**
+   * Tears down the bridge only. Clearing `?egovPath=` is the caller's job (see
+   * `updated`), since this also runs defensively from `_mountEgovBridge`, which
+   * is about to read that param.
+   */
+  _disposeEgovBridge() {
+    this._egovBridge?.destroy();
+    this._egovBridge = null;
   }
 
   async _mountSkillCM() {
@@ -1796,6 +1858,21 @@ class NxSkillsEditor extends LitElement {
     }
     if (this._isLoading) {
       return html`<div class="loading" aria-live="polite">Loading capabilities\u2026</div>`;
+    }
+    if (this._configError) {
+      return html`
+        <div class="gate">
+          <div class="inline-alert inline-alert-negative" role="alert">
+            <div class="inline-alert-header">
+              <h2 class="inline-alert-title">Can't load this site</h2>
+              <svg class="inline-alert-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <use href="/img/icons/s2-icon-alerttriangle-20-n.svg#icon"></use>
+              </svg>
+            </div>
+            <p class="inline-alert-content">${this._configError.message}</p>
+          </div>
+        </div>
+      `;
     }
     const rootCls = [
       'root',
