@@ -571,7 +571,6 @@ class NxSkillsEditor extends LitElement {
         this._saveDataSnapshot();
 
         this._applySuggestion();
-        this._scheduleOrphanSkillSync();
       }
     } finally {
       if (!silent) this._isLoading = false;
