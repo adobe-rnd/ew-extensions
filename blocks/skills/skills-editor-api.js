@@ -1111,6 +1111,24 @@ async function bridgePutMcpServers(ctx, servers) {
   if (!resp.ok) throw new Error(`Save failed (${resp.status})`);
 }
 
+/**
+ * Read-modify-write the bridge's personal `mcp_servers` array. `mutate(servers)`
+ * returns the new array, or `{ error }` to abort without writing. The single
+ * place register/enable-disable/delete share for the CMA path.
+ */
+async function bridgeMutateMcpServers(mutate) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+  try {
+    const next = mutate(await bridgeGetMcpServers(ctx));
+    if (next && next.error) return { ok: false, error: next.error };
+    await bridgePutMcpServers(ctx, next);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
 export async function registerMcpServer(
   org,
   site,
@@ -1130,24 +1148,15 @@ export async function registerMcpServer(
     .filter((h) => h.name && h.value);
 
   if (altHarnessEnabled) {
-    const ctx = await aoAuthContext();
-    if (!ctx) return { ok: false, error: 'Not signed in' };
-    try {
-      const servers = await bridgeGetMcpServers(ctx);
+    return bridgeMutateMcpServers((servers) => {
       const entry = { key: serverKey, url: serverUrl };
       if (description) entry.description = String(description).trim();
       if (safeHeaders.length) entry.headers = safeHeaders;
       const idx = servers.findIndex((s) => s?.key === serverKey);
       const prevEnabled = idx >= 0 ? servers[idx]?.enabled : undefined;
       if (prevEnabled !== undefined) entry.enabled = prevEnabled;
-      const next = idx >= 0
-        ? servers.map((s, i) => (i === idx ? entry : s))
-        : [...servers, entry];
-      await bridgePutMcpServers(ctx, next);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: String(err?.message ?? err) };
-    }
+      return idx >= 0 ? servers.map((s, i) => (i === idx ? entry : s)) : [...servers, entry];
+    });
   }
 
   return upsertSheetRow(
@@ -1173,18 +1182,11 @@ export async function setMcpServerEnabled(org, site, key, enabled) {
   if (!serverKey) return { ok: false, error: 'Server id required' };
 
   if (altHarnessEnabled) {
-    const ctx = await aoAuthContext();
-    if (!ctx) return { ok: false, error: 'Not signed in' };
-    try {
-      const servers = await bridgeGetMcpServers(ctx);
+    return bridgeMutateMcpServers((servers) => {
       const idx = servers.findIndex((s) => s?.key === serverKey);
-      if (idx < 0) return { ok: false, error: 'Server not found' };
-      const next = servers.map((s, i) => (i === idx ? { ...s, enabled: !!enabled } : s));
-      await bridgePutMcpServers(ctx, next);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: String(err?.message ?? err) };
-    }
+      if (idx < 0) return { error: 'Server not found' };
+      return servers.map((s, i) => (i === idx ? { ...s, enabled: !!enabled } : s));
+    });
   }
 
   const loaded = await fetchDaConfigSheets(org, site);
@@ -1209,16 +1211,7 @@ export async function deleteMcpServer(org, site, key) {
   if (!serverKey) return { ok: false, error: 'Key required' };
 
   if (altHarnessEnabled) {
-    const ctx = await aoAuthContext();
-    if (!ctx) return { ok: false, error: 'Not signed in' };
-    try {
-      const servers = await bridgeGetMcpServers(ctx);
-      const next = servers.filter((s) => s?.key !== serverKey);
-      await bridgePutMcpServers(ctx, next);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: String(err?.message ?? err) };
-    }
+    return bridgeMutateMcpServers((servers) => servers.filter((s) => s?.key !== serverKey));
   }
 
   return deleteSheetRow(org, site, MCP_SHEET, mcpKeyMatch(serverKey), 'MCP server');
