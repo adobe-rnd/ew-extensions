@@ -622,7 +622,8 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId
  * skill server-side. A 409 with needs_confirmation means a skill of that name
  * already exists for this user (not auto-overwritten here).
  */
-export async function uploadSkillFileToAo(file) {
+// TODO: org-scope create needs an admin-gated scope selector in the UI; defaults to owner.
+export async function uploadSkillFileToAo(file, scope = 'owner') {
   const ctx = await aoAuthContext();
   if (!ctx) return { ok: false, error: 'Not signed in' };
 
@@ -631,6 +632,7 @@ export async function uploadSkillFileToAo(file) {
       const form = new FormData();
       form.append('file', file, file.name);
       form.append('display_title', file.name.replace(/\.md$/i, ''));
+      if (scope === 'org') form.append('scope', 'org');
       const resp = await fetch(`${ctx.base}/api/v1/skills`, {
         method: 'POST',
         headers: {
@@ -1078,6 +1080,37 @@ function mcpKeyMatch(serverKey) {
   return (r) => normaliseRowKey(r) === serverKey;
 }
 
+// ─── MCP servers on the CMA bridge (AO `overrides.settings.mcp_servers`) ─────
+// On the alt harness, MCP servers live in the bridge's per-user overrides
+// instead of the DA config sheet. Each entry keeps the same shape as an
+// `mcp-servers` config row ({ key, url, description?, headers?, enabled? }) so
+// the editor UI round-trips unchanged.
+// TODO: org-scope MCP needs an admin-gated scope selector in the UI; personal only for now.
+function bridgeHeaders(ctx) {
+  return {
+    authorization: `Bearer ${ctx.token}`,
+    'x-tenant-id': ctx.orgId,
+    'x-user-id': ctx.userId || '',
+  };
+}
+
+async function bridgeGetMcpServers(ctx) {
+  const resp = await fetch(`${ctx.base}/api/v1/overrides/user`, { headers: bridgeHeaders(ctx) });
+  if (!resp.ok) throw new Error(`Could not load overrides (${resp.status})`);
+  const json = await resp.json();
+  const servers = json?.settings?.mcp_servers;
+  return Array.isArray(servers) ? servers : [];
+}
+
+async function bridgePutMcpServers(ctx, servers) {
+  const resp = await fetch(`${ctx.base}/api/v1/overrides/user/settings/mcp_servers`, {
+    method: 'PUT',
+    headers: { ...bridgeHeaders(ctx), 'content-type': 'application/json' },
+    body: JSON.stringify({ value: servers }),
+  });
+  if (!resp.ok) throw new Error(`Save failed (${resp.status})`);
+}
+
 export async function registerMcpServer(
   org,
   site,
@@ -1095,6 +1128,28 @@ export async function registerMcpServer(
       value: String(h?.value || '').trim(),
     }))
     .filter((h) => h.name && h.value);
+
+  if (altHarnessEnabled) {
+    const ctx = await aoAuthContext();
+    if (!ctx) return { ok: false, error: 'Not signed in' };
+    try {
+      const servers = await bridgeGetMcpServers(ctx);
+      const entry = { key: serverKey, url: serverUrl };
+      if (description) entry.description = String(description).trim();
+      if (safeHeaders.length) entry.headers = safeHeaders;
+      const idx = servers.findIndex((s) => s?.key === serverKey);
+      const prevEnabled = idx >= 0 ? servers[idx]?.enabled : undefined;
+      if (prevEnabled !== undefined) entry.enabled = prevEnabled;
+      const next = idx >= 0
+        ? servers.map((s, i) => (i === idx ? entry : s))
+        : [...servers, entry];
+      await bridgePutMcpServers(ctx, next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
   return upsertSheetRow(
     org,
     site,
@@ -1117,6 +1172,21 @@ export async function setMcpServerEnabled(org, site, key, enabled) {
   const serverKey = String(key || '').trim();
   if (!serverKey) return { ok: false, error: 'Server id required' };
 
+  if (altHarnessEnabled) {
+    const ctx = await aoAuthContext();
+    if (!ctx) return { ok: false, error: 'Not signed in' };
+    try {
+      const servers = await bridgeGetMcpServers(ctx);
+      const idx = servers.findIndex((s) => s?.key === serverKey);
+      if (idx < 0) return { ok: false, error: 'Server not found' };
+      const next = servers.map((s, i) => (i === idx ? { ...s, enabled: !!enabled } : s));
+      await bridgePutMcpServers(ctx, next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
   const loaded = await fetchDaConfigSheets(org, site);
   if (!loaded.ok) return { ok: false, error: 'Could not load config' };
 
@@ -1137,6 +1207,20 @@ export async function setMcpServerEnabled(org, site, key, enabled) {
 export async function deleteMcpServer(org, site, key) {
   const serverKey = String(key || '').trim();
   if (!serverKey) return { ok: false, error: 'Key required' };
+
+  if (altHarnessEnabled) {
+    const ctx = await aoAuthContext();
+    if (!ctx) return { ok: false, error: 'Not signed in' };
+    try {
+      const servers = await bridgeGetMcpServers(ctx);
+      const next = servers.filter((s) => s?.key !== serverKey);
+      await bridgePutMcpServers(ctx, next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
+  }
+
   return deleteSheetRow(org, site, MCP_SHEET, mcpKeyMatch(serverKey), 'MCP server');
 }
 

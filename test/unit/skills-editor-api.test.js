@@ -14,6 +14,9 @@ import {
   fetchSkillFileFromAo,
   uploadSkillFileToAo,
   removePersonalSkillSource,
+  registerMcpServer,
+  setMcpServerEnabled,
+  deleteMcpServer,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -465,6 +468,82 @@ describe('AO / bridge backend switch', () => {
       expect(result.ok).to.be.true;
       expect(calls).to.have.length(1);
       expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-9');
+    });
+
+    it('uploadSkillFileToAo passes scope:org in the multipart body when requested', async () => {
+      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ id: 'skill-uuid-3' }) }));
+      const result = await uploadSkillFileToAo(file, 'org');
+      expect(result.ok).to.be.true;
+      expect(calls[0].opts.body.get('scope')).to.equal('org');
+    });
+
+    // MCP servers: GET the overrides bag, mutate mcp_servers, PUT it back.
+    const OVERRIDES_BAG = (servers) => ({
+      settings: { skills: { sources: [], disabled_skills: [] }, mcp_servers: servers, plugins: { installed: [] } },
+    });
+
+    it('registerMcpServer GETs overrides then PUTs the appended server', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => OVERRIDES_BAG([]) };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await registerMcpServer('o', 's', 'my-mcp', 'https://mcp.example', 'desc', [{ name: 'H', value: 'v' }]);
+      expect(result.ok).to.be.true;
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user');
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user/settings/mcp_servers');
+      expect(calls[1].opts.method).to.equal('PUT');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ key: 'my-mcp', url: 'https://mcp.example', description: 'desc' });
+      expect(sent[0].headers).to.deep.equal([{ name: 'H', value: 'v' }]);
+    });
+
+    it('registerMcpServer replaces an existing entry by key, preserving enabled', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'my-mcp', url: 'old', enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      await registerMcpServer('o', 's', 'my-mcp', 'https://new.example');
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ key: 'my-mcp', url: 'https://new.example', enabled: false });
+    });
+
+    it('setMcpServerEnabled toggles enabled on the matching entry', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'my-mcp', url: 'u', enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setMcpServerEnabled('o', 's', 'my-mcp', true);
+      expect(result.ok).to.be.true;
+      expect(JSON.parse(calls[1].opts.body).value[0].enabled).to.be.true;
+    });
+
+    it('deleteMcpServer removes the entry by key and PUTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'a', url: 'u' }, { key: 'my-mcp', url: 'u' }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await deleteMcpServer('o', 's', 'my-mcp');
+      expect(result.ok).to.be.true;
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent.map((x) => x.key)).to.deep.equal(['a']);
+    });
+  });
+
+  describe('MCP altHarness off (DA config, unchanged)', () => {
+    it('deleteMcpServer does not call the bridge overrides endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, text: async () => '{}', json: async () => ({}) }));
+      await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
+      expect(calls.every((c) => !String(c.url).includes('claudebridge'))).to.be.true;
     });
   });
 });
