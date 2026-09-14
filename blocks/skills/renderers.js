@@ -27,6 +27,7 @@ import {
   isSensitiveHeaderName,
   skillRowEnabled,
   skillRowStatus,
+  AO_SCOPE_PERSONAL,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
 } from './skills-editor-api.js';
@@ -106,10 +107,6 @@ function agentsUsingSkill(vm, skillId) {
   return result;
 }
 
-function isPluginSkill(skillId) {
-  return BUILTIN_AGENTS.some((a) => a.skills?.includes(skillId));
-}
-
 // ─── shared icon constants (used in catalog cards and detail views) ───────────
 const DRILL_CHEVRON = html`<svg class="drill-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>`;
 const PROMPT_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`;
@@ -138,14 +135,12 @@ function renderViewToggle(vm) {
 }
 
 function renderSkillCard(vm, id) {
-  const body = vm.skills[id] || '';
-  const title = extractTitle(body);
-  const status = vm.skillStatuses[id] || STATUS.APPROVED;
+  const description = vm.skillDescriptions[id] || '';
+  const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
-  const isDraft = status === STATUS.DRAFT;
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const usedBy = agentsUsingSkill(vm, id);
-  const approxTokens = Math.round(body.length / 4);
-  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
+  const lineCount = vm.skillLineCounts[id] || 0;
 
   return html`
     <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
@@ -160,28 +155,27 @@ function renderSkillCard(vm, id) {
       <header class="plugin-card-top">
         <span class="plugin-card-pill">${SKILL_ICON}</span>
         <div class="plugin-card-identity">
-          <span class="plugin-card-name">${id}</span>
+          <span class="plugin-card-name">${displayName}</span>
         </div>
       </header>
-      ${title ? html`<p class="plugin-card-desc">${title}</p>` : nothing}
       <footer class="plugin-card-meta">
         ${usedBy.length ? html`
           ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
-        <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
-        <span class="plugin-card-count" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
+        ${isPersonal ? html`<span class="plugin-card-badge">Personal</span>` : nothing}
+        <span class="plugin-card-count" title="Line count">${lineCount} lines</span>
       </footer>
     </article>
   `;
 }
 
 function renderSkillRow(vm, id) {
-  const body = vm.skills[id] || '';
-  const title = extractTitle(body);
+  const description = vm.skillDescriptions[id] || '';
+  const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const usedBy = agentsUsingSkill(vm, id);
-  const approxTokens = Math.round(body.length / 4);
-  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
+  const lineCount = vm.skillLineCounts[id] || 0;
 
   return html`
     <div class="catalog-row ${isViewing ? 'is-selected' : ''}" role="button"
@@ -195,14 +189,14 @@ function renderSkillRow(vm, id) {
       <span class="catalog-row-pill">${SKILL_ICON}</span>
       <div class="catalog-row-body">
         <div class="catalog-row-title-line">
-          <span class="catalog-row-name">${id}</span>
+          <span class="catalog-row-name">${displayName}</span>
+          ${isPersonal ? html`<span class="catalog-row-meta">Personal</span>` : nothing}
           ${usedBy.length ? html`
             <span class="catalog-row-meta">⚡ ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
           ` : nothing}
         </div>
-        ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
-      <span class="catalog-row-meta" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
+      <span class="catalog-row-meta" title="Line count">${lineCount} lines</span>
       ${DRILL_CHEVRON}
     </div>
   `;
@@ -217,14 +211,12 @@ function renderSkillDetail(vm) {
   const body = vm.skills[id] || '';
   const fm = parseFrontmatter(body);
   const name = fm?.fields?.name || id;
-  const description = fm?.fields?.description || extractTitle(body) || '';
-  const status = vm.skillStatuses[id] || STATUS.APPROVED;
-  const isDraft = status === STATUS.DRAFT;
+  const description = vm.skillDescriptions[id] || fm?.fields?.description || extractTitle(body) || '';
   const usedBy = agentsUsingSkill(vm, id);
-  const readOnly = isPluginSkill(id);
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
+  const readOnly = !isPersonal;
   const pluginName = usedBy.length ? usedBy[0] : null;
-  const origin = readOnly ? 'built-in' : 'user-created';
-  const badgeLabel = isDraft ? 'DRAFT' : 'APPROVED';
+  const origin = isPersonal ? 'personal' : (vm.skillScopes[id] || 'application');
 
   return html`
     <div class="skill-detail">
@@ -233,28 +225,16 @@ function renderSkillDetail(vm) {
           <span class="skill-detail-icon">${TAB_ICON_MAP[TAB_SKILLS]}</span>
           <div>
             <span class="skill-detail-name">${name}</span>
-            <span class="skill-detail-sub">
-              ${pluginName ? html`${PLUGIN_ICON} Plugin: ${pluginName}` : html`${origin}`}
-            </span>
           </div>
         </div>
         ${!readOnly ? html`
           <div class="skill-detail-actions">
-            <button type="button" class="skill-detail-action-btn"
-              @click=${() => vm.onChangeSkillStatus(id, isDraft ? STATUS.APPROVED : STATUS.DRAFT)}
-            >${isDraft ? 'Approve' : 'Move to Draft'}</button>
-            <button type="button" class="skill-detail-action-btn"
-              @click=${() => vm.onEditSkill(id)}
-            >Edit</button>
             <button type="button" class="skill-detail-action-btn is-negative"
               @click=${() => vm.onDeleteSkillById(id)}
             >Delete</button>
           </div>
         ` : nothing}
       </header>
-
-      <span class="skill-detail-badge ${isDraft ? 'is-draft' : ''}">${readOnly ? 'BUILT-IN' : badgeLabel}</span>
-
       <div class="skill-detail-description">
         ${description || 'No description provided.'}
       </div>
@@ -299,7 +279,6 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
           <span class="plugin-card-source">${isBuiltin ? 'built-in' : 'custom'}</span>
         </div>
       </header>
-      ${description ? html`<p class="plugin-card-desc">${description}</p>` : nothing}
       <footer class="plugin-card-meta">
         ${skillCount ? html`<span class="plugin-card-count">${skillCount} Skill${skillCount > 1 ? 's' : ''}</span>` : nothing}
         ${mcpCount ? html`<span class="plugin-card-count">${mcpCount} MCP${mcpCount > 1 ? 's' : ''}</span>` : nothing}
@@ -372,7 +351,6 @@ function renderPluginDetail(vm) {
           <span class="skill-detail-icon">${PLUGIN_ICON}</span>
           <div>
             <span class="skill-detail-name">${title}</span>
-            <span class="skill-detail-sub">${source}</span>
           </div>
         </div>
         ${!isBuiltin ? html`
@@ -518,11 +496,11 @@ function renderDetailView(vm) {
         ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
         ${isPrompt ? renderPromptForm(vm) : nothing}
         ${isMcp && (vm.editingMcpKey || !vm.viewingMcpServerId)
-          ? renderMcpForm(vm) : nothing}
+      ? renderMcpForm(vm) : nothing}
         ${isMcp && vm.viewingMcpServerId && !vm.editingMcpKey
-          ? renderMcpServerInfo(vm) : nothing}
+      ? renderMcpServerInfo(vm) : nothing}
         ${isMcp && (vm.viewingMcpServerId || vm.editingMcpKey)
-          ? renderMcpToolsList(vm) : nothing}
+      ? renderMcpToolsList(vm) : nothing}
         ${isMemory ? html`
           <p class="form-hint">.da/agent/memory.md</p>
           ${renderMemoryContent(vm)}
@@ -530,7 +508,7 @@ function renderDetailView(vm) {
         ${isContext ? renderContextContent(vm) : nothing}
       </div>
       ${(isSkill || (isAgent && !vm.isAgentViewTools) || isPrompt
-        || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
+      || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
         <div class="editor-footer">
           ${renderEditorFooter(vm, tab)}
         </div>
@@ -557,9 +535,9 @@ function renderCatalogView(vm) {
             <button type="button" class="new-btn"
               ?disabled=${TAB_ACTIONS[tab].disabled || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])}
               @click=${() => {
-                const { opener } = TAB_ACTIONS[tab];
-                if (opener && typeof vm[opener] === 'function') vm[opener]();
-              }}
+        const { opener } = TAB_ACTIONS[tab];
+        if (opener && typeof vm[opener] === 'function') vm[opener]();
+      }}
             >${ACTION_ICONS[TAB_ACTIONS[tab].icon] ? html`<span class="new-btn-icon">${ACTION_ICONS[TAB_ACTIONS[tab].icon]}</span>` : nothing}${TAB_ACTIONS[tab].btnLabel}</button>
           ` : nothing}
         </div>
@@ -700,30 +678,30 @@ export function renderAssociatedToolsSelector(vm) {
         <ul class="tools-group-list" aria-label="${ns} tools">
           ${!tools.length ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
           ${tools.map((toolId) => {
-            const isActive = selected.has(toolId);
-            return html`
+      const isActive = selected.has(toolId);
+      return html`
               <li class="tool-item ${isActive ? 'is-active' : ''}">
                 <span class="tool-dot ${isActive ? 'is-dot-active' : 'is-dot-inactive'}" aria-hidden="true"></span>
                 <label class="tool-label-wrap" title=${toolId}>
                   <input type="checkbox" class="tool-checkbox"
                     .checked=${isActive}
                     @change=${(e) => {
-                      const prevTools = vm.formPromptTools ? [...vm.formPromptTools] : [];
-                      const next = new Set(prevTools);
-                      if (e.target.checked) next.add(toolId);
-                      else next.delete(toolId);
-                      vm.setFormPromptTools([...next]);
-                      const { serverId, toolName } = vm.parseToolId(toolId);
-                      vm.onToggleToolEnabled(serverId, toolName, e.target.checked, () => {
-                        vm.setFormPromptTools(prevTools);
-                      });
-                    }}
+          const prevTools = vm.formPromptTools ? [...vm.formPromptTools] : [];
+          const next = new Set(prevTools);
+          if (e.target.checked) next.add(toolId);
+          else next.delete(toolId);
+          vm.setFormPromptTools([...next]);
+          const { serverId, toolName } = vm.parseToolId(toolId);
+          vm.onToggleToolEnabled(serverId, toolName, e.target.checked, () => {
+            vm.setFormPromptTools(prevTools);
+          });
+        }}
                   >
                   <span class="tool-label">${toolId}</span>
                 </label>
               </li>
             `;
-          })}
+    })}
         </ul>
       </details>
     `;
@@ -777,8 +755,8 @@ export function renderMcpForm(vm) {
       <div class="mcp-auth-section ${hasSecret ? 'is-sensitive' : ''}">
         <p class="form-hint">HTTP headers (optional — e.g. Authorization, x-api-key)</p>
         ${headers.map((h, i) => {
-          const masked = isSensitiveHeaderName(h.name);
-          return html`
+    const masked = isSensitiveHeaderName(h.name);
+    return html`
             <div class="mcp-header-row">
               <input
                 type="text"
@@ -801,7 +779,7 @@ export function renderMcpForm(vm) {
               >✕</button>
             </div>
           `;
-        })}
+  })}
         <button type="button" class="action-btn mcp-header-add"
           @click=${() => vm.addMcpHeader()}
         >+ Add header</button>
@@ -854,10 +832,10 @@ export function renderMcpToolsList(vm) {
           <span class="mcp-error-hint">Did you mean:
             <a class="mcp-error-url" href="#"
               @click=${(e) => {
-                e.preventDefault();
-                vm.setMcpUrl(hint);
-                vm.onSetStatus(`URL updated to ${hint} — save to apply`, STATUS_TYPE.WARN);
-              }}
+            e.preventDefault();
+            vm.setMcpUrl(hint);
+            vm.onSetStatus(`URL updated to ${hint} — save to apply`, STATUS_TYPE.WARN);
+          }}
             >${hint}</a>?
           </span>
         ` : nothing}
@@ -877,13 +855,13 @@ export function renderMcpToolsList(vm) {
         >
       ` : nothing}
       ${!tools.length
-        ? html`<div class="empty ${source === 'error' ? 'empty-err' : ''}">${emptyMsg()}</div>`
-        : html`
+      ? html`<div class="empty ${source === 'error' ? 'empty-err' : ''}">${emptyMsg()}</div>`
+      : html`
           <ul class="tools-group-list" aria-label="Tools for ${serverId}">
             ${filtered.map((t) => {
-              const key = `${serverId}/${t.name}`;
-              const isEnabled = overrides[key] !== false;
-              return html`
+        const key = `${serverId}/${t.name}`;
+        const isEnabled = overrides[key] !== false;
+        return html`
                 <li class="tool-item ${isEnabled ? 'is-active' : ''}">
                   <label class="tool-label-wrap" title=${t.name}>
                     <input type="checkbox" class="tool-checkbox"
@@ -899,9 +877,9 @@ export function renderMcpToolsList(vm) {
                   </label>
                 </li>
               `;
-            })}
+      })}
             ${filtered.length === 0 && tools.length
-              ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
+          ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
           </ul>
         `}
     </div>
@@ -990,9 +968,9 @@ export function renderEditorFooter(vm, tab) {
           title="Insert prompt text into the chat input without sending"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => {
-            vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
-            vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
-          }}
+        vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
+        vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
+      }}
         >Add to Chat</button>
         <button type="button" data-variant="secondary"
           title="Send prompt to the assistant immediately"
@@ -1035,13 +1013,14 @@ export function renderSkillsCatalog(vm) {
   const ids = Object.keys(vm.skills);
   const searchQuery = vm.promptSearch.trim().toLowerCase();
 
-  let filtered = vm.catalogFilter === 'all' ? ids
-    : ids.filter((id) => vm.skillStatuses[id] === vm.catalogFilter);
+  let filtered = vm.catalogFilter === 'personal'
+    ? ids.filter((id) => vm.skillScopes[id] === AO_SCOPE_PERSONAL)
+    : ids;
 
   if (searchQuery) {
     filtered = filtered.filter((id) => {
-      const title = extractTitle(vm.skills[id]).toLowerCase();
-      return id.toLowerCase().includes(searchQuery) || title.includes(searchQuery);
+      const description = (vm.skillDescriptions[id] || '').toLowerCase();
+      return id.toLowerCase().includes(searchQuery) || description.includes(searchQuery);
     });
   }
 
@@ -1049,18 +1028,16 @@ export function renderSkillsCatalog(vm) {
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Filter skills">
-      ${[STATUS.APPROVED, STATUS.DRAFT].map((status) => html`
-        <button type="button"
-          class="filter-chip ${vm.catalogFilter === status ? 'is-active' : ''}"
-          aria-pressed=${vm.catalogFilter === status ? 'true' : 'false'}
-          @click=${() => vm.setCatalogFilter(status)}
-        >${status.charAt(0).toUpperCase() + status.slice(1)}</button>
-      `)}
       <button type="button"
         class="filter-chip ${vm.catalogFilter === 'all' ? 'is-active' : ''}"
         aria-pressed=${vm.catalogFilter === 'all' ? 'true' : 'false'}
         @click=${() => vm.setCatalogFilter('all')}
       >All</button>
+      <button type="button"
+        class="filter-chip ${vm.catalogFilter === 'personal' ? 'is-active' : ''}"
+        aria-pressed=${vm.catalogFilter === 'personal' ? 'true' : 'false'}
+        @click=${() => vm.setCatalogFilter('personal')}
+      >Personal</button>
       ${renderViewToggle(vm)}
     </div>
     ${!filtered.length ? html`<div class="empty">No skills found</div>` : nothing}
@@ -1086,8 +1063,8 @@ function renderDepTree(vm, agent, isBuiltin) {
         </div>
       `)}
       ${mcps.map((mcpId) => {
-        const tools = BUILTIN_TOOL_DETAILS[mcpId] || [];
-        return html`
+    const tools = BUILTIN_TOOL_DETAILS[mcpId] || [];
+    return html`
           <div class="dep-tree-node dep-tree-indent">
             <span class="dep-tree-connector">├─</span>
             <span class="entity-chip entity-chip-mcp">${mcpId}</span>
@@ -1105,7 +1082,7 @@ function renderDepTree(vm, agent, isBuiltin) {
             </div>
           ` : nothing}
         `;
-      })}
+  })}
     </div>
   `;
 }
@@ -1165,12 +1142,12 @@ export function renderPromptsCatalog(vm) {
   return html`
     <div class="prompt-list" role="list" aria-label="Prompts">
       ${prompts.map((row) => {
-        const title = row.title || '';
-        const isSelected = vm.isEditorOpen && vm.isFormPromptEdit
-          && vm.formPromptTitle === title;
-        const cat = (row.category || '').toLowerCase().trim();
-        const catClass = KNOWN_CATEGORY_CLASSES.has(cat) ? cat : 'default';
-        return html`
+    const title = row.title || '';
+    const isSelected = vm.isEditorOpen && vm.isFormPromptEdit
+      && vm.formPromptTitle === title;
+    const cat = (row.category || '').toLowerCase().trim();
+    const catClass = KNOWN_CATEGORY_CLASSES.has(cat) ? cat : 'default';
+    return html`
           <article role="listitem" data-testid="prompt-card" data-prompt-title=${title}>
             <div class="prompt-row ${isSelected ? 'is-selected' : ''}" role="button"
               tabindex="0"
@@ -1194,7 +1171,7 @@ export function renderPromptsCatalog(vm) {
             </div>
           </article>
         `;
-      })}
+  })}
     </div>
   `;
 }
@@ -1241,7 +1218,7 @@ function renderMcpCard(vm, s, isBuiltin) {
         ${transport ? html`<span class="plugin-card-badge">${transport}</span>` : nothing}
       </header>
       <footer class="plugin-card-meta">
-        <span class="plugin-card-badge">${badge}</span>
+        <span class="skill-detail-badge plugin-card-badge">Personal</span>
         <span class="plugin-card-count">${toolCount} tools</span>
         ${!isBuiltin ? html`
           <button type="button" class="plugin-card-action is-uninstall"
