@@ -1,5 +1,6 @@
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
+import { getSpacecatSessionToken } from './session-auth.js';
 
 // LLMO API origin. Defaults to prod; override for local dev with
 // ?llmo-api=http://localhost:3001
@@ -316,6 +317,7 @@ class BrandVisibilityApp extends LitElement {
     // Non-reactive
     this._apiBase = DEFAULT_API_BASE_URL;
     this._actions = null;
+    this._accessToken = null; // IMS token used only to obtain a short-lived SpaceCat session token
     this._org = null; // DA project org (slug), used for drafts + site-id storage key
     this._site = null; // DA project repo (slug), used for drafts + site-id storage key
     this._draftsStarted = false;
@@ -374,7 +376,7 @@ class BrandVisibilityApp extends LitElement {
     if (inIframe) {
       try {
         const sdk = await DA_SDK;
-        this._token = tokenOverride || sdk.token;
+        this._accessToken = tokenOverride || sdk.token;
         this._actions = sdk.actions;
         this._org = sdk.project?.org;
         this._site = sdk.project?.repo;
@@ -388,10 +390,10 @@ class BrandVisibilityApp extends LitElement {
         // eslint-disable-next-line no-console
         console.debug('[brand-visibility] DA_SDK payload', sdk, '-> detected page path:', this._pagePath);
       } catch {
-        if (tokenOverride) this._token = tokenOverride;
+        if (tokenOverride) this._accessToken = tokenOverride;
       }
     } else if (tokenOverride) {
-      this._token = tokenOverride;
+      this._accessToken = tokenOverride;
     }
     if (pagePathOverride) this._pagePath = toPagePath(pagePathOverride);
 
@@ -408,7 +410,7 @@ class BrandVisibilityApp extends LitElement {
     if (siteIdOverride) this._saveSiteId(siteIdOverride);
     this._siteId = siteIdOverride || this._loadSiteId();
 
-    if (this._token && this._siteId) this._fetchOpportunities();
+    if (this._accessToken && this._siteId) this._fetchOpportunities();
   }
 
   _siteIdStorageKey() {
@@ -432,10 +434,11 @@ class BrandVisibilityApp extends LitElement {
   }
 
   async _fetchOpportunities() {
-    if (!this._token || !this._siteId) return;
+    if (!this._accessToken || !this._siteId) return;
     this._loading = true;
     this._error = null;
     try {
+      this._token = await getSpacecatSessionToken(this._apiBase, this._accessToken);
       const resp = await fetch(`${this._apiBase}/sites/${this._siteId}/opportunities`, {
         headers: { Authorization: `Bearer ${this._token}` },
       });
@@ -845,7 +848,7 @@ class BrandVisibilityApp extends LitElement {
   }
 
   _renderContent() {
-    if (!this._token) {
+    if (!this._accessToken) {
       return html`<div class="card"><p>Sign in to Experience Workspace to see your brand visibility opportunities.</p></div>`;
     }
     if (!this._siteId) {
@@ -865,6 +868,9 @@ class BrandVisibilityApp extends LitElement {
         <p>Couldn't load opportunities: ${this._error}</p>
         <sl-button class="ew-fill-accent" @click=${() => this._fetchOpportunities()}>Retry</sl-button>
       </div>`;
+    }
+    if (!this._token) {
+      return html`<div class="card"><p>Unable to connect to Adobe Brand Visibility.</p></div>`;
     }
     if (this._opportunities.length === 0) {
       return html`<div class="card"><p>No brand visibility (LLMO) opportunities for this site yet.</p></div>`;
