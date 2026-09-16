@@ -5,7 +5,7 @@ const TAB_PROMPTS = 'prompts';
 const TAB_MCPS = 'mcps';
 const TAB_MARKETPLACE = 'marketplace';
 const TAB_MEMORY = 'memory';
-const TAB_CONTEXT = 'context'; // UI label: "Enterprise Context"; embeds the Experience Governance MFE
+const TAB_CONTEXT = 'context'; // UI label: "Experience Context"; embeds the Experience Governance MFE
 
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
@@ -15,7 +15,7 @@ const CATALOG_TABS = [
   { id: TAB_MCPS, label: 'MCPs' },
   // { id: TAB_MARKETPLACE, label: 'Marketplace', disabled: true },
   { id: TAB_MEMORY, label: 'Memory' },
-  { id: TAB_CONTEXT, label: 'Enterprise Context' },
+  { id: TAB_CONTEXT, label: 'Experience Context' },
 ];
 
 const TAB_LABEL_MAP = Object.fromEntries(CATALOG_TABS.map((t) => [t.id, t.label]));
