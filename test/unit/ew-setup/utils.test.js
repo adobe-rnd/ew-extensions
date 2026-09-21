@@ -60,7 +60,11 @@ describe('hasEwEnabled', () => {
 describe('buildConfigWithEwEnabled', () => {
   it('creates a minimal flags config when existingJson is null', () => {
     const result = buildConfigWithEwEnabled(null);
-    expect(result).to.deep.equal({ flags: { data: [{ key: 'ew.enabled', value: 'true' }] } });
+    expect(result).to.deep.equal({
+      flags: { data: [{ key: 'ew.enabled', value: 'true' }] },
+      ':names': ['flags'],
+      ':type': 'multi-sheet',
+    });
   });
   it('adds ew.enabled to a config that has no flags', () => {
     const result = buildConfigWithEwEnabled({ project: 'My Project' });
@@ -80,21 +84,24 @@ describe('buildConfigWithEwEnabled', () => {
     expect(ewRows).to.have.length(1);
     expect(ewRows[0].value).to.equal('true');
   });
-  it('appends "flags" to :names when flags key did not previously exist', () => {
+  it('adds "flags" to :names and sets :type when flags key did not previously exist', () => {
     const json = { ':names': ['settings'], settings: { data: [] } };
     const result = buildConfigWithEwEnabled(json);
-    expect(result[':names']).to.include('flags');
+    expect(result[':names']).to.include.members(['settings', 'flags']);
+    expect(result[':type']).to.equal('multi-sheet');
   });
-  it('does not append "flags" to :names when flags key already existed', () => {
+  it('keeps a single "flags" entry in :names when flags key already existed', () => {
     const json = { ':names': ['flags'], flags: { data: [] } };
     const result = buildConfigWithEwEnabled(json);
     const flagsCount = result[':names'].filter((n) => n === 'flags').length;
     expect(flagsCount).to.equal(1);
+    expect(result[':type']).to.equal('multi-sheet');
   });
   it('does not mutate the input object', () => {
     const json = { flags: { data: [{ key: 'other', value: 'x' }] } };
     buildConfigWithEwEnabled(json);
     expect(json.flags.data).to.have.length(1);
+    expect(json).to.not.have.property(':names');
   });
 });
 
