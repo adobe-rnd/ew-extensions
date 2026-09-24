@@ -27,8 +27,45 @@ Extensions add capabilities to EW — editors, panels, tools, and integrations �
 | Extension | Path | Entry point | Description |
 |-----------|------|-------------|-------------|
 | **Skills Editor** | `apps/skills/` | `tools/skills.html` | Manage skills, agents, MCP servers, prompts, and memory |
+| **Quick Blocks** | `tools/quick-blocks/` | `tools/quick-blocks/quick-blocks.html` | Add blocks or browse AEM Assets from the EW sidebar |
 
 > More extensions coming soon.
+
+To enable **Quick Blocks**, add a row to the org or site DA config's `library`
+sheet: `title` = `Quick Blocks`, `path` = the deployed URL of
+`/tools/quick-blocks/quick-blocks.html`, `experience` = `inline`. Keep the
+existing `Blocks` row: Quick Blocks uses its sheet sources and variant pages,
+including their library metadata. The new entry appears under **Extensions**
+in the EW sidebar. Its UI uses the EW NX2 stylesheets for Adobe Clean, shared
+colors, and form controls. The text section above the blocks offers expandable
+Heading (H1–H6) and List (unordered/ordered) groups and a paragraph, all with
+sample content. Click any text item or block variant to insert it at the editor
+cursor; the sidebar stays open for repeated inserts.
+The extension requires an EW page editor and the DA SDK iframe channel (it
+does not insert content when opened standalone).
+The **Assets** tab lists images from the site's configured AEM Assets repository
+(`aem.repositoryId`) in pages. Images are drag-only; clicking them does not insert
+anything. EW fetches the listing and thumbnails using its existing sign-in;
+the extension never loads the AEM Assets selector. The host checks approval,
+fetches the original image with authentication as the pointer enters a card,
+and relays its file bytes to the existing-image replacement target on drop.
+If the download is still in progress, wait briefly and drag again; no
+publish-URL HTML is inserted as a fallback.
+In EW layout mode, drag a text item or variant into the page to insert it before
+or after the nearest block. Because the sidebar and preview are separate iframes, EW
+places a transparent drag handle over each visible item in the host page
+and bridges the drop through a temporary surface over the preview. Other
+sources can drop ordinary `text/html` directly onto the preview; ProseMirror
+parses the content according to the editor schema. Native OS image drops use
+the preview's file target directly; sidebar assets need the relay because
+browsers do not carry script-created files through native drag-and-drop.
+On a `localhost:3000` EW host, the Assets tab shows a bundled **Sample JPEG (local
+mock)** instead of requesting AEM Assets, so the file-replacement drag can be
+tried without a configured repository. The mock is never shown by a deployed
+EW host.
+For local development, the plugin uses the DA Admin environment and IMS token
+provided by its EW host. Sign in through EW on `localhost:3000` first; opening
+the plugin directly on `localhost:3001` does not initiate a separate IMS login.
 
 ## Architecture
 
