@@ -1274,16 +1274,19 @@ export function renderMcpsCatalog(vm) {
   }
   const showBuiltins = filterPasses(STATUS.APPROVED);
   const isGrid = vm.catalogViewMode === 'grid';
+  // On the bridge/altHarness path the connected list is the CMA agent's real
+  // MCP servers (vm.builtinMcpServers); otherwise fall back to the built-in presets.
+  const connected = vm.builtinMcpServers?.length ? vm.builtinMcpServers : BUILTIN_MCP_SERVERS;
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="MCP view controls">
       ${renderViewToggle(vm)}
     </div>
     ${showBuiltins ? html`
-      <h3 class="section-h">Connected (${BUILTIN_MCP_SERVERS.length})</h3>
+      <h3 class="section-h">Connected (${connected.length})</h3>
       ${isGrid
-        ? html`<div class="plugin-grid">${BUILTIN_MCP_SERVERS.map((s) => renderMcpCard(vm, s, true))}</div>`
-        : html`<div class="catalog-list">${BUILTIN_MCP_SERVERS.map((s) => renderMcpRow(vm, s, true))}</div>`}
+        ? html`<div class="plugin-grid">${connected.map((s) => renderMcpCard(vm, s, true))}</div>`
+        : html`<div class="catalog-list">${connected.map((s) => renderMcpRow(vm, s, true))}</div>`}
     ` : nothing}
     <h3 class="section-h">Custom (${filteredCustom.length})</h3>
     ${!filteredCustom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
