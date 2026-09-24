@@ -558,6 +558,40 @@ export async function fetchSkillsFromAo() {
 }
 
 /**
+ * The CMA agent's real MCP servers (+ org/user overrides), for the MCPs tab's
+ * "Connected" list on the altHarness/bridge path. Without this the tab renders
+ * a hardcoded preset list (da-tools/eds-preview) that doesn't reflect what the
+ * agent actually runs. Returns null off-bridge or on any failure, so the caller
+ * keeps its built-in default and the AO path is unchanged.
+ */
+export async function fetchMcpServersFromBridge() {
+  const ctx = await aoAuthContext();
+  if (!ctx || !ctx.bridge) return null;
+  try {
+    const resp = await fetch(`${ctx.base}/api/v1/mcp-servers`, {
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+        'x-tenant-id': ctx.orgId,
+        'x-user-id': ctx.userId || '',
+      },
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const toCard = (s, scope) => {
+      const id = s.name || s.key || s.url;
+      if (!id) return null;
+      return { id, description: s.url || s.value || scope, transport: 'built-in', scope };
+    };
+    const agent = (json.agent || []).map((s) => toCard(s, 'agent'));
+    const org = (json.org || []).map((s) => toCard(s, 'org'));
+    const user = (json.user || []).map((s) => toCard(s, 'user'));
+    return [...agent, ...org, ...user].filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Reads a file out of a skill's directory via AO — mirrors Coworker's own
  * "view SKILL.md" call (GET /api/v1/skills/{skill_name}/files?path=...&manifest_id=...),
  * confirmed against aep-ai's read_skill_file handler. Returns the raw file

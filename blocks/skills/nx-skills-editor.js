@@ -11,6 +11,7 @@ import {
   uploadSkillFileToAo,
   removePersonalSkillSource,
   setSkillsBackend,
+  fetchMcpServersFromBridge,
   AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
   deleteSkillFromConfig,
@@ -92,6 +93,7 @@ class NxSkillsEditor extends LitElement {
     _agents: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
+    _builtinMcpServers: { state: true },
     _mcpTools: { state: true },
     _configuredMcpServers: { state: true },
     _configuredMcpServerHeaders: { state: true },
@@ -193,6 +195,7 @@ class NxSkillsEditor extends LitElement {
     this._agents = [];
     this._agentRows = [];
     this._mcpRows = [];
+    this._builtinMcpServers = [];
     this._mcpTools = null;
     this._configuredMcpServers = {};
     this._configuredMcpServerHeaders = {};
@@ -568,6 +571,12 @@ class NxSkillsEditor extends LitElement {
         this._configuredMcpServers = configResult.configuredMcpServers || {};
         this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
         this._toolOverrides = configResult.toolOverrides || {};
+        // On the bridge path, the "Connected" MCPs come from the CMA agent
+        // (fetchMcpServersFromBridge), not the hardcoded client presets. Empty
+        // off-bridge or on failure → renderer falls back to its built-in list.
+        this._builtinMcpServers = altHarness
+          ? (await fetchMcpServersFromBridge()) || []
+          : [];
         this._saveDataSnapshot();
 
         this._applySuggestion();
@@ -1701,6 +1710,7 @@ class NxSkillsEditor extends LitElement {
       agents: this._agents,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
+      builtinMcpServers: this._builtinMcpServers,
       mcpTools: this._mcpTools,
       mcpEnableBusy: this._mcpEnableBusy,
       configuredMcpServers: this._configuredMcpServers,
