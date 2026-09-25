@@ -45,6 +45,7 @@ import {
 import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
+  EW_ALT_HARNESS_FLAG,
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
@@ -534,7 +535,7 @@ class NxSkillsEditor extends LitElement {
       // (`!!flags['ew.altHarness']` in chat-ao.js). The old `=== 'true'` check
       // never matched a real key, so the editor always fell back to AO.
       const flagRows = configResult.json?.flags?.data ?? [];
-      const altHarnessRow = flagRows.find((r) => r?.key === 'ew.altHarness');
+      const altHarnessRow = flagRows.find((r) => r?.key === EW_ALT_HARNESS_FLAG);
       const altHarness = !!String(altHarnessRow?.value ?? '').trim();
       setSkillsBackend({ altHarness });
 
