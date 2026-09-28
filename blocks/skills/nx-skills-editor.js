@@ -45,6 +45,7 @@ import {
 import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
+  EW_ALT_HARNESS_FLAG,
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
@@ -528,12 +529,14 @@ class NxSkillsEditor extends LitElement {
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
-      // Mirrors da-nx's ewFlags.js: flags live in the `flags` sheet, keyed
-      // `ew.*`, and are read as the literal string 'true'.
+      // Flags live in the `flags` sheet, keyed `ew.*`. The `ew.altHarness`
+      // VALUE is the activation key (a non-empty string), not the literal
+      // 'true' — so enablement is a non-empty check, matching da-nx chat
+      // (`!!flags['ew.altHarness']` in chat-ao.js). The old `=== 'true'` check
+      // never matched a real key, so the editor always fell back to AO.
       const flagRows = configResult.json?.flags?.data ?? [];
-      const altHarness = flagRows.some(
-        (r) => r?.key === 'ew.altHarness' && r?.value === 'true',
-      );
+      const altHarnessRow = flagRows.find((r) => r?.key === EW_ALT_HARNESS_FLAG);
+      const altHarness = !!String(altHarnessRow?.value ?? '').trim();
       setSkillsBackend({ altHarness });
 
       const permKey = `${this._org}/${this._site}`;

@@ -7,6 +7,10 @@ const TAB_MARKETPLACE = 'marketplace';
 const TAB_MEMORY = 'memory';
 const TAB_CONTEXT = 'context'; // UI label: "Enterprise Context"; embeds the Experience Governance MFE
 
+// Site-config `flags` key whose (non-empty) value is the CMA bridge activation
+// key. Present + non-empty => route skills/MCP to the bridge instead of AO.
+const EW_ALT_HARNESS_FLAG = 'ew.altHarness';
+
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
   { id: TAB_PROMPTS, label: 'Prompts' },
@@ -159,6 +163,7 @@ export {
   CHAT_DRAWER_WIDTH,
   DEP_TREE_MAX_TOOLS,
   EGOV_MFE,
+  EW_ALT_HARNESS_FLAG,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,
