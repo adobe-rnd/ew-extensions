@@ -13,6 +13,7 @@ import {
   fetchSkillsFromAo,
   fetchSkillFileFromAo,
   uploadSkillFileToAo,
+  updateSkillOnAo,
   removePersonalSkillSource,
   registerMcpServer,
   setMcpServerEnabled,
@@ -476,6 +477,26 @@ describe('AO / bridge backend switch', () => {
       const result = await uploadSkillFileToAo(file, 'org');
       expect(result.ok).to.be.true;
       expect(calls[0].opts.body.get('scope')).to.equal('org');
+    });
+
+    it('updateSkillOnAo PUTs a multipart SKILL.md to /api/v1/skills/:skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await updateSkillOnAo('skill-uuid-1', '# Edited body', 'My Skill');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[0].opts.method).to.equal('PUT');
+      expect(calls[0].opts.body).to.be.instanceOf(FormData);
+      expect(calls[0].opts.body.get('file').name).to.equal('SKILL.md');
+      expect(calls[0].opts.body.get('display_title')).to.equal('My Skill');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('updateSkillOnAo returns an error without a skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await updateSkillOnAo('', '# body', 'x');
+      expect(result.ok).to.be.false;
+      expect(calls).to.have.length(0);
     });
 
     // MCP servers: GET the overrides bag, mutate mcp_servers, PUT it back.

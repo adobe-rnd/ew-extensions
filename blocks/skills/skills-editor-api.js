@@ -496,6 +496,11 @@ export function setSkillsBackend({ altHarness } = {}) {
   altHarnessEnabled = altHarness === true;
 }
 
+// True on the CMA/claudebridge (altHarness) path; false on AO-direct/da-agent.
+export function isSkillsBackendAltHarness() {
+  return altHarnessEnabled;
+}
+
 function aoEnv() {
   const { hostname } = window.location;
   if (hostname.endsWith('.aem.live')) return 'prod';
@@ -801,6 +806,42 @@ export async function removePersonalSkillSource(id, skillId = null) {
       body: JSON.stringify({ value: { ...skills, sources } }),
     });
     if (!putResp.ok) return { ok: false, error: `Delete failed (${putResp.status})` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+/**
+ * Saves an edited skill body as a new Managed Agents version via the bridge
+ * (PUT /api/v1/skills/:skillId, multipart SKILL.md). CMA/bridge only — the
+ * AO-direct/da-agent edit path stays on the config sheet. `skillId` is the
+ * Managed Agents id (this._skillIds[name]); the bridge reuses the skill's
+ * existing directory prefix, so a bare SKILL.md upload is correct.
+ */
+export async function updateSkillOnAo(skillId, body, displayTitle) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+  if (!ctx.bridge) return { ok: false, error: 'Editing is only supported on the CMA harness' };
+  if (!skillId) return { ok: false, error: 'Skill not found' };
+  try {
+    const form = new FormData();
+    const file = new File([body], 'SKILL.md', { type: 'text/markdown' });
+    form.append('file', file, 'SKILL.md');
+    if (displayTitle) form.append('display_title', displayTitle);
+    const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(skillId)}`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${ctx.token}`,
+        'x-tenant-id': ctx.orgId,
+        'x-user-id': ctx.userId || '',
+      },
+      body: form,
+    });
+    if (!resp.ok) {
+      const errBody = await resp.json().catch(() => ({}));
+      return { ok: false, error: errBody?.error || errBody?.detail || `Save failed (${resp.status})` };
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err?.message ?? err) };
