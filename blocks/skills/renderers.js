@@ -106,9 +106,16 @@ function mcpServerToolData(vm, serverId) {
   return { tools, error: null, source: 'live' };
 }
 
+// The da-agent "DA Assistant" plugin (da-tools/eds-preview) is legacy: on the
+// CMA/bridge path those tools come from the AEM MCP, so hide the built-in
+// preset there. AO-direct/da-agent keeps showing it.
+function builtinAgents(vm) {
+  return vm.altHarness ? [] : BUILTIN_AGENTS;
+}
+
 function agentsUsingSkill(vm, skillId) {
   const result = [];
-  BUILTIN_AGENTS.forEach((a) => {
+  builtinAgents(vm).forEach((a) => {
     if (a.skills?.includes(skillId)) result.push(a.label || a.id);
   });
   (vm.agents || []).forEach((a) => {
@@ -343,12 +350,12 @@ function renderAgentRow(vm, agent, isBuiltin = false) {
 // ─── Plugin detail drill-down (AO-style) ─────────────────────────────────────
 
 function renderPluginDetail(vm) {
-  const agent = [...BUILTIN_AGENTS, ...(vm.agents || [])].find(
+  const agent = [...builtinAgents(vm), ...(vm.agents || [])].find(
     (a) => a.id === vm.selectedAgentId,
   );
   if (!agent) return nothing;
 
-  const isBuiltin = BUILTIN_AGENTS.some((a) => a.id === agent.id);
+  const isBuiltin = builtinAgents(vm).some((a) => a.id === agent.id);
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
   const source = isBuiltin ? 'built-in' : 'custom';
   const description = agent.description || agent.preset?.description || '';
@@ -1101,11 +1108,12 @@ function renderDepTree(vm, agent, isBuiltin) {
 export function renderAgentsCatalog(vm) {
   const isGrid = vm.catalogViewMode === 'grid';
   const filter = vm.agentFilter || 'all';
-  const builtinCount = BUILTIN_AGENTS.length;
+  const builtins = builtinAgents(vm);
+  const builtinCount = builtins.length;
   const customCount = vm.agents.length;
   const totalCount = builtinCount + customCount;
 
-  const builtinTagged = BUILTIN_AGENTS.map((a) => ({ agent: a, builtin: true }));
+  const builtinTagged = builtins.map((a) => ({ agent: a, builtin: true }));
   const customTagged = vm.agents.map((a) => ({ agent: a, builtin: false }));
   const allAgents = [...builtinTagged, ...customTagged];
 
@@ -1291,8 +1299,10 @@ export function renderMcpsCatalog(vm) {
   const showBuiltins = filterPasses(STATUS.APPROVED);
   const isGrid = vm.catalogViewMode === 'grid';
   // On the bridge/altHarness path the connected list is the CMA agent's real
-  // MCP servers (vm.builtinMcpServers); otherwise fall back to the built-in presets.
-  const connected = vm.builtinMcpServers?.length ? vm.builtinMcpServers : BUILTIN_MCP_SERVERS;
+  // MCP servers (vm.builtinMcpServers); the da-agent da-tools/eds-preview
+  // presets don't apply there, so never fall back to them on altHarness.
+  let connected = vm.builtinMcpServers || [];
+  if (!connected.length && !vm.altHarness) connected = BUILTIN_MCP_SERVERS;
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="MCP view controls">
