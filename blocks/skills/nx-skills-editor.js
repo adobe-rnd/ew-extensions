@@ -97,6 +97,7 @@ class NxSkillsEditor extends LitElement {
     _agentRows: { state: true },
     _mcpRows: { state: true },
     _builtinMcpServers: { state: true },
+    _altHarness: { state: true },
     _mcpTools: { state: true },
     _configuredMcpServers: { state: true },
     _configuredMcpServerHeaders: { state: true },
@@ -199,6 +200,7 @@ class NxSkillsEditor extends LitElement {
     this._agentRows = [];
     this._mcpRows = [];
     this._builtinMcpServers = [];
+    this._altHarness = false;
     this._mcpTools = null;
     this._configuredMcpServers = {};
     this._configuredMcpServerHeaders = {};
@@ -540,6 +542,7 @@ class NxSkillsEditor extends LitElement {
       const altHarnessRow = flagRows.find((r) => r?.key === EW_ALT_HARNESS_FLAG);
       const altHarness = !!String(altHarnessRow?.value ?? '').trim();
       setSkillsBackend({ altHarness });
+      this._altHarness = altHarness;
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -1762,6 +1765,7 @@ class NxSkillsEditor extends LitElement {
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
       builtinMcpServers: this._builtinMcpServers,
+      altHarness: this._altHarness,
       mcpTools: this._mcpTools,
       mcpEnableBusy: this._mcpEnableBusy,
       configuredMcpServers: this._configuredMcpServers,
