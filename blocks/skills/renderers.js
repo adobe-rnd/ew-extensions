@@ -75,6 +75,17 @@ function editorTitle(vm, tab) {
 }
 
 function mcpServerToolData(vm, serverId) {
+  // Bridge/altHarness: the CMA agent server carries its own resolved tools
+  // (GET /api/v1/mcp-servers), so render those instead of a hardcoded preset.
+  const bridgeServer = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  if (bridgeServer && Array.isArray(bridgeServer.tools)) {
+    const tools = bridgeServer.tools.map((t) => ({
+      name: t.name,
+      description: t.description || '',
+    }));
+    return { tools, error: null, source: 'live' };
+  }
+
   const builtinList = BUILTIN_TOOL_DETAILS[serverId];
   if (builtinList) return { tools: builtinList, error: null, source: 'builtin' };
 
@@ -1179,9 +1190,14 @@ export function renderPromptsCatalog(vm) {
 function mcpShared(vm, s, isBuiltin) {
   const key = isBuiltin ? s.id : (s.key || '');
   const desc = isBuiltin ? s.description : (s.url || s.value || '');
-  const toolCount = isBuiltin
-    ? (BUILTIN_TOOL_DETAILS[s.id]?.length || 0)
-    : mcpServerToolData(vm, key).tools.length;
+  let toolCount;
+  if (!isBuiltin) {
+    toolCount = mcpServerToolData(vm, key).tools.length;
+  } else if (Array.isArray(s.tools)) {
+    toolCount = s.tools.length;
+  } else {
+    toolCount = BUILTIN_TOOL_DETAILS[s.id]?.length || 0;
+  }
   let transport = '';
   if (!isBuiltin) transport = s.url ? 'HTTP' : 'stdio';
   const isSelected = isBuiltin

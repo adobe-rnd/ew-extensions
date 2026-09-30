@@ -15,6 +15,7 @@ import {
   uploadSkillFileToAo,
   updateSkillOnAo,
   removePersonalSkillSource,
+  fetchMcpServersFromBridge,
   registerMcpServer,
   setMcpServerEnabled,
   deleteMcpServer,
@@ -497,6 +498,36 @@ describe('AO / bridge backend switch', () => {
       const result = await updateSkillOnAo('', '# body', 'x');
       expect(result.ok).to.be.false;
       expect(calls).to.have.length(0);
+    });
+
+    it('fetchMcpServersFromBridge carries agent tools and dedupes by url (agent wins)', async () => {
+      const calls = trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          agent: [
+            {
+              name: 'adobe-experience-manager',
+              url: 'https://mcp.adobeaemcloud.com/adobe/mcp/aem',
+              tools: [{ name: 'da_get_source' }, { name: 'da_create_page' }],
+            },
+          ],
+          org: [],
+          // Same server re-declared as a user override — must not double up.
+          user: [{ key: 'aem', url: 'https://mcp.adobeaemcloud.com/adobe/mcp/aem' }],
+        }),
+      }));
+      const servers = await fetchMcpServersFromBridge();
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/mcp-servers');
+      expect(servers).to.have.length(1);
+      expect(servers[0].id).to.equal('adobe-experience-manager');
+      expect(servers[0].scope).to.equal('agent');
+      expect(servers[0].tools).to.deep.equal([{ name: 'da_get_source' }, { name: 'da_create_page' }]);
+    });
+
+    it('fetchMcpServersFromBridge returns null off-bridge', async () => {
+      setSkillsBackend({ altHarness: false });
+      const result = await fetchMcpServersFromBridge();
+      expect(result).to.equal(null);
     });
 
     // MCP servers: GET the overrides bag, mutate mcp_servers, PUT it back.

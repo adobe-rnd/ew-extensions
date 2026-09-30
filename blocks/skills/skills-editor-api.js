@@ -585,12 +585,30 @@ export async function fetchMcpServersFromBridge() {
     const toCard = (s, scope) => {
       const id = s.name || s.key || s.url;
       if (!id) return null;
-      return { id, description: s.url || s.value || scope, transport: 'built-in', scope };
+      const url = s.url || s.value || '';
+      return {
+        id,
+        description: url || scope,
+        transport: scope === 'agent' ? 'built-in' : 'remote',
+        scope,
+        url,
+        tools: Array.isArray(s.tools) ? s.tools : [],
+      };
     };
-    const agent = (json.agent || []).map((s) => toCard(s, 'agent'));
-    const org = (json.org || []).map((s) => toCard(s, 'org'));
-    const user = (json.user || []).map((s) => toCard(s, 'user'));
-    return [...agent, ...org, ...user].filter(Boolean);
+    const merged = [
+      ...(json.agent || []).map((s) => toCard(s, 'agent')),
+      ...(json.org || []).map((s) => toCard(s, 'org')),
+      ...(json.user || []).map((s) => toCard(s, 'user')),
+    ].filter(Boolean);
+    // Dedup by url so a server present on both the agent and an org/user
+    // override renders once; agent is listed first, so it wins and the kept
+    // entry carries the agent's resolved tools. Fall back to id when no url.
+    const seen = new Map();
+    for (const card of merged) {
+      const dedupKey = (card.url || card.id).trim().toLowerCase();
+      if (!seen.has(dedupKey)) seen.set(dedupKey, card);
+    }
+    return [...seen.values()];
   } catch {
     return null;
   }
