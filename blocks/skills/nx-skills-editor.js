@@ -9,8 +9,10 @@ import {
   loadSkillsFromAo,
   fetchSkillFileFromAo,
   uploadSkillFileToAo,
+  updateSkillOnAo,
   removePersonalSkillSource,
   setSkillsBackend,
+  isSkillsBackendAltHarness,
   fetchMcpServersFromBridge,
   AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
@@ -933,6 +935,31 @@ class NxSkillsEditor extends LitElement {
     this._isSaveBusy = true;
     this._statusMsg = '';
 
+    // CMA/bridge edit: persist as a new Managed Agents skill version, not the
+    // .da config sheet. Create-new on altHarness goes through the upload flow.
+    if (this._isFormEdit && isSkillsBackendAltHarness()) {
+      const result = await updateSkillOnAo(
+        this._skillIds[id],
+        body,
+        this._skillDisplayNames?.[id] || id,
+      );
+      if (!result.ok) {
+        this._setStatus(result.error || 'Failed to save skill', STATUS_TYPE.ERR);
+        this._isSaveBusy = false;
+        return;
+      }
+      this._setStatus('Saved');
+      this._clearDirty();
+      this._isSaveBusy = false;
+      this._hasSuggestion = false;
+      clearSuggestionSession();
+      this._viewingSkillId = null;
+      this._clearForm();
+      this._isEditorOpen = false;
+      await this._reload();
+      return;
+    }
+
     // Write the .md file first — if it fails we don't touch the config sheet.
     const fileResult = await writeSkillMdFile(this._org, this._site, id, body);
     if (!fileResult.ok) {
@@ -1001,6 +1028,23 @@ class NxSkillsEditor extends LitElement {
     if (!id) return;
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
+
+    // On the CMA/bridge (altHarness) path skills live in Managed Agents, not the
+    // .da config sheet — route to the same bridge delete the catalog card uses.
+    // AO-direct/da-agent config-sheet path below is unchanged.
+    if (isSkillsBackendAltHarness()) {
+      const result = await removePersonalSkillSource(id, this._skillIds[id]);
+      this._isSaveBusy = false;
+      if (!result.ok) {
+        this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
+        return;
+      }
+      this._viewingSkillId = null;
+      this._clearForm();
+      this._isEditorOpen = false;
+      await this._reload();
+      return;
+    }
 
     // Read existing content before deleting, so we can rollback if needed.
     const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
@@ -1269,7 +1313,11 @@ class NxSkillsEditor extends LitElement {
     // Capture the context at the time of the request to guard against stale responses.
     const requestedId = skillId;
     const requestedTab = tab;
-    const { text } = await readSkillMdFile(this._org, this._site, skillId);
+    // On the CMA/bridge path SKILL.md comes from Managed Agents (fetchSkillFileFromAo
+    // has a bridge branch); the config-sheet read has no content there.
+    const { text } = isSkillsBackendAltHarness()
+      ? { text: await fetchSkillFileFromAo(skillId, 'SKILL.md', this._skillIds[skillId]) }
+      : await readSkillMdFile(this._org, this._site, skillId);
     // Discard the response if the user navigated away before it resolved.
     if (text && !this._isFormDirty
       && this._formSkillId === requestedId
