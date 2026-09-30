@@ -17,7 +17,7 @@ const CATALOG_TABS = [
   { id: TAB_AGENTS, label: 'Plugins' },
   { id: TAB_SKILLS, label: 'Skills' },
   { id: TAB_MCPS, label: 'MCPs' },
-  // { id: TAB_MARKETPLACE, label: 'Marketplace', disabled: true },
+  { id: TAB_MARKETPLACE, label: 'Marketplace' },
   { id: TAB_MEMORY, label: 'Memory' },
   { id: TAB_CONTEXT, label: 'Enterprise Context' },
 ];
