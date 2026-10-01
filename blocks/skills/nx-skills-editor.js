@@ -1123,7 +1123,10 @@ class NxSkillsEditor extends LitElement {
     footer.className = 'skill-md-modal-footer';
     const meta = document.createElement('span');
     meta.className = 'skill-md-modal-meta';
-    meta.textContent = `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`;
+    const hasBody = body.trim().length > 0;
+    meta.textContent = hasBody
+      ? `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`
+      : 'No content';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'skill-md-modal-close-btn';
     closeBtn.textContent = 'Close';
@@ -1140,6 +1143,16 @@ class NxSkillsEditor extends LitElement {
     this._cmPortal.appendChild(styleLink);
 
     document.body.appendChild(this._cmPortal);
+
+    if (!hasBody) {
+      // The skill has no body (frontmatter-only) or its content could not be
+      // loaded — show an explicit empty state instead of a blank viewer.
+      editorHost.classList.add('skill-md-empty');
+      editorHost.textContent = this._skillIds[id]
+        ? 'This skill has no content yet.'
+        : "Couldn't load this skill's content.";
+      return;
+    }
 
     try {
       this._cmEditor = await createReadOnlyViewer(editorHost, body);
