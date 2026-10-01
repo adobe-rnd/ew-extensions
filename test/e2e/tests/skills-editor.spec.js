@@ -29,7 +29,7 @@ const HAS_AUTH = process.env.DA_AUTH_OK === '1';
  * Minimum required catalog tabs. The test reads actual tab names from the DOM
  * so it can't go stale, but we still assert these are present at minimum.
  */
-const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'Plugins', 'MCPs', 'Marketplace', 'Memory'];
+const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'Plugins', 'MCPs', 'Memory', 'Experience Context'];
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -174,9 +174,10 @@ test.describe('Top-nav pill UI', () => {
     await expect(page.getByRole('button', { name: 'Open Assistant' })).toBeVisible();
 
     // All catalog tabs visible
-    for (const name of ['Prompts', 'Plugins', 'Skills', 'MCPs', 'Memory']) {
+    for (const name of ['Prompts', 'Plugins', 'Skills', 'MCPs', 'Memory', 'Experience Context']) {
       await expect(page.getByRole('tab', { name })).toBeVisible();
     }
+    await expect(page.getByRole('tab', { name: 'Enterprise Context', exact: true })).not.toBeAttached();
   });
 
   test('Assistant button disappears when chat opens, reappears when it closes', async ({ page }) => {
