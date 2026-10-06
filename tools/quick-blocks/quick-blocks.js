@@ -20,6 +20,11 @@ class QuickBlocks extends LitElement {
     _assetError: { state: true },
     _assets: { state: true },
     _assetHasMore: { state: true },
+    _properties: { state: true },
+    _propertyEditing: { state: true },
+    _propertyValue: { state: true },
+    _propertyError: { state: true },
+    _propertyBusy: { state: true },
   };
 
   constructor() {
@@ -36,6 +41,11 @@ class QuickBlocks extends LitElement {
     this._assetError = '';
     this._assets = [];
     this._assetHasMore = false;
+    this._properties = null;
+    this._propertyEditing = null;
+    this._propertyValue = '';
+    this._propertyError = '';
+    this._propertyBusy = false;
     this._assetsRequested = false;
     this._assetMorePending = false;
     this._assetRetry = false;
@@ -107,6 +117,22 @@ class QuickBlocks extends LitElement {
       } else if (type === 'ew-asset-drag-ready' && this._assetDragError) {
         this._assetError = '';
         this._assetDragError = false;
+      } else if (type === 'ew-properties-result') {
+        if (this._tab !== 'properties') return;
+        if (this._properties?.block?.pos !== event.data.block?.pos) this._propertyEditing = null;
+        this._properties = {
+          block: event.data.block,
+          items: event.data.items,
+          canWrite: event.data.canWrite,
+        };
+        if (event.data.saved) {
+          this._propertyBusy = false;
+          this._propertyError = '';
+          this._propertyEditing = null;
+        }
+      } else if (type === 'ew-properties-error') {
+        this._propertyBusy = false;
+        this._propertyError = event.data.error || 'Could not update the block.';
       }
     };
     window.addEventListener('message', this._onHandleMessage);
@@ -123,6 +149,9 @@ class QuickBlocks extends LitElement {
     this._assetObjectUrls.clear();
     this._assets = [];
     this._assetsRequested = false;
+    if (this._editorOrigin) {
+      window.parent.postMessage({ type: 'ew-properties-watch', active: false }, this._editorOrigin);
+    }
     super.disconnectedCallback();
   }
 
@@ -143,10 +172,12 @@ class QuickBlocks extends LitElement {
       this._editorOrigin = resolveEditorOrigin(project);
       this._daFetch = libraryFetch(token, project.daAdmin);
       if (this._tab === 'assets') this._selectTab('assets');
+      if (this._tab === 'properties') this._watchProperties(true);
       await this._load();
     } catch (error) {
       this._error = error.message;
       if (this._tab === 'assets') this._assetError = error.message;
+      if (this._tab === 'properties') this._propertyError = error.message;
     }
   }
 
@@ -191,9 +222,40 @@ class QuickBlocks extends LitElement {
   }
 
   _selectTab(tab) {
+    if (this._tab === 'properties' && tab !== 'properties') this._watchProperties(false);
     this._tab = tab;
+    if (tab === 'properties') {
+      this._propertyEditing = null;
+      this._propertyError = '';
+      this._propertyBusy = false;
+      this._properties = null;
+      this._watchProperties(true);
+    }
     if (tab !== 'assets' || this._assetsRequested || this._assetLoading) return;
     this._requestAssets();
+  }
+
+  _watchProperties(active) {
+    if (!this._editorOrigin) return;
+    window.parent.postMessage({ type: 'ew-properties-watch', active }, this._editorOrigin);
+  }
+
+  _saveText(item) {
+    if (this._propertyBusy || !this._editorOrigin) return;
+    this._propertyBusy = true;
+    this._propertyError = '';
+    window.parent.postMessage({
+      type: 'ew-properties-text', item, text: this._propertyValue,
+    }, this._editorOrigin);
+  }
+
+  _replaceImage(event, item) {
+    const [file] = event.target.files;
+    event.target.value = '';
+    if (!file || !this._editorOrigin || this._propertyBusy) return;
+    this._propertyBusy = true;
+    this._propertyError = '';
+    window.parent.postMessage({ type: 'ew-properties-image', item, file }, this._editorOrigin);
   }
 
   _requestAssets(more = false) {
@@ -274,14 +336,53 @@ class QuickBlocks extends LitElement {
     </div></li>`;
   }
 
+  _renderProperty(item, startsRow) {
+    const label = item.kind === 'text' ? item.text : item.alt || item.src?.split('/').pop() || 'Image';
+    const index = this._properties.items.indexOf(item);
+    const editing = this._propertyEditing === index;
+    return html`<li class=${startsRow ? 'quick-property quick-row-start' : 'quick-property'}>
+      <span class="quick-property-type">${item.kind === 'text' ? 'Text' : 'Image'}</span>
+      <button type="button" class="quick-property-pill"
+        title=${label} ?disabled=${!this._properties.canWrite || this._propertyBusy}
+        @click=${() => {
+    if (item.kind === 'image') {
+      this.querySelector(`#quick-property-file-${index}`)?.click();
+    } else {
+      this._propertyEditing = editing ? null : index;
+      this._propertyValue = item.text;
+    }
+  }}>${label}</button>
+      ${item.kind === 'image'
+    ? html`<input id=${`quick-property-file-${index}`} class="sr-only" type="file"
+        accept="image/*" tabindex="-1" aria-label=${`Replace image ${label}`}
+        @change=${(event) => this._replaceImage(event, item)}>`
+    : nothing}
+      ${editing ? html`<form class="quick-property-editor"
+        @submit=${(event) => { event.preventDefault(); this._saveText(item); }}>
+        <textarea class="nx-input" aria-label="Replacement text"
+          .value=${this._propertyValue}
+          @input=${(event) => { this._propertyValue = event.target.value; }}></textarea>
+        <div class="quick-property-actions">
+          <button type="submit" class="nx-action-btn nx-btn-sm"
+            ?disabled=${this._propertyBusy}>Save</button>
+          <button type="button" class="nx-action-btn nx-btn-sm"
+            @click=${() => { this._propertyEditing = null; }}>Cancel</button>
+        </div>
+      </form>` : nothing}
+    </li>`;
+  }
+
   render() {
     const filtered = this._visibleBlocks();
+    const tabDescription = {
+      blocks: 'Click to add at the cursor, or drag into the page.',
+      assets: 'Drag an image into the page.',
+      properties: 'Edit content in the nearest block.',
+    };
     return html`
       <header class="quick-header">
         <h1>Quick Blocks</h1>
-        <p>${this._tab === 'blocks'
-    ? 'Click to add at the cursor, or drag into the page.'
-    : 'Drag an image into the page.'}</p>
+        <p>${tabDescription[this._tab]}</p>
       </header>
       <nav class="quick-tabs" role="tablist" aria-label="Quick Blocks tools">
         <button type="button" id="quick-blocks-tab" role="tab"
@@ -290,6 +391,9 @@ class QuickBlocks extends LitElement {
         <button type="button" id="quick-assets-tab" role="tab"
           aria-controls="quick-assets-panel" aria-selected=${this._tab === 'assets'}
           @click=${() => this._selectTab('assets')}>Assets</button>
+        <button type="button" id="quick-properties-tab" role="tab"
+          aria-controls="quick-properties-panel" aria-selected=${this._tab === 'properties'}
+          @click=${() => this._selectTab('properties')}>Properties</button>
       </nav>
       <section class="quick-blocks-content" id="quick-blocks-panel" role="tabpanel"
         aria-labelledby="quick-blocks-tab" ?hidden=${this._tab !== 'blocks'}>
@@ -368,6 +472,26 @@ class QuickBlocks extends LitElement {
         ${this._assetHasMore && !this._assetLoading && !this._assetError
     ? html`<button type="button" class="nx-action-btn quick-asset-more"
       @click=${() => this._requestAssets(true)}>Load more images</button>` : nothing}
+      </section>
+      <section class="quick-properties-content" id="quick-properties-panel" role="tabpanel"
+        aria-labelledby="quick-properties-tab" ?hidden=${this._tab !== 'properties'}>
+        ${this._propertyError ? html`<div class="quick-error" role="alert">${this._propertyError}</div>` : nothing}
+        ${this._propertyBusy ? html`<p class="quick-state">Updating block…</p>` : nothing}
+        ${!this._properties ? html`<p class="quick-state">Loading properties…</p>` : nothing}
+        ${this._properties && !this._properties.block
+    ? html`<p class="quick-state">No block on this page.</p>` : nothing}
+        ${this._properties?.block ? html`
+          <h2>${this._properties.block.name}</h2>
+          ${!this._properties.canWrite ? html`<p class="quick-state">This page is read-only.</p>` : nothing}
+          ${this._properties.items.length
+    ? html`<ul class="quick-property-list">
+                ${this._properties.items.map((item, index) => this._renderProperty(
+    item,
+    index > 0 && item.rowIndex !== this._properties.items[index - 1].rowIndex,
+  ))}
+              </ul>`
+    : html`<p class="quick-state">No text or images in this block.</p>`}
+        ` : nothing}
       </section>`;
   }
 }

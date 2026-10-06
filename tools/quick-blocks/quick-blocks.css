@@ -316,3 +316,89 @@ ew-quick-blocks [hidden] {
 .quick-asset-more {
   margin: 12px auto 0;
 }
+
+.quick-properties-content {
+  padding: 8px 16px 24px;
+}
+
+.quick-properties-content h2 {
+  margin: 4px 0 12px;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.quick-property-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-property {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-row-start {
+  padding-top: 12px;
+  border-top: 1px solid var(--s2-gray-200);
+}
+
+.quick-property-type {
+  width: 40px;
+  color: var(--s2-gray-700);
+  font-size: 11px;
+}
+
+.quick-property-pill {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 10px;
+  border: 1px solid var(--s2-gray-300);
+  border-radius: 16px;
+  background: var(--s2-gray-75);
+  color: var(--s2-gray-900);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-property-pill:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.quick-property-pill:focus-visible {
+  border-color: var(--s2-blue-800);
+  outline: none;
+}
+
+.quick-property-pill:hover:not(:disabled) {
+  border-color: var(--s2-blue-800);
+}
+
+.quick-property-editor {
+  width: 100%;
+  padding-left: 46px;
+}
+
+.quick-property-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.quick-property-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}

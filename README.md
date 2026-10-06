@@ -43,6 +43,12 @@ sample content. Click any text item or block variant to insert it at the editor
 cursor; the sidebar stays open for repeated inserts.
 The extension requires an EW page editor and the DA SDK iframe channel (it
 does not insert content when opened standalone).
+The **Properties** tab follows the current editor selection, showing the closest
+block even when the cursor is outside a block. It lists the block's text and
+images as truncated pills, with separators between the block's table rows.
+Click text to edit and save it, or click an image
+to choose a replacement image file. Changes use the editor document and its
+existing media upload, and are unavailable on read-only pages.
 The **Assets** tab lists images from the site's configured AEM Assets repository
 (`aem.repositoryId`) in pages. Images are drag-only; clicking them does not insert
 anything. EW fetches the listing and thumbnails using its existing sign-in;
