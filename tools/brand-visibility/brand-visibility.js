@@ -11,6 +11,7 @@ const DRAFTS_PREFIX = '/drafts/brand-visibility/';
 
 const STATUS_FILTERS = ['all', 'new', 'in_progress', 'resolved', 'ignored'];
 const SORTS = ['recent', 'title', 'type'];
+const SORT_LABELS = { recent: 'Most recent', title: 'A–Z', type: 'Type' };
 const PAGE_SIZE = 50;
 const SUGGESTIONS_CONCURRENCY = 6;
 
@@ -56,6 +57,7 @@ async function withConcurrency(items, limit, fn) {
     while (next < items.length) {
       const i = next;
       next += 1;
+      // eslint-disable-next-line no-await-in-loop -- Sequential work within each worker enforces the concurrency limit.
       results[i] = await fn(items[i]);
     }
   }
@@ -114,8 +116,7 @@ function renderBold(text) {
   const parts = [];
   const re = /\*\*([^*]+)\*\*/g;
   let last = 0;
-  let match;
-  while ((match = re.exec(text)) !== null) {
+  for (const match of text.matchAll(re)) {
     if (match.index > last) parts.push(text.slice(last, match.index));
     parts.push(html`<strong>${match[1]}</strong>`);
     last = match.index + match[0].length;
@@ -215,16 +216,18 @@ function renderTocSuggestion(data) {
 function renderSummarizationSuggestion(data) {
   const summaryText = data.summarizationText || data.aiGeneratedSummarizationText;
   const bullets = data.keyPoints === true ? extractBulletPoints(summaryText) : [];
+  let content = nothing;
+  if (bullets.length) {
+    content = html`<p class="opp-suggestion-summary"><strong>Key points:</strong></p>
+      <ul class="opp-evidence-list">
+        ${bullets.map((b) => html`<li>${renderBold(b)}</li>`)}
+      </ul>`;
+  } else if (summaryText) {
+    content = html`<p class="opp-suggestion-summary"><strong>Summary:</strong> ${renderRichText(summaryText)}</p>`;
+  }
   return html`
     <div class="opp-suggestion opp-suggestion--summarization">
-      ${bullets.length
-        ? html`<p class="opp-suggestion-summary"><strong>Key points:</strong></p>
-            <ul class="opp-evidence-list">
-              ${bullets.map((b) => html`<li>${renderBold(b)}</li>`)}
-            </ul>`
-        : summaryText
-          ? html`<p class="opp-suggestion-summary"><strong>Summary:</strong> ${renderRichText(summaryText)}</p>`
-          : nothing}
+      ${content}
     </div>
   `;
 }
@@ -532,7 +535,7 @@ class BrandVisibilityApp extends LitElement {
         else summaries.push(text);
       }
       return [
-        'Update the page content - add a summary section in the beginning of the content:',
+        'Update the page content - add a summary section at the beginning of the main content, after the H1 and the hero if available:',
         summaries.join('\n'),
         'Add a key points section below the summary:',
         bullets.map((b) => `- ${b}`).join('\n'),
@@ -556,8 +559,7 @@ class BrandVisibilityApp extends LitElement {
     const parts = [];
     const re = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
     let last = 0;
-    let match;
-    while ((match = re.exec(text)) !== null) {
+    for (const match of text.matchAll(re)) {
       if (match.index > last) parts.push(text.slice(last, match.index));
       parts.push(html`<a href=${match[2]} target="_blank" rel="noopener noreferrer">${match[1]}</a>`);
       last = match.index + match[0].length;
@@ -623,7 +625,7 @@ class BrandVisibilityApp extends LitElement {
           ${entry.items.map(
             (item) => html`<li>
               <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${this._draftName(item)}</a>
-            </li>`
+            </li>`,
           )}
         </ul>
         <sl-button
@@ -673,14 +675,16 @@ class BrandVisibilityApp extends LitElement {
   _renderPageScopeBanner() {
     if (!this._pagePath) return nothing;
     const loading = this._suggestionsStarted && !this._matchingDone;
+    let message = 'Showing opportunities for the whole site';
+    if (loading) {
+      message = 'Matching opportunities against this page…';
+    } else if (this._scope === 'page') {
+      message = html`Showing opportunities for <strong>${this._pagePath}</strong>`;
+    }
     return html`
       <div class="bv-scope-banner">
         <span>
-          ${loading
-            ? 'Matching opportunities against this page…'
-            : this._scope === 'page'
-              ? html`Showing opportunities for <strong>${this._pagePath}</strong>`
-              : 'Showing opportunities for the whole site'}
+          ${message}
         </span>
         ${!loading
           ? html`<button
@@ -735,7 +739,7 @@ class BrandVisibilityApp extends LitElement {
                     }}
                   >
                     ${s === 'all' ? 'All' : statusLabel(s.toUpperCase())}
-                  </button>`
+                  </button>`,
                 )}
               </div>
               <div class="bv-control-row">
@@ -747,8 +751,8 @@ class BrandVisibilityApp extends LitElement {
                       this._sort = s;
                     }}
                   >
-                    ${s === 'recent' ? 'Most recent' : s === 'title' ? 'A–Z' : 'Type'}
-                  </button>`
+                    ${SORT_LABELS[s]}
+                  </button>`,
                 )}
               </div>
             </div>
@@ -821,7 +825,7 @@ class BrandVisibilityApp extends LitElement {
                         ? html`<div><p class="opp-detail-label">Details</p>
                             <div class="opp-data-list">
                               ${Object.entries(o.data).map(
-                                ([k, v]) => html`<div><span class="opp-data-key">${k}:</span> <span>${JSON.stringify(v)}</span></div>`
+                                ([k, v]) => html`<div><span class="opp-data-key">${k}:</span> <span>${JSON.stringify(v)}</span></div>`,
                               )}
                             </div>
                           </div>`
