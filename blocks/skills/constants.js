@@ -88,14 +88,10 @@ const BUILTIN_MCP_SERVERS = [
   },
 ];
 
-const BUILTIN_AGENTS = [
-  {
-    id: 'da-assistant',
-    label: 'DA Assistant',
-    description: 'Default content authoring assistant with full DA tooling',
-    mcpServers: ['da-tools', 'eds-preview'],
-  },
-];
+// DA Assistant's tools now live in the AEM MCP server (surfaced via the bridge
+// /api/v1/mcp-servers endpoint), so the hardcoded preset is removed to stop it
+// listing stale tools. Left as an empty list so existing consumers are safe.
+const BUILTIN_AGENTS = [];
 
 const BUILTIN_TOOL_DETAILS = {
   'da-tools': [
