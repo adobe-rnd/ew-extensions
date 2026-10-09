@@ -581,7 +581,16 @@ export async function fetchMcpServersFromBridge() {
     const toCard = (s, scope) => {
       const id = s.name || s.key || s.url;
       if (!id) return null;
-      return { id, description: s.url || s.value || scope, transport: 'built-in', scope };
+      return {
+        id,
+        description: s.url || s.value || scope,
+        transport: 'built-in',
+        scope,
+        // Carry the agent group's resolved tools through (overrides.ts
+        // getAgentMcpServersWithTools) instead of dropping them, so the MCP
+        // card can list them on the CMA/bridge path.
+        tools: Array.isArray(s.tools) ? s.tools : [],
+      };
     };
     // Dedupe by server URL across agent/org/user (agent wins) — the same server
     // configured on the agent AND in an org/user override would otherwise show

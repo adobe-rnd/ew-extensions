@@ -78,6 +78,15 @@ function mcpServerToolData(vm, serverId) {
   const builtinList = BUILTIN_TOOL_DETAILS[serverId];
   if (builtinList) return { tools: builtinList, error: null, source: 'builtin' };
 
+  // Bridge/CMA path: servers come from the bridge (fetchMcpServersFromBridge)
+  // with their resolved tools attached; vm.mcpTools is only populated for the
+  // config-sheet path. Use the bridge server's own tools when present.
+  const bridgeServer = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  if (bridgeServer && Array.isArray(bridgeServer.tools) && bridgeServer.tools.length) {
+    const tools = bridgeServer.tools.map((t) => ({ name: t.name, description: t.description || '' }));
+    return { tools, error: null, source: 'live' };
+  }
+
   if (!vm.mcpTools) return { tools: [], error: null, source: 'pending' };
 
   const server = (vm.mcpTools.servers || []).find((s) => s.id === serverId);
