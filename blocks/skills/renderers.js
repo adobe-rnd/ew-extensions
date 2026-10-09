@@ -144,7 +144,6 @@ function renderViewToggle(vm) {
 }
 
 function renderSkillCard(vm, id) {
-  const description = vm.skillDescriptions[id] || '';
   const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
@@ -179,7 +178,6 @@ function renderSkillCard(vm, id) {
 }
 
 function renderSkillRow(vm, id) {
-  const description = vm.skillDescriptions[id] || '';
   const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
@@ -221,11 +219,8 @@ function renderSkillDetail(vm) {
   const fm = parseFrontmatter(body);
   const name = fm?.fields?.name || id;
   const description = vm.skillDescriptions[id] || fm?.fields?.description || extractTitle(body) || '';
-  const usedBy = agentsUsingSkill(vm, id);
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const readOnly = !isPersonal;
-  const pluginName = usedBy.length ? usedBy[0] : null;
-  const origin = isPersonal ? 'personal' : (vm.skillScopes[id] || 'application');
 
   return html`
     <div class="skill-detail">
@@ -268,7 +263,6 @@ function agentMcpServerIds(agent, isBuiltin) {
 
 function renderAgentCard(vm, agent, isBuiltin = false) {
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
-  const description = agent.description || agent.preset?.description || '';
   const skills = agentSkillIds(agent);
   const mcps = agentMcpServerIds(agent, isBuiltin);
   const skillCount = skills.length;
@@ -348,7 +342,6 @@ function renderPluginDetail(vm) {
 
   const isBuiltin = BUILTIN_AGENTS.some((a) => a.id === agent.id);
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
-  const source = isBuiltin ? 'built-in' : 'custom';
   const description = agent.description || agent.preset?.description || '';
   const skillIds = agentSkillIds(agent);
   const isGrid = vm.catalogViewMode === 'grid';
@@ -1208,7 +1201,7 @@ function mcpShared(vm, s, isBuiltin) {
 }
 
 function renderMcpCard(vm, s, isBuiltin) {
-  const { key, desc, toolCount, transport, isSelected, onClick, onKey, badge } = mcpShared(vm, s, isBuiltin);
+  const { key, desc, toolCount, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
 
   return html`
     <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
