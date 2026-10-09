@@ -8,6 +8,7 @@
 
 import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
+import { parseFrontmatter } from './utils/skill-frontmatter.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -665,7 +666,14 @@ export async function uploadSkillFileToAo(file, scope = 'owner') {
     try {
       const form = new FormData();
       form.append('file', file, file.name);
-      form.append('display_title', file.name.replace(/\.md$/i, ''));
+      // Display title comes from the skill's frontmatter `name`, NOT the
+      // filename — a bare SKILL.md would otherwise surface as "SKILL" on the
+      // card. Fall back to omitting it (bridge then uses the parsed name).
+      let displayTitle = '';
+      try {
+        displayTitle = String(parseFrontmatter(await file.text())?.fields?.name || '').trim();
+      } catch { /* no readable frontmatter — let the bridge derive the name */ }
+      if (displayTitle) form.append('display_title', displayTitle);
       if (scope === 'org') form.append('scope', 'org');
       const resp = await fetch(`${ctx.base}/api/v1/skills`, {
         method: 'POST',
