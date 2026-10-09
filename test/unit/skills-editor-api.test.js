@@ -12,6 +12,7 @@ import {
   setSkillsBackend,
   fetchSkillsFromAo,
   fetchSkillFileFromAo,
+  fetchSkillFileResultFromAo,
   uploadSkillFileToAo,
   removePersonalSkillSource,
   registerMcpServer,
@@ -434,6 +435,18 @@ describe('AO / bridge backend switch', () => {
       expect(calls).to.have.length(1);
       expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
       expect(text).to.equal('# Direct');
+    });
+
+    it('fetchSkillFileResultFromAo flags a service error (non-ok) distinctly from empty', async () => {
+      trackFetch(() => ({ ok: false, status: 502, json: async () => ({}) }));
+      const result = await fetchSkillFileResultFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(result).to.deep.equal({ content: null, error: true });
+    });
+
+    it('fetchSkillFileResultFromAo reports empty (not error) when the file is absent', async () => {
+      trackFetch(() => ({ ok: true, json: async () => ({ files: [] }) }));
+      const result = await fetchSkillFileResultFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(result).to.deep.equal({ content: null, error: false });
     });
 
     it('uploadSkillFileToAo posts multipart/form-data to /api/v1/skills', async () => {

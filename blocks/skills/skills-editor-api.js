@@ -634,13 +634,20 @@ function base64ToText(base64) {
   return new TextDecoder().decode(bytes);
 }
 
-export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
+/**
+ * Like fetchSkillFileFromAo but distinguishes a service/transport failure from a
+ * genuinely empty/absent file, so the viewer can show an honest message:
+ *   { content: '...', error: false } -> loaded
+ *   { content: null,  error: false } -> request succeeded, no such file / empty
+ *   { content: null,  error: true  } -> request failed (HTTP error / network / unauth)
+ */
+export async function fetchSkillFileResultFromAo(skillName, path = 'SKILL.md', skillId = null) {
   const ctx = await aoAuthContext();
-  if (!ctx) return null;
+  if (!ctx) return { content: null, error: true };
   try {
     if (ctx.bridge) {
       const id = skillId || await resolveBridgeSkillId(skillName);
-      if (!id) return null;
+      if (!id) return { content: null, error: true };
       const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(id)}`, {
         headers: {
           authorization: `Bearer ${ctx.token}`,
@@ -648,12 +655,12 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId
           'x-user-id': ctx.userId || '',
         },
       });
-      if (!resp.ok) return null;
+      if (!resp.ok) return { content: null, error: true };
       const json = await resp.json();
       const files = Array.isArray(json?.files) ? json.files : [];
       const file = files.find((f) => String(f?.path || '').split('/').pop() === path);
-      if (!file || typeof file.content !== 'string') return null;
-      return base64ToText(file.content);
+      if (!file || typeof file.content !== 'string') return { content: null, error: false };
+      return { content: base64ToText(file.content), error: false };
     }
     const url = `${ctx.base}/api/v1/skills/${encodeURIComponent(skillName)}/files`
       + `?path=${encodeURIComponent(path)}&manifest_id=${AO_MANIFEST_ID}`;
@@ -663,12 +670,19 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId
         'x-tenant-id': ctx.orgId,
       },
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) return { content: null, error: true };
     const json = await resp.json();
-    return typeof json?.content === 'string' ? json.content : null;
+    return typeof json?.content === 'string'
+      ? { content: json.content, error: false }
+      : { content: null, error: false };
   } catch {
-    return null;
+    return { content: null, error: true };
   }
+}
+
+export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
+  const { content } = await fetchSkillFileResultFromAo(skillName, path, skillId);
+  return content;
 }
 
 /**

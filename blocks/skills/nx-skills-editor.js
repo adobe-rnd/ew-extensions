@@ -7,7 +7,7 @@ import './shared/popover/popover.js';
 import {
   fetchDaConfigSheets,
   loadSkillsFromAo,
-  fetchSkillFileFromAo,
+  fetchSkillFileResultFromAo,
   uploadSkillFileToAo,
   removePersonalSkillSource,
   setSkillsBackend,
@@ -1090,8 +1090,11 @@ class NxSkillsEditor extends LitElement {
   async _mountCMModal() {
     const id = this._viewingSkillId;
     let body = this._skills[id] || '';
+    let loadError = false;
     if (!body) {
-      body = await fetchSkillFileFromAo(id, 'SKILL.md', this._skillIds[id]) || '';
+      const result = await fetchSkillFileResultFromAo(id, 'SKILL.md', this._skillIds[id]);
+      body = result.content || '';
+      loadError = result.error;
       if (body) this._skills = { ...this._skills, [id]: body };
     }
 
@@ -1124,9 +1127,10 @@ class NxSkillsEditor extends LitElement {
     const meta = document.createElement('span');
     meta.className = 'skill-md-modal-meta';
     const hasBody = body.trim().length > 0;
-    meta.textContent = hasBody
-      ? `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`
-      : 'No content';
+    let metaText = 'No content';
+    if (hasBody) metaText = `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`;
+    else if (loadError) metaText = 'Content unavailable';
+    meta.textContent = metaText;
     const closeBtn = document.createElement('button');
     closeBtn.className = 'skill-md-modal-close-btn';
     closeBtn.textContent = 'Close';
@@ -1145,12 +1149,13 @@ class NxSkillsEditor extends LitElement {
     document.body.appendChild(this._cmPortal);
 
     if (!hasBody) {
-      // The skill has no body (frontmatter-only) or its content could not be
-      // loaded — show an explicit empty state instead of a blank viewer.
+      // Either the skill genuinely has no body (frontmatter-only) or its content
+      // could not be loaded (e.g. a bridge/service error) — show an honest,
+      // distinct message instead of a blank viewer.
       editorHost.classList.add('skill-md-empty');
-      editorHost.textContent = this._skillIds[id]
-        ? 'This skill has no content yet.'
-        : "Couldn't load this skill's content.";
+      editorHost.textContent = loadError
+        ? "Content unavailable \u2014 couldn't load this skill's content (service error). Please try again."
+        : 'This skill has no content yet.';
       return;
     }
 
