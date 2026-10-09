@@ -12,7 +12,8 @@ import {
 
 const { default: DA_SDK } = await import(`${runtime.nx}/utils/sdk.js`);
 const { setConfig } = await import(`${runtime.nx2}/scripts/nx.js`);
-await setConfig({ codeBase: runtime.live });
+const codeBase = new URL('.', import.meta.url).href.replace(/\/$/, '');
+await setConfig({ codeBase });
 await Promise.all([
   import(`${runtime.nx2}/blocks/shared/picker/picker.js`),
   import(`${runtime.nx2}/blocks/shared/menu/menu.js`),
@@ -31,8 +32,8 @@ const [formStyle, buttonsStyle, pageStyle, style] = await Promise.all([
   getSheet(new URL('./block-editor.css', import.meta.url)),
 ]);
 
-const ADD_ICON_SRC = `${runtime.live}/img/icons/s2-icon-addcircle-20-n.svg`;
-const DELETE_ICON_SRC = `${runtime.live}/img/icons/s2-icon-delete-20-n.svg`;
+const ADD_ICON_SRC = `${codeBase}/img/icons/s2-icon-addcircle-20-n.svg`;
+const DELETE_ICON_SRC = `${codeBase}/img/icons/s2-icon-delete-20-n.svg`;
 const SUPPORTED_IMAGE_FILES = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/gif'];
 const MAX_ITEM_TEXT_LENGTH = 30;
 
@@ -918,7 +919,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   }
 
   render() {
-    const switchIcon = html`<svg aria-hidden="true" viewBox="0 0 20 20"><use href="${runtime.live}/img/icons/s2-icon-switch-20-n.svg#icon"></use></svg>`;
+    const switchIcon = html`<svg aria-hidden="true" viewBox="0 0 20 20"><use href="${codeBase}/img/icons/s2-icon-switch-20-n.svg#icon"></use></svg>`;
     if (this._hostError) return html`<p class="ew-block-empty" role="status">${this._hostError}</p>`;
     if (this._available === false) return html`<p class="ew-block-empty" role="status">No editor document is available.</p>`;
     return html`

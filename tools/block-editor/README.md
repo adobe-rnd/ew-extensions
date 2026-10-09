@@ -25,7 +25,10 @@ http://localhost:3002/tools/block-editor/block-editor.html?nx=http%3A%2F%2Flocal
 `nx` is the base containing `utils/sdk.js`. Shared picker/menu components and
 styles use `nx2`, derived as the sibling `/nx2` base unless explicitly overridden.
 The extension initializes nx2 configuration before loading those components.
-`live` contains `deps/lit/dist/index.js` and `img/icons/`.
+`live` contains `deps/lit/dist/index.js`. Icons are copies of the DA SVG assets
+under this tool's `img/icons/`; both sidebar controls and shared picker/menu
+components use this same-origin asset base. External SVG `<use>` references
+cannot cross origins, including different localhost ports, even with CORS.
 Both accept HTTP(S) bases, including a path prefix, and reject credentials, query
 strings, and fragments. Localhost defaults are da-nx `:3001/nx`, da-live `:3001`.
 Specifying **either** override makes the other default local too; the extension

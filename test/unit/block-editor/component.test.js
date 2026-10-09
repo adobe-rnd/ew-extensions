@@ -80,6 +80,47 @@ describe('block editor SDK workflow adapter', () => {
     sdk.callback({ ...snapshot(), selectedBlock: null });
     expect(element._name).to.equal('Cards');
   });
+  it('uses extension-local icons for sidebar controls and shared component configuration', async () => {
+    const codeBase = `${window.location.origin}/tools/block-editor`;
+    expect(window.blockEditorTestNxConfig.codeBase).to.equal(codeBase);
+    const markup = (value) => {
+      if (Array.isArray(value)) return value.map(markup).join('');
+      if (value?.strings) return value.strings.map((text, index) => text + markup(value.values[index])).join('');
+      return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+    };
+    const rendered = markup([
+      element.render(),
+      element._renderListField({
+        key: 'items', label: 'Items',
+        items: [{ label: 'Item', value: 'Text', key: 'item', target: fieldTarget }],
+      }, false),
+    ]);
+    for (const name of ['switch', 'addcircle', 'delete']) {
+      expect(rendered).to.include(`${codeBase}/img/icons/s2-icon-${name}-20-n.svg#icon`);
+    }
+    for (const icon of ['switch-20', 'addcircle-20', 'delete-20', 'chevronleft-10']) {
+      const url = `${codeBase}/img/icons/s2-icon-${icon}-n.svg`;
+      const response = await fetch(url);
+      expect(response.ok, url).to.equal(true);
+      const doc = new DOMParser().parseFromString(await response.text(), 'image/svg+xml');
+      expect(doc.querySelector('parsererror'), url).to.equal(null);
+      expect(doc.querySelector('svg#icon path'), url).not.to.equal(null);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `${url}#icon`);
+      svg.append(use);
+      document.body.append(svg);
+      try {
+        for (let attempt = 0; attempt < 40 && !svg.getBBox().width; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        expect(svg.getBBox().width, url).to.be.greaterThan(0);
+        expect(svg.getBBox().height, url).to.be.greaterThan(0);
+      } finally {
+        svg.remove();
+      }
+    }
+  });
   it('renders an explicit unsupported-host state', async () => {
     element.remove();
     sdk.capabilities.editor = 0;
