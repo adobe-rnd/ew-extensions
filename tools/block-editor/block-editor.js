@@ -55,6 +55,7 @@ export class EwBlockProperties extends LitElement {
     _fieldDefinitions: { state: true },
     _blockOptions: { state: true },
     _fieldError: { state: true },
+    _libraryWarnings: { state: true },
     _hasAemAssets: { state: true },
     _uploadingField: { state: true },
     _assetTarget: { state: true },
@@ -546,19 +547,25 @@ export class EwBlockProperties extends LitElement {
     this._blockOptions = null;
     this._generateFieldsContext = null;
     this._fieldError = '';
+    this._libraryWarnings = [];
     this._hasAemAssets = false;
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     const variant = this._variant;
     if (!org || !site || !name || !this._actions) return;
     try {
-      const [multi, { ext, blocks }, options] = await Promise.all([
+      const [multi, { ext, blocks, warnings = [] }, options] = await Promise.all([
         isMultiBlock(org, site, name), loadBlockLibrary(org, site), loadBlockOptions(org, site),
       ]);
+      if (loadId !== this._fieldLoadId || !this.isConnected) return;
+      this._libraryWarnings = warnings;
       const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
       this._isMulti = multi;
       this._blockOptions = processBlockOptions(options);
+      if (!match && warnings.some((warning) => (
+        normalizeBlockName(warning.name) === normalizeBlockName(name)
+      ))) throw new Error(`The template for ${name} is unavailable. Retry loading the library.`);
       this._generateFieldsContext = {
         org,
         site,
@@ -678,7 +685,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   async _onRefreshLibrary() {
     const { org, site } = this._hashState ?? {};
     const block = this._itemTable;
-    if (!this._fieldsGenerationRequested || this._refreshingLibrary || !org || !site
+    if (this._refreshingLibrary || !org || !site
       || !block || block.name !== this._name
       || block.variant !== this._variant) return;
     this._refreshingLibrary = true;
@@ -926,7 +933,18 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
               aria-label=${`Open block library for ${this._name}`}
               aria-haspopup="dialog" ?disabled=${this._disabled}
               @click=${this._openLibrary}>${html`<span>${this._name}</span>`}${switchIcon}</button>
-          </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}` : html`<p class="ew-block-empty">Select a block</p>`}
+          </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}
+            ${this._libraryWarnings?.length ? html`
+              <div role="status">
+                <p>Some block templates could not be loaded. Other blocks remain available.</p>
+                <ul>${this._libraryWarnings.map((warning) => html`<li>${warning.name}: ${warning.message}</li>`)}</ul>
+              </div>` : nothing}
+            ${this._libraryWarnings?.length || this._fieldError ? html`
+              <button type="button" class="nx-form-btn-secondary"
+                ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
+                ${this._refreshingLibrary ? 'Loading library…' : 'Retry loading library'}
+              </button>` : nothing}
+          ` : html`<p class="ew-block-empty">Select a block</p>`}
         </div>
       </div>
       ${this._assetTarget ? html`<p class="ew-block-empty" role="status">Choosing an AEM asset in the editor…</p>` : nothing}`;

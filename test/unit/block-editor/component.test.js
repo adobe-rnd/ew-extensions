@@ -202,6 +202,100 @@ describe('block editor SDK workflow adapter', () => {
       documentId: 'doc', revision: 1, target: fieldTarget,
     });
   });
+  it('keeps valid templates usable, warns about failures, and retries without changing the document', async () => {
+    let recovered = false;
+    const actions = {
+      ...sdk.actions,
+      daFetch: async (url) => {
+        if (url.endsWith('.json')) {
+          return new Response(JSON.stringify({
+            data: ['cards', 'embed', 'broken'].map((name) => ({
+              name, path: `${window.location.origin}/fixture/${name}.html`,
+            })),
+            editor: { data: [{ block: 'cards', property: 'multi' }] },
+            options: { data: [{ blocks: 'cards', key: 'Color', values: 'Red=red' }] },
+          }));
+        }
+        if (!recovered && url.endsWith('/embed.html')) return new Response('', { status: 404 });
+        if (!recovered && url.endsWith('/broken.html')) throw new Error('Network unavailable');
+        const name = url.endsWith('/cards.html') ? 'cards' : 'embed';
+        return new Response(`<main><div><h2>${name} (Default)</h2>
+          <div class="${name}"><div><div><p>Original</p></div></div></div>
+          <h2>${name} (Left)</h2>
+          <div class="${name} left"><div><div><p>Original</p></div></div></div>
+        </div></main>`);
+      },
+      describeBlock: async ({ html }) => {
+        const header = new DOMParser().parseFromString(html, 'text/html').querySelector('td').textContent;
+        return { name: header.split(' (')[0], variant: header.includes('(left)') ? 'left' : '', rows: [] };
+      },
+    };
+    library.configureLibrary(actions);
+    library.resetBlockLibraryCache();
+    element._hashState = { org: 'org', site: 'site' };
+    element._actions = actions;
+    try {
+      const loaded = await library.loadBlockLibrary('org', 'site');
+      expect(loaded.blocks.map((entry) => entry.name)).to.deep.equal(['cards']);
+      expect(loaded.warnings.map((warning) => warning.name)).to.deep.equal(['embed', 'broken']);
+      expect(loaded.warnings[0].message).to.include('404');
+      expect(loaded.warnings[1].message).to.equal('Network unavailable');
+      await element._reloadLibrary();
+      expect(element._fieldError).to.equal('');
+      expect(element._variantOptions).to.deep.equal([{ value: 'left', label: 'Left' }]);
+      expect(element._multiTemplateRow.textContent).to.equal('Original');
+      const rendered = JSON.stringify(element.render());
+      expect(rendered).to.include('Other blocks remain available');
+      expect(rendered).to.include('404');
+      expect(rendered).to.include('Retry loading library');
+      expect(element._generateFieldsContext.blockPath).to.include('/cards.html');
+      expect(await library.loadBlockOptions('org', 'site')).to.have.length(1);
+
+      element._name = 'embed';
+      element._itemTable = { ...block, name: 'embed' };
+      await element._reloadLibrary();
+      expect(element._fieldError).to.include('template for embed is unavailable');
+      expect(element._generateFieldsContext).to.equal(null);
+      recovered = true;
+      await element._onRefreshLibrary();
+      expect(element._libraryWarnings).to.deep.equal([]);
+      expect(element._fieldError).to.equal('');
+      expect(element._generateFieldsContext.blockPath).to.include('/embed.html');
+      expect(calls.some(([action]) => action === 'applyChanges')).to.equal(false);
+    } finally {
+      library.configureLibrary(sdk.actions);
+      library.resetBlockLibraryCache();
+    }
+  });
+  it('reports complete template failure and retries failed library loads', async () => {
+    let fetches = 0;
+    library.configureLibrary({
+      daFetch: async (url) => {
+        fetches += 1;
+        return url.endsWith('.json')
+          ? new Response(JSON.stringify({ data: [{ name: 'Cards', path: `${window.location.origin}/fixture/cards.html` }] }))
+          : new Response('', { status: 404 });
+      },
+    });
+    library.resetBlockLibraryCache();
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let failure;
+        try {
+          await library.loadBlockLibrary('org', 'site');
+        } catch (error) {
+          failure = error;
+        }
+        expect(failure).to.be.instanceOf(Error);
+        expect(failure.message).to.include('No block templates could be loaded');
+        expect(failure.message).to.include('404');
+      }
+      expect(fetches).to.equal(4);
+    } finally {
+      library.configureLibrary(sdk.actions);
+      library.resetBlockLibraryCache();
+    }
+  });
   it('loads explicit local library indexes through SDK fetch and resets all sheet caches', async () => {
       let fetches = 0;
       const actions = {

@@ -120,10 +120,20 @@ async function load(org, site) {
   const blocks = indexes.flatMap(firstSheet).filter((entry) => entry.name && entry.path)
     .map((entry) => ({ ...entry, loadVariants: getBlockVariants(entry.path) }));
   // All variants are shared by fields, variant picker, and row templates.
-  await Promise.all(blocks.map((block) => block.loadVariants));
+  const results = await Promise.allSettled(blocks.map((block) => block.loadVariants));
+  const warnings = results.flatMap((result, index) => (result.status === 'rejected' ? [{
+    name: blocks[index].name,
+    path: blocks[index].path,
+    message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+  }] : []));
+  const availableBlocks = blocks.filter((block, index) => results[index].status === 'fulfilled');
+  if (blocks.length && !availableBlocks.length) {
+    throw new Error(`No block templates could be loaded. ${warnings.map((warning) => warning.message).join('; ')}`);
+  }
   return {
     ext: { sources },
-    blocks,
+    blocks: availableBlocks,
+    warnings,
     options: indexes.flatMap((index) => index.options?.data || []),
     editor: indexes.flatMap((index) => index.editor?.data || []),
   };

@@ -46,6 +46,13 @@ to bypass the host's library configuration lookup. The validated HTTP(S) index U
 through SDK `actions.daFetch`, as are the referenced template documents. Refresh
 refetches that index and those documents. The SDK still supplies org/site context.
 
+Failed template requests or parsing failures do not prevent other templates from
+loading. The sidebar lists unavailable templates in a warning and provides
+**Retry loading library** to refetch the index and templates. A selected block
+whose template failed cannot generate fields from that missing template. If every
+template fails, or the index itself cannot be loaded, the sidebar shows an error
+instead of treating the library as empty.
+
 Example `/tools/sdk-block-editor/library.json`:
 
 ```json
