@@ -583,10 +583,24 @@ export async function fetchMcpServersFromBridge() {
       if (!id) return null;
       return { id, description: s.url || s.value || scope, transport: 'built-in', scope };
     };
-    const agent = (json.agent || []).map((s) => toCard(s, 'agent'));
-    const org = (json.org || []).map((s) => toCard(s, 'org'));
-    const user = (json.user || []).map((s) => toCard(s, 'user'));
-    return [...agent, ...org, ...user].filter(Boolean);
+    // Dedupe by server URL across agent/org/user (agent wins) — the same server
+    // configured on the agent AND in an org/user override would otherwise show
+    // twice (e.g. AEM MCP listed twice).
+    const tagged = [
+      ...(json.agent || []).map((s) => [s, 'agent']),
+      ...(json.org || []).map((s) => [s, 'org']),
+      ...(json.user || []).map((s) => [s, 'user']),
+    ];
+    const seen = new Set();
+    const cards = [];
+    for (const [s, scope] of tagged) {
+      const key = String(s.url || s.value || s.name || s.key || '').toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const card = toCard(s, scope);
+      if (card) cards.push(card);
+    }
+    return cards;
   } catch {
     return null;
   }
