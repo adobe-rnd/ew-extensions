@@ -437,7 +437,11 @@ describe('AO / bridge backend switch', () => {
     });
 
     it('uploadSkillFileToAo posts multipart/form-data to /api/v1/skills', async () => {
-      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const file = new File(
+        ['---\nname: my-skill\ndescription: a test skill\nversion: 1\n---\n# Body'],
+        'SKILL.md',
+        { type: 'text/markdown' },
+      );
       const calls = trackFetch(() => ({ ok: true, json: async () => ({ id: 'skill-uuid-2' }) }));
       const result = await uploadSkillFileToAo(file);
       expect(result.ok).to.be.true;
@@ -445,7 +449,8 @@ describe('AO / bridge backend switch', () => {
       expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills');
       expect(calls[0].opts.method).to.equal('POST');
       expect(calls[0].opts.body).to.be.instanceOf(FormData);
-      expect(calls[0].opts.body.get('file').name).to.equal('my-skill.md');
+      expect(calls[0].opts.body.get('file').name).to.equal('SKILL.md');
+      // display_title comes from the frontmatter name, not the filename ("SKILL")
       expect(calls[0].opts.body.get('display_title')).to.equal('my-skill');
       expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
     });
