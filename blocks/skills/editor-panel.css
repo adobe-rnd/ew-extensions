@@ -559,6 +559,15 @@
   overflow: hidden;
 }
 
+.skill-md-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: var(--spectrum-gray-600, #6e6e6e);
+  font-style: italic;
+  text-align: center;
+}
+
 .skill-md-cm-host {
   flex: 1;
   min-height: 0;

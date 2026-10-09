@@ -8,6 +8,7 @@
 
 import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
+import { parseFrontmatter } from './utils/skill-frontmatter.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -580,12 +581,35 @@ export async function fetchMcpServersFromBridge() {
     const toCard = (s, scope) => {
       const id = s.name || s.key || s.url;
       if (!id) return null;
-      return { id, description: s.url || s.value || scope, transport: 'built-in', scope };
+      return {
+        id,
+        description: s.url || s.value || scope,
+        transport: 'built-in',
+        scope,
+        // Carry the agent group's resolved tools through (overrides.ts
+        // getAgentMcpServersWithTools) instead of dropping them, so the MCP
+        // card can list them on the CMA/bridge path.
+        tools: Array.isArray(s.tools) ? s.tools : [],
+      };
     };
-    const agent = (json.agent || []).map((s) => toCard(s, 'agent'));
-    const org = (json.org || []).map((s) => toCard(s, 'org'));
-    const user = (json.user || []).map((s) => toCard(s, 'user'));
-    return [...agent, ...org, ...user].filter(Boolean);
+    // Dedupe by server URL across agent/org/user (agent wins) — the same server
+    // configured on the agent AND in an org/user override would otherwise show
+    // twice (e.g. AEM MCP listed twice).
+    const tagged = [
+      ...(json.agent || []).map((s) => [s, 'agent']),
+      ...(json.org || []).map((s) => [s, 'org']),
+      ...(json.user || []).map((s) => [s, 'user']),
+    ];
+    const seen = new Set();
+    const cards = [];
+    for (const [s, scope] of tagged) {
+      const key = String(s.url || s.value || s.name || s.key || '').toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const card = toCard(s, scope);
+      if (card) cards.push(card);
+    }
+    return cards;
   } catch {
     return null;
   }
@@ -610,13 +634,20 @@ function base64ToText(base64) {
   return new TextDecoder().decode(bytes);
 }
 
-export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
+/**
+ * Like fetchSkillFileFromAo but distinguishes a service/transport failure from a
+ * genuinely empty/absent file, so the viewer can show an honest message:
+ *   { content: '...', error: false } -> loaded
+ *   { content: null,  error: false } -> request succeeded, no such file / empty
+ *   { content: null,  error: true  } -> request failed (HTTP error / network / unauth)
+ */
+export async function fetchSkillFileResultFromAo(skillName, path = 'SKILL.md', skillId = null) {
   const ctx = await aoAuthContext();
-  if (!ctx) return null;
+  if (!ctx) return { content: null, error: true };
   try {
     if (ctx.bridge) {
       const id = skillId || await resolveBridgeSkillId(skillName);
-      if (!id) return null;
+      if (!id) return { content: null, error: true };
       const resp = await fetch(`${ctx.base}/api/v1/skills/${encodeURIComponent(id)}`, {
         headers: {
           authorization: `Bearer ${ctx.token}`,
@@ -624,12 +655,12 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId
           'x-user-id': ctx.userId || '',
         },
       });
-      if (!resp.ok) return null;
+      if (!resp.ok) return { content: null, error: true };
       const json = await resp.json();
       const files = Array.isArray(json?.files) ? json.files : [];
       const file = files.find((f) => String(f?.path || '').split('/').pop() === path);
-      if (!file || typeof file.content !== 'string') return null;
-      return base64ToText(file.content);
+      if (!file || typeof file.content !== 'string') return { content: null, error: false };
+      return { content: base64ToText(file.content), error: false };
     }
     const url = `${ctx.base}/api/v1/skills/${encodeURIComponent(skillName)}/files`
       + `?path=${encodeURIComponent(path)}&manifest_id=${AO_MANIFEST_ID}`;
@@ -639,12 +670,19 @@ export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId
         'x-tenant-id': ctx.orgId,
       },
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) return { content: null, error: true };
     const json = await resp.json();
-    return typeof json?.content === 'string' ? json.content : null;
+    return typeof json?.content === 'string'
+      ? { content: json.content, error: false }
+      : { content: null, error: false };
   } catch {
-    return null;
+    return { content: null, error: true };
   }
+}
+
+export async function fetchSkillFileFromAo(skillName, path = 'SKILL.md', skillId = null) {
+  const { content } = await fetchSkillFileResultFromAo(skillName, path, skillId);
+  return content;
 }
 
 /**
@@ -665,7 +703,14 @@ export async function uploadSkillFileToAo(file, scope = 'owner') {
     try {
       const form = new FormData();
       form.append('file', file, file.name);
-      form.append('display_title', file.name.replace(/\.md$/i, ''));
+      // Display title comes from the skill's frontmatter `name`, NOT the
+      // filename — a bare SKILL.md would otherwise surface as "SKILL" on the
+      // card. Fall back to omitting it (bridge then uses the parsed name).
+      let displayTitle = '';
+      try {
+        displayTitle = String(parseFrontmatter(await file.text())?.fields?.name || '').trim();
+      } catch { /* no readable frontmatter — let the bridge derive the name */ }
+      if (displayTitle) form.append('display_title', displayTitle);
       if (scope === 'org') form.append('scope', 'org');
       const resp = await fetch(`${ctx.base}/api/v1/skills`, {
         method: 'POST',
