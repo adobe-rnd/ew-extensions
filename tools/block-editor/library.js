@@ -127,6 +127,8 @@ async function load(org, site) {
     message: result.reason instanceof Error ? result.reason.message : String(result.reason),
   }] : []));
   const availableBlocks = blocks.filter((block, index) => results[index].status === 'fulfilled');
+  // eslint-disable-next-line no-console -- Recoverable template failures are console-only.
+  if (warnings.length) console.warn('Some block templates could not be loaded:', warnings);
   if (blocks.length && !availableBlocks.length) {
     throw new Error(`No block templates could be loaded. ${warnings.map((warning) => warning.message).join('; ')}`);
   }

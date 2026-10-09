@@ -202,8 +202,11 @@ describe('block editor SDK workflow adapter', () => {
       documentId: 'doc', revision: 1, target: fieldTarget,
     });
   });
-  it('keeps valid templates usable, warns about failures, and retries without changing the document', async () => {
+  it('keeps valid templates usable, logs failures only to console, and retries without changing the document', async () => {
     let recovered = false;
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args);
     const actions = {
       ...sdk.actions,
       daFetch: async (url) => {
@@ -240,14 +243,17 @@ describe('block editor SDK workflow adapter', () => {
       expect(loaded.warnings.map((warning) => warning.name)).to.deep.equal(['embed', 'broken']);
       expect(loaded.warnings[0].message).to.include('404');
       expect(loaded.warnings[1].message).to.equal('Network unavailable');
+      expect(warnings).to.have.length(1);
+      expect(warnings[0][1]).to.deep.equal(loaded.warnings);
       await element._reloadLibrary();
       expect(element._fieldError).to.equal('');
       expect(element._variantOptions).to.deep.equal([{ value: 'left', label: 'Left' }]);
       expect(element._multiTemplateRow.textContent).to.equal('Original');
       const rendered = JSON.stringify(element.render());
-      expect(rendered).to.include('Other blocks remain available');
-      expect(rendered).to.include('404');
-      expect(rendered).to.include('Retry loading library');
+      expect(rendered).not.to.include('Some block templates could not be loaded');
+      expect(rendered).not.to.include('404');
+      expect(rendered).not.to.include('Retry loading library');
+      expect(warnings).to.have.length(1);
       expect(element._generateFieldsContext.blockPath).to.include('/cards.html');
       expect(await library.loadBlockOptions('org', 'site')).to.have.length(1);
 
@@ -256,13 +262,16 @@ describe('block editor SDK workflow adapter', () => {
       await element._reloadLibrary();
       expect(element._fieldError).to.include('template for embed is unavailable');
       expect(element._generateFieldsContext).to.equal(null);
+      expect(JSON.stringify(element.render())).to.include('Retry loading library');
       recovered = true;
       await element._onRefreshLibrary();
-      expect(element._libraryWarnings).to.deep.equal([]);
+      expect((await library.loadBlockLibrary('org', 'site')).warnings).to.deep.equal([]);
+      expect(warnings).to.have.length(1);
       expect(element._fieldError).to.equal('');
       expect(element._generateFieldsContext.blockPath).to.include('/embed.html');
       expect(calls.some(([action]) => action === 'applyChanges')).to.equal(false);
     } finally {
+      console.warn = originalWarn;
       library.configureLibrary(sdk.actions);
       library.resetBlockLibraryCache();
     }

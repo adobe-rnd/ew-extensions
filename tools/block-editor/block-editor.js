@@ -55,7 +55,6 @@ export class EwBlockProperties extends LitElement {
     _fieldDefinitions: { state: true },
     _blockOptions: { state: true },
     _fieldError: { state: true },
-    _libraryWarnings: { state: true },
     _hasAemAssets: { state: true },
     _uploadingField: { state: true },
     _assetTarget: { state: true },
@@ -547,7 +546,6 @@ export class EwBlockProperties extends LitElement {
     this._blockOptions = null;
     this._generateFieldsContext = null;
     this._fieldError = '';
-    this._libraryWarnings = [];
     this._hasAemAssets = false;
     const { org, site } = this._hashState ?? {};
     const name = this._name;
@@ -558,7 +556,6 @@ export class EwBlockProperties extends LitElement {
         isMultiBlock(org, site, name), loadBlockLibrary(org, site), loadBlockOptions(org, site),
       ]);
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
-      this._libraryWarnings = warnings;
       const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
       this._isMulti = multi;
@@ -934,12 +931,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
               aria-haspopup="dialog" ?disabled=${this._disabled}
               @click=${this._openLibrary}>${html`<span>${this._name}</span>`}${switchIcon}</button>
           </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}
-            ${this._libraryWarnings?.length ? html`
-              <div role="status">
-                <p>Some block templates could not be loaded. Other blocks remain available.</p>
-                <ul>${this._libraryWarnings.map((warning) => html`<li>${warning.name}: ${warning.message}</li>`)}</ul>
-              </div>` : nothing}
-            ${this._libraryWarnings?.length || this._fieldError ? html`
+            ${this._fieldError ? html`
               <button type="button" class="nx-form-btn-secondary"
                 ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
                 ${this._refreshingLibrary ? 'Loading library…' : 'Retry loading library'}

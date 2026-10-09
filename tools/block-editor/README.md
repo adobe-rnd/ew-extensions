@@ -47,7 +47,8 @@ through SDK `actions.daFetch`, as are the referenced template documents. Refresh
 refetches that index and those documents. The SDK still supplies org/site context.
 
 Failed template requests or parsing failures do not prevent other templates from
-loading. The sidebar lists unavailable templates in a warning and provides
+loading. Unavailable templates are logged to the console without a sidebar
+warning. For failures affecting the selected block, the sidebar provides
 **Retry loading library** to refetch the index and templates. A selected block
 whose template failed cannot generate fields from that missing template. If every
 template fails, or the index itself cannot be loaded, the sidebar shows an error
