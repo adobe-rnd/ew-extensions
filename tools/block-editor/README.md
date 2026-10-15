@@ -1,53 +1,81 @@
 # Block editor extension (local prototype)
 
-Prototype port of the `blocktab` canvas block-properties sidebar. It retains the Lit
-markup and styles, library field metadata, link/text/dropdown/list controls,
-multi-row previews and editing, keyboard and drag reordering, variant picker,
-image upload/AEM Assets, scoped block replacement, and field generation/repair
-and refresh. The host owns schema parsing, selection, media handling, and every
-document mutation; the extension contains no editor implementation.
+Experimental block-properties sidebar using `sdk.actions.subscribeLiveDocument`.
+Live HTML and the zero-based selected block index populate the sidebar on canvas
+changes and caret movement. Edits send the **whole selected block** through
+`sdk.actions.sendHTML(html, { replace: true })`, updating the live editor through
+its normal collaboration and autosave. No document source API reads or writes
+are needed. Parsing and editing are local to the extension, not the SDK.
 
 ## Run locally
 
-With all three repositories as siblings, start the integration server from da-live:
-
-```sh
-node tools/sdk-block-editor/server.mjs
-```
-
-Open `http://localhost:3001/tools/sdk-block-editor/` for a fixture-backed editor.
-For a configured canvas document, use this extension tool URL:
+Serve this repository with your local HTTP development server (port 3001 in this
+example). Configure a sidebar extension in the canvas's library configuration
+using this tool URL; the canvas host and SDK must support live subscriptions and
+HTML replacement:
 
 ```text
-http://localhost:3002/tools/block-editor/block-editor.html?nx=http%3A%2F%2Flocalhost%3A3001%2Fnx&live=http%3A%2F%2Flocalhost%3A3001&ref=local
+http://localhost:3001/tools/block-editor/block-editor.html
 ```
 
-`nx` is the base containing `utils/sdk.js`. Shared picker/menu components and
+`nx` is the base containing `utils/sdk.js`. The shared picker component and
 styles use `nx2`, derived as the sibling `/nx2` base unless explicitly overridden.
 The extension initializes nx2 configuration before loading those components.
-`live` contains `deps/lit/dist/index.js`. Icons are copies of the DA SVG assets
-under this tool's `img/icons/`; both sidebar controls and shared picker/menu
+Lit is mapped statically in the HTML to `https://da.live/deps/lit/dist/index.js`
+before any module loads, avoiding Firefox's dynamic import-map timing issue.
+`live` still controls local library source resolution; it no longer changes Lit.
+Icons are copies of the DA SVG assets
+under this tool's `img/icons/`; both sidebar controls and the shared picker
 components use this same-origin asset base. External SVG `<use>` references
 cannot cross origins, including different localhost ports, even with CORS.
 Both accept HTTP(S) bases, including a path prefix, and reject credentials, query
-strings, and fragments. Localhost defaults are da-nx `:3001/nx`, da-live `:3001`.
-Specifying **either** override makes the other default local too; the extension
-never silently imports production SDK/assets when a local override is present.
-Without overrides, non-local deployments use `https://da.live/nx` and
-`https://da.live`. `ref=local` resolves relative library index sources against
-`live`; otherwise they resolve to the corresponding site AEM live origin.
+strings, and fragments. Defaults use the published SDK (`https://da.live/nx`),
+UI assets (`https://da.live/nx2`) and `ref=main`, including on localhost.
+Until the new SDK is deployed, set `nx` to the local da-nx `blockext` asset base;
+`nx2` defaults to its sibling path unless explicitly overridden. Each override
+applies only to its own base. `ref=local` resolves relative library index
+sources against `live`; otherwise they resolve to the site AEM live origin.
 
 Open through the canvas extension panel, not a standalone tab: the SDK requires
-the parent handshake and `capabilities.editor = 1`. Older hosts show an explicit
-unsupported-host message. The extension resolves org/site from SDK
-`context.org/site` or `project.org/site` (`repo` is also accepted as the site).
+the parent handshake. The extension requires `sdk.capabilities.liveDocument === 1`
+and `sdk.capabilities.sendHTMLReplace === 1`, plus
+`sdk.actions.subscribeLiveDocument(callback)`, which returns an unsubscribe
+function. The callback supplies `{ html, selection: { blockIndex }, editable }`: `html` is
+EDS-shaped live `<main>` HTML and `blockIndex` is a zero-based document-wide block
+ordinal, or `null` outside a block. Both live document changes and caret-only
+selection changes update the sidebar. Image URLs retain the original editor
+sources, rather than site-preview-relative URLs, so unchanged images can be sent
+back without URL reconstruction. Unsupported hosts show a clear error rather
+than falling back to `getSelection` text matching. Removal unsubscribes and ignores
+late replacement replies. The extension resolves org/site/path from SDK `context` or
+`project` (`repo` is also accepted as the site). `daFetch`, `showPanel('blocks')`,
+and optionally `setPrompt` are used for API and panel operations. On localhost
+and loopback IPs, the default API is `https://stage-admin.da.live`; other hosts
+default to `https://admin.da.live`. An explicit `admin` query parameter
+(URL-encoded in the tool URL) overrides either default with a validated HTTP(S)
+API base.
+The extension's API environment must match the canvas; it cannot infer the
+parent's environment from the SDK.
+
+Place the caret inside a block to see live values; selected text is unnecessary.
+The sidebar follows the live block automatically, and clears its selection outside
+a block. Changes apply on blur/change through live HTML replacement, including
+unsaved canvas content. The acknowledgement supplies the updated live document,
+so consecutive edits do not require a reload. Read-only editors disable field
+editing. Conflict recovery offers **Discard drafts**, returning to the latest live
+values without making an API request or reloading the canvas.
+
+The block name button opens the host's existing **Blocks** library modal through
+`sdk.actions.showPanel('blocks')`. Choosing a template is handled by the canvas
+host; it replaces the selected live block. This action remains separate from
+sidebar field edits.
 
 ### Fixture library without IMS
 
 Append `&library=http%3A%2F%2Flocalhost%3A3001%2Ftools%2Fsdk-block-editor%2Flibrary.json`
 to bypass the host's library configuration lookup. The validated HTTP(S) index URL is fetched
 through SDK `actions.daFetch`, as are the referenced template documents. Refresh
-refetches that index and those documents. The SDK still supplies org/site context.
+refetches that index and those documents. The SDK still supplies org/site/path context.
 
 Failed template requests or parsing failures do not prevent other templates from
 loading. Unavailable templates are logged to the console without a sidebar
@@ -91,25 +119,48 @@ Only the first content row supplies the shared schema because the index's
 `editor` sheet explicitly configures this block as multi-item. Without that
 configuration, metadata must describe both content rows.
 
-## SDK boundary
+## Expected functionality and limitations
 
-Requires `subscribeDocument`, `describeBlock`, `applyChanges`, `selectTarget`,
-`uploadImage`, `pickAsset`, `openBlockLibrary`, `getEditorConfig`, `daFetch`, and
-`setPrompt`. Mutations echo the original opaque field/block targets plus
-`documentId` and exact `revision`. Document HTML remains the host's instrumented
-preview, with its existing normalization/metadata limitations.
+| Feature | Status |
+| --- | --- |
+| Block selection | Live zero-based block index, updated on caret movement; selection outside blocks clears the sidebar |
+| Plain text, headings, line breaks, simple links | Editable; rich/nested markup is read-only rather than flattened |
+| Library field labels and simple key/value dropdowns | Supported; library config is fetched directly from DA |
+| Lists | Plain items and simple links editable; add/delete/reorder supported |
+| Multi-item blocks | Library-configured row previews, expand, append/delete and keyboard/drag reorder supported |
+| Block variants | Supported by replacing the live block with updated classes |
+| Generate/repair fields and library refresh | Uses existing `setPrompt` when available; refresh refetches library sources |
+| Images | Replace single-image fields by PNG, JPEG, GIF or SVG upload (up to 20 MB); AEM Assets unavailable |
+| Replace block with library template | Block name button opens the existing host Blocks modal via SDK `showPanel('blocks')`; host replaces in live canvas |
+| Click item to navigate canvas | Unavailable; expands sidebar item only |
+| Canvas live updates, undo/redo, collaborative edits | Sidebar writes use the live editor's collaboration, history and autosave |
 
-For key/value dropdown parity, text descriptors should include the source-faithful
-`optionKey` (only the strict simple two-cell key/value case). List item descriptors
-must retain their own targets and read-only/multiline/link flags. Image `value`
-uses `previewSrc` for a preview-resolved URL while retaining the source `value`.
+Each edit applies semantic changes to the selected live block and sends its full
+HTML with `replace: true` and an `expected` guard containing the captured live
+document HTML and selected zero-based block ordinal. The host verifies both before
+dispatching a single editor transaction. Changed content or a moved selection is
+rejected instead of overwriting a collaborator's edit or replacing the wrong block.
+Identical blocks are safe to target by ordinal within this guarded live snapshot.
+Success confirms the editor update, not completion of durable persistence.
 
-Typing drafts survive same-document snapshots. Focus captures the original
-revision before typing; conflicts are shown explicitly, never silently rebased.
-The **Discard drafts and reload current values** button is the explicit recovery
-path. Unchanged blur values do not create an edit. Changing documents discards
-the previous document's drafts. Asset and library cancellation does not trigger
-another mutation or claim success.
+Content outside the selected block remains untouched. The host parses the block
+into its existing schema and preserves local selection where possible without
+stealing focus from the sidebar. Drafts retain their original live revision and
+block signature; conflicts keep the draft and are shown explicitly, never silently
+rebased. Unchanged blur values do not write. Failed and timed-out replacements are
+not automatically retried.
+
+**Replace image** uploads the chosen file through authenticated SDK `daFetch` to
+the DA source API, in the document's `.<document-name>/` media folder. Each upload
+uses a unique filename so replacing one image cannot overwrite a shared asset.
+Only the asset is uploaded through the API: its returned `contentUrl` is applied
+to the image and picture sources through the same guarded live block replacement
+as text edits. Alt text and enclosing links are preserved; old responsive URLs and
+dimensions are cleared. The image target and revision are captured before opening
+the file picker and rechecked after upload. Changed selections, collaborative edits
+and read-only state prevent replacement; a file already uploaded may remain unused.
+Mixed text/image fields and fields containing multiple images remain read-only.
+This upload path uses the DA source store, not the Helix 6 media-bus API or AEM Assets.
 
 ## Validate
 
@@ -121,7 +172,8 @@ npx stylelint 'tools/block-editor/*.css'
 ```
 
 Tests exercise pure schema/label matching, multi-row configuration, options,
-read-only/list rules, local URL validation, SDK lifecycle, semantic operations,
-draft conflict behavior, and prompt generation. SDK adapter unit tests use the
-repository's existing Lit stub; real iframe rendering and integrated host dialog
-behavior additionally require the SDK-enabled local host.
+read-only/list rules, local URL validation, subscription lifecycle, SDK panel
+navigation, guarded live replacement, semantic operations, draft conflict behavior,
+and prompt generation.
+SDK adapter unit tests use the repository's existing Lit stub; real iframe
+rendering and integrated host dialog behavior require the live-capable host.

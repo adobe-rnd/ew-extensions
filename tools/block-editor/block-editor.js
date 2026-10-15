@@ -1,5 +1,6 @@
 import { LitElement, html, nothing } from 'da-lit';
 import { runtime } from './runtime.js';
+import { createDocumentActions, IMAGE_FILE_TYPES } from './document.js';
 import {
   normalizeBlockName, buildBlockFieldDefinitions, resolveBlockFields,
   processBlockOptions, normalizeForSlashMenu, sameTarget, EditorSession,
@@ -14,10 +15,7 @@ const { default: DA_SDK } = await import(`${runtime.nx}/utils/sdk.js`);
 const { setConfig } = await import(`${runtime.nx2}/scripts/nx.js`);
 const codeBase = new URL('.', import.meta.url).href.replace(/\/$/, '');
 await setConfig({ codeBase });
-await Promise.all([
-  import(`${runtime.nx2}/blocks/shared/picker/picker.js`),
-  import(`${runtime.nx2}/blocks/shared/menu/menu.js`),
-]);
+await import(`${runtime.nx2}/blocks/shared/picker/picker.js`);
 async function getSheet(url) {
   const response = await fetch(String(url));
   if (!response.ok) throw new Error(`Unable to load styles: ${url}`);
@@ -34,7 +32,6 @@ const [formStyle, buttonsStyle, pageStyle, style] = await Promise.all([
 
 const ADD_ICON_SRC = `${codeBase}/img/icons/s2-icon-addcircle-20-n.svg`;
 const DELETE_ICON_SRC = `${codeBase}/img/icons/s2-icon-delete-20-n.svg`;
-const SUPPORTED_IMAGE_FILES = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/gif'];
 const MAX_ITEM_TEXT_LENGTH = 30;
 
 export class EwBlockProperties extends LitElement {
@@ -56,14 +53,11 @@ export class EwBlockProperties extends LitElement {
     _fieldDefinitions: { state: true },
     _blockOptions: { state: true },
     _fieldError: { state: true },
-    _hasAemAssets: { state: true },
-    _uploadingField: { state: true },
-    _assetTarget: { state: true },
     _generateFieldsContext: { state: true },
     _fieldsGenerationRequested: { state: true },
     _refreshingLibrary: { state: true },
     _hostError: { state: true },
-    _available: { state: true },
+    _documentBusy: { state: true },
   };
 
   connectedCallback() {
@@ -79,6 +73,8 @@ export class EwBlockProperties extends LitElement {
     this._generateFieldsContext = null;
     this._fieldsGenerationRequested = false;
     this._session = new EditorSession();
+    this._documentBusy = false;
+    this._imageUploadTarget = null;
     this._disabled = true;
     this._hostError = 'Connecting to editor…';
     this._connect();
@@ -90,32 +86,93 @@ export class EwBlockProperties extends LitElement {
     try {
       const sdk = await DA_SDK;
       if (!this.isConnected || this._connection !== connection) return;
-      if (!sdk.capabilities?.editor) {
-        this._hostError = 'This host does not support the editor extension API. Use the local SDK-enabled canvas host.';
+      if (sdk.capabilities?.liveDocument !== 1
+        || sdk.capabilities?.sendHTMLReplace !== 1
+        || typeof sdk.actions?.subscribeLiveDocument !== 'function'
+        || typeof sdk.actions?.sendHTML !== 'function'
+        || typeof sdk.actions?.daFetch !== 'function') {
+        this._hostError = 'This host does not support live document subscriptions, HTML replacement and authenticated fetching. Update the canvas host and SDK.';
         return;
       }
-      this._actions = sdk.actions;
-      configureLibrary(sdk.actions);
+      this._actions = createDocumentActions(sdk, {
+        admin: runtime.admin,
+        onSnapshot: (snapshot) => {
+          if (!this.isConnected || this._connection !== connection) return;
+          this._session.receive(snapshot);
+          this._refresh();
+        },
+      });
+      configureLibrary(this._actions);
       const context = sdk.context || {};
       const project = sdk.project || {};
       const org = context.org || project.org;
       const site = context.site || context.repo || project.site || project.repo;
       this._hashState = { org, site };
       this._hostError = '';
-      const unsubscribe = await sdk.actions.subscribeDocument((snapshot) => {
+      const unsubscribe = sdk.actions.subscribeLiveDocument((value) => {
         if (!this.isConnected || this._connection !== connection) return;
-        this._session.receive(snapshot);
-        this._refresh();
+        try {
+          this._actions.receiveLiveDocument(value);
+          this._hostError = '';
+        } catch (error) {
+          this._hostError = `Live document unavailable: ${error.message}`;
+        }
       });
       if (!this.isConnected || this._connection !== connection) unsubscribe();
-      else this._unsubscribeDoc = unsubscribe;
+      else this._unsubscribeLiveDocument = unsubscribe;
     } catch (error) {
       if (this.isConnected && this._connection === connection) this._hostError = `Unable to connect: ${error.message}`;
     }
   }
 
+  _discardDrafts() {
+    this._session.drafts.clear();
+    this._fieldError = '';
+    this._refresh();
+  }
+
   _commitLink(field, href) {
     return this._commitValue(field, 'href', href, 'setLink');
+  }
+
+  _chooseImage(field, event) {
+    const request = this._captureField(field);
+    if (!request) return;
+    this._imageUploadTarget = request;
+    const input = event.currentTarget.closest('.ew-block-field').querySelector('input[type="file"]');
+    input.value = '';
+    input.click();
+  }
+
+  async _uploadImage(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    const request = this._imageUploadTarget;
+    this._imageUploadTarget = null;
+    if (!file) return;
+    if (!request || !this._isFieldTargetCurrent(request)) {
+      this._fieldError = 'The selected image changed. Choose the intended image again.';
+      return;
+    }
+    if (this._documentBusy) {
+      this._fieldError = 'Wait for the current document operation.';
+      return;
+    }
+    const connection = this._connection;
+    this._documentBusy = true;
+    try {
+      const uploaded = await this._run('uploadImage', request, file);
+      if (!uploaded || !this.isConnected || this._connection !== connection) return;
+      if (!this._isFieldTargetCurrent(request)) {
+        this._fieldError = 'The document or selected image changed during upload. Choose the intended image again.';
+        return;
+      }
+      await this._run('applyChanges', {
+        ...request, changes: [{ type: 'setImage', target: request.target, src: uploaded.src }],
+      });
+    } finally {
+      if (this._connection === connection) this._documentBusy = false;
+    }
   }
 
   _changeList(field, from, to) {
@@ -253,18 +310,20 @@ export class EwBlockProperties extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._connection = (this._connection ?? 0) + 1;
-    this._unsubscribeDoc?.();
+    this._unsubscribeLiveDocument?.();
+    this._unsubscribeLiveDocument = null;
+    this._actions?.dispose?.();
+    this._actions = null;
+    this._imageUploadTarget = null;
     this._variantLoadId = (this._variantLoadId ?? 0) + 1;
     this._multiLoadId = (this._multiLoadId ?? 0) + 1;
     this._fieldLoadId = (this._fieldLoadId ?? 0) + 1;
-    this._assetTarget = null;
     this._clearDragState();
     this._clearListDragState();
   }
 
   _refresh() {
     const { snapshot } = this._session;
-    this._available = snapshot.available !== false;
     const block = snapshot?.blocks.find((entry) => sameTarget(entry.target, snapshot.selectedBlock));
     const prevName = this._name;
     const prevVariant = this._variant;
@@ -337,16 +396,13 @@ export class EwBlockProperties extends LitElement {
   }
 
   _getItemView({ editable = true } = {}) {
-    if (!this._isMulti || !this._itemTable || (editable && this._disabled)) return null;
+    if (!this._isMulti || !this._itemTable || (editable && (this._disabled || this._documentBusy))) return null;
     return this._session.capture(this._itemTable.target);
   }
 
   _scrollToItem(index) {
     if (this._dragSource || !this._getItemView({ editable: false })) return;
-    this._run('selectTarget', {
-      ...this._session.capture(this._itemTable.target),
-      target: { ...this._itemTable.target, rowIndex: index },
-    });
+    this._expandedItems = new Set([...this._expandedItems, index]);
   }
 
   _onItemClick(e, index) {
@@ -547,7 +603,6 @@ export class EwBlockProperties extends LitElement {
     this._blockOptions = null;
     this._generateFieldsContext = null;
     this._fieldError = '';
-    this._hasAemAssets = false;
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     const variant = this._variant;
@@ -577,10 +632,6 @@ export class EwBlockProperties extends LitElement {
       const definitions = buildBlockFieldDefinitions(match, { multi });
       this._fieldDefinitions = definitions;
       if (definitions.length) this._generateFieldsContext = null;
-      const config = definitions.some((field) => field.type === 'image')
-        ? await this._actions.getEditorConfig() : null;
-      if (loadId !== this._fieldLoadId || !this.isConnected) return;
-      this._hasAemAssets = !!config?.hasAemAssets;
     } catch (error) {
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
       this._fieldError = `Unable to load block fields: ${error.message}`;
@@ -721,7 +772,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   }
 
   _captureField(field) {
-    if (this._disabled || !this._itemTable || !field.target || field.readOnly
+    if (this._disabled || this._documentBusy || !this._itemTable || !field.target || field.readOnly
       || !this._fields.flatMap((current) => [current, ...(current.items ?? [])])
         .some((current) => current.key === field.key && !current.readOnly)) return null;
     return this._session.capture(field.target);
@@ -730,6 +781,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   _isFieldTargetCurrent(target) {
     const { snapshot } = this._session;
     return this.isConnected && !this._disabled && snapshot?.documentId === target.documentId
+      && snapshot.liveBlockSignature === target.liveBlockSignature
       && snapshot.revision === target.revision && sameTarget(target.target, this._itemTable?.target);
   }
 
@@ -741,20 +793,21 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     if (!this._captureField(field)) return;
     const edit = this._session.edit(field, property, value);
     if (!edit) return;
-    const { documentId, revision, target } = edit.request;
-    const result = await this._apply({ documentId, revision, target }, {
-      type, target, [property === 'href' ? 'href' : 'value']: value,
+    const result = await this._apply(edit.request, {
+      type, target: edit.request.target, [property === 'href' ? 'href' : 'value']: value,
     });
     if (result && this._session.drafts.get(edit.key)?.value === value) this._session.drafts.delete(edit.key);
     this.requestUpdate();
   }
 
   async _run(action, ...args) {
+    const connection = this._connection;
     this._fieldError = '';
     try {
+      if (!this._actions?.[action]) throw new Error('This feature is unavailable with the standard SDK.');
       return await this._actions[action](...args);
     } catch (error) {
-      if (this.isConnected) {
+      if (this.isConnected && this._connection === connection) {
         this._fieldError = ['STALE_REVISION', 'WRONG_DOCUMENT'].includes(error.code)
           ? `${error.code}: The document changed. Your draft was kept; review it against the current document before trying again.`
           : `${error.code || action}: ${error.message}`;
@@ -763,56 +816,19 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     }
   }
 
-  _apply(request, change) {
-    const { documentId, revision } = request;
-    return this._run('applyChanges', { documentId, revision, changes: [change] });
-  }
-
-  _triggerFieldUpload(field) {
-    const target = this._captureField(field);
-    if (!target) return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = SUPPORTED_IMAGE_FILES.join(',');
-    input.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (file) this._uploadFieldImage(field, target, file);
-    }, { once: true });
-    input.click();
-  }
-
-  async _uploadFieldImage(field, target, file) {
-    if (!this._isFieldTargetCurrent(target)) {
-      this._fieldError = 'STALE_REVISION: The document changed while choosing the image. Select the image again.';
-      return;
+  async _apply(request, change) {
+    if (this._documentBusy) {
+      this._fieldError = 'Wait for the current document operation.';
+      return null;
     }
-    this._fieldError = '';
-    if (!SUPPORTED_IMAGE_FILES.includes(file.type)) {
-      this._fieldError = 'Select an SVG, PNG, JPEG, or GIF image.';
-      return;
-    }
-    this._uploadingField = field.key;
+    this._documentBusy = true;
     try {
-      await this._run('uploadImage', { ...target, file });
-    } finally {
-      if (this._uploadingField === field.key) this._uploadingField = null;
-    }
-  }
-
-  async _openFieldAssets(field) {
-    const target = this._captureField(field);
-    if (!target) return;
-    this._assetTarget = target;
-    this._fieldError = '';
-    try {
-      await this._run('pickAsset', target);
-    } finally {
-      if (this._assetTarget === target) this._assetTarget = null;
-    }
+      return await this._run('applyChanges', { ...request, changes: [change] });
+    } finally { this._documentBusy = false; }
   }
 
   _renderField(field) {
-    const disabled = this._disabled || !field.target || field.readOnly || !!this._uploadingField || !!this._assetTarget;
+    const disabled = this._disabled || this._documentBusy || !field.target || field.readOnly;
     let control = nothing;
     if (field.type === 'text') control = this._renderTextField(field, disabled);
     if (field.type === 'list') control = this._renderListField(field, disabled);
@@ -825,25 +841,15 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
               ${field.value ? html`<img class="ew-block-field-image"
                 src=${field.previewSrc || field.value}
                 alt=${field.alt || ''}>` : nothing}
-              ${this._hasAemAssets ? html`
-                <nx-menu placement="below-start"
-                  .items=${[{ id: 'upload', label: 'Upload' }, { id: 'aem-assets', label: 'AEM Assets' }]}
-                  ?inert=${disabled}
-                  @select=${(e) => {
-                    if (e.detail.id === 'upload') this._triggerFieldUpload(field);
-                    else if (e.detail.id === 'aem-assets') this._openFieldAssets(field);
-                  }}>
-                  <button slot="trigger" type="button" class="nx-form-btn-secondary" ?disabled=${disabled}>
-                    Replace image
-                  </button>
-                </nx-menu>
-              ` : html`
-                <button type="button" class="nx-form-btn-secondary" ?disabled=${disabled}
-                  @click=${() => this._triggerFieldUpload(field)}>Replace image</button>
-              `}
+              <input type="file" hidden accept=${Object.values(IMAGE_FILE_TYPES).join(',')}
+                ?disabled=${disabled} @change=${this._uploadImage}>
+              <button type="button" class="nx-form-btn-secondary"
+                aria-label=${`Replace ${field.label || 'image'}`}
+                ?disabled=${disabled} @click=${(event) => this._chooseImage(field, event)}>
+                Replace image
+              </button>
             ` : control}
             ${field.error ? html`<span class="nx-input-error-msg" role="alert">${field.error}</span>` : nothing}
-            ${this._uploadingField === field.key ? html`<span role="status">Uploading image...</span>` : nothing}
           </div>`;
   }
 
@@ -867,10 +873,8 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
         <p class="nx-input-error-msg" role="alert">${this._fieldError}</p>
         ${this._session.drafts.size ? html`<button type="button" class="nx-form-btn-secondary"
           @click=${() => {
-            this._session.drafts.clear();
-            this._fieldError = '';
-            this.requestUpdate();
-          }}>Discard drafts and reload current values</button>` : nothing}
+            this._discardDrafts();
+          }}>Discard drafts</button>` : nothing}
       ` : nothing}`;
   }
 
@@ -888,7 +892,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   }
 
   _onVariantChange(e) {
-    if (this._disabled || !this._itemTable) return;
+    if (this._disabled || this._documentBusy || !this._itemTable) return;
     const request = this._session.capture(this._itemTable.target);
     this._apply(request, { type: 'setBlockVariant', target: request.target, value: e.detail.value });
   }
@@ -899,7 +903,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
       .find((v) => normalizeBlockName(v.value) === normalizeBlockName(this._variant))?.value ?? '';
     return html`
       <div class="nx-form-field ew-pm-control ew-block-variant"
-        ?inert=${this._disabled} aria-disabled=${this._disabled}>
+        ?inert=${this._disabled || this._documentBusy} aria-disabled=${this._disabled || this._documentBusy}>
         <span>Variant</span>
         <nx-picker size="m" variant="field" placement="below-start"
           aria-label="Block variant"
@@ -913,34 +917,38 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
       </div>`;
   }
 
-  async _openLibrary() {
-    if (this._disabled || !this._itemTable) return;
-    await this._run('openBlockLibrary', this._session.capture(this._itemTable.target));
+  _openBlockLibrary() {
+    if (!this._itemTable || this._documentBusy) return null;
+    return this._run('showPanel', 'blocks');
   }
 
   render() {
     const switchIcon = html`<svg aria-hidden="true" viewBox="0 0 20 20"><use href="${codeBase}/img/icons/s2-icon-switch-20-n.svg#icon"></use></svg>`;
     if (this._hostError) return html`<p class="ew-block-empty" role="status">${this._hostError}</p>`;
-    if (this._available === false) return html`<p class="ew-block-empty" role="status">No editor document is available.</p>`;
+    if (!this._session?.snapshot) return html`<p class="ew-block-empty" role="status">Waiting for a live canvas document…</p>`;
     return html`
-      <div class="ew-page-metadata">
-        <div class="ew-pm-fields">
+      ${!this._hasBlock && this._fieldError ? html`<p class="nx-input-error-msg" role="alert">${this._fieldError}</p>` : nothing}
+      <div class="ew-page-metadata" aria-busy=${!!this._documentBusy}>
+        <div class="ew-pm-fields" ?inert=${this._documentBusy}>
           ${this._hasBlock ? html`<div class="nx-form-field ew-pm-control">
             <span>Block</span>
             <button type="button" class="ew-block-name"
               aria-label=${`Open block library for ${this._name}`}
-              aria-haspopup="dialog" ?disabled=${this._disabled}
-              @click=${this._openLibrary}>${html`<span>${this._name}</span>`}${switchIcon}</button>
+              aria-haspopup="dialog"
+              ?disabled=${this._documentBusy}
+              title="Open block library to replace the selected canvas block"
+              @click=${this._openBlockLibrary}
+              >${html`<span>${this._name}</span>`}${switchIcon}</button>
           </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}
             ${this._fieldError ? html`
               <button type="button" class="nx-form-btn-secondary"
                 ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
                 ${this._refreshingLibrary ? 'Loading library…' : 'Retry loading library'}
               </button>` : nothing}
-          ` : html`<p class="ew-block-empty">Select a block</p>`}
+          ` : html`<p class="ew-block-empty">Place the caret inside a canvas block to inspect its live values.</p>`}
         </div>
       </div>
-      ${this._assetTarget ? html`<p class="ew-block-empty" role="status">Choosing an AEM asset in the editor…</p>` : nothing}`;
+      `;
   }
 }
 

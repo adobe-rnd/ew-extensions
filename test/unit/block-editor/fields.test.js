@@ -112,6 +112,14 @@ describe('revision-bound draft lifecycle', () => {
     expect(session.value(text('Remote'), 'value')).to.equal('Typing');
     expect(session.edit(field, 'value', 'Typing').request.revision).to.equal(1);
   });
+  it('keeps the original live block identity when the canvas changes during a draft', () => {
+    const field = text();
+    session.receive({ documentId: 'doc', revision: 1, liveBlockSignature: 'before' });
+    session.draft(field, 'value', 'Typing');
+    session.receive({ documentId: 'doc', revision: 1, liveBlockSignature: 'after' });
+    expect(session.edit(field, 'value', 'Typing').request.liveBlockSignature).to.equal('before');
+    expect(session.capture(target).liveBlockSignature).to.equal('after');
+  });
   it('preserves typed link drafts independently from text drafts', () => {
     const field = text('Label', { href: '/old' });
     session.draft(field, 'href', '/new');

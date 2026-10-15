@@ -57,15 +57,34 @@ describe('block editor library parsing', () => {
 });
 
 describe('block editor local asset configuration', () => {
-  it('defaults to local da-nx and da-live on localhost', () => {
+  it('defaults to published SDK and UI assets even on localhost', () => {
     expect(getRuntime('', 'localhost')).to.deep.equal({
-      nx: 'http://localhost:3001/nx', nx2: 'http://localhost:3001/nx2',
-      live: 'http://localhost:3001', ref: 'local',
+      nx: 'https://da.live/nx', nx2: 'https://da.live/nx2',
+      live: 'https://da.live', ref: 'main',
+      admin: 'https://stage-admin.da.live',
     });
   });
-  it('never falls back to production when either local override is supplied', () => {
-    expect(getRuntime('?nx=http://localhost:4001', 'extension.example').live).to.equal('http://localhost:3001');
-    expect(getRuntime('?live=http://localhost:4000', 'extension.example').nx).to.equal('http://localhost:3001/nx');
+  it('uses staging for loopback hosts and production elsewhere', () => {
+    ['localhost', '127.0.0.1', '[::1]', '::1'].forEach((hostname) => {
+      expect(getRuntime('', hostname).admin).to.equal('https://stage-admin.da.live');
+    });
+    expect(getRuntime('', 'extension.example').admin).to.equal('https://admin.da.live');
+  });
+  it('lets an explicit admin override take precedence over the hostname default', () => {
+    expect(getRuntime('?admin=https://admin.da.live', 'localhost').admin).to.equal('https://admin.da.live');
+    expect(getRuntime('?admin=https://stage-admin.da.live', 'extension.example').admin)
+      .to.equal('https://stage-admin.da.live');
+    expect(() => getRuntime('?admin=javascript:alert(1)', 'localhost')).to.throw();
+  });
+  it('applies explicit asset overrides without implicitly changing other defaults', () => {
+    const nx = getRuntime('?nx=http://localhost:4001');
+    expect(nx.nx).to.equal('http://localhost:4001');
+    expect(nx.nx2).to.equal('http://localhost:4001/nx2');
+    expect(nx.live).to.equal('https://da.live');
+    const live = getRuntime('?live=http://localhost:4000');
+    expect(live.live).to.equal('http://localhost:4000');
+    expect(live.nx).to.equal('https://da.live/nx');
+    expect(live.ref).to.equal('main');
   });
   it('rejects unsafe schemes, credentials, and ambiguous asset URLs', () => {
     ['javascript:alert(1)', 'https://user:pass@example.com', 'https://example.com/?a=b', 'https://example.com/#hash']

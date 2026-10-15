@@ -128,8 +128,13 @@ export class EditorSession {
 
   capture(target) {
     if (!this.snapshot || !target) return null;
-    const { documentId, revision } = this.snapshot;
-    return { documentId, revision, target };
+    const { documentId, revision, liveBlockSignature } = this.snapshot;
+    return {
+      documentId,
+      revision,
+      target,
+      ...(liveBlockSignature === undefined ? {} : { liveBlockSignature }),
+    };
   }
 
   draft(field, property, value) {

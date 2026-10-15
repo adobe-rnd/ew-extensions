@@ -14,13 +14,16 @@
         line-height: 1.5;
       }
     </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "da-lit": "https://da.live/deps/lit/dist/index.js"
+        }
+      }
+    </script>
     <script type="module">
       try {
         const { runtime } = await import('./runtime.js');
-        const map = document.createElement('script');
-        map.type = 'importmap';
-        map.textContent = JSON.stringify({ imports: { 'da-lit': `${runtime.live}/deps/lit/dist/index.js` } });
-        document.head.append(map);
         const css = document.createElement('link');
         css.rel = 'stylesheet';
         css.href = `${runtime.nx2}/styles/styles.css`;
