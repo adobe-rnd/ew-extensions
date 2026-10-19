@@ -81,7 +81,13 @@ describe('setupEgovBridge', () => {
     const iframe = stubIframe();
     bridge = setupEgovBridge({
       iframe,
-      getProps: () => ({ path: '/brands/1', env: 'QA', imsToken: 't', imsOrg: 'org@AdobeOrg' }),
+      getProps: () => ({
+        path: '/brands/1',
+        env: 'QA',
+        apiUrl: 'https://experience-context-stage.adobe.io/api',
+        imsToken: 't',
+        imsOrg: 'org@AdobeOrg',
+      }),
     });
     respondTo(connectRequests(iframe)[0], { internal: '1.0.0', consumer: '1.1' });
     await settle();
@@ -91,11 +97,23 @@ describe('setupEgovBridge', () => {
     const [{ simple, callbacks }] = props.params;
     expect(simple.path).to.equal('/brands/1');
     expect(simple.env).to.equal('QA');
+    expect(simple.embedSource).to.equal('da');
+    expect(simple.apiUrl).to.equal('https://experience-context-stage.adobe.io/api');
     expect(simple.imsToken).to.equal('t');
     expect(simple.imsOrg).to.equal('org@AdobeOrg');
     // Only what `reactCallback` actually handles: advertising a callback the
     // host ignores can make the MFE suppress its own in-frame UI for it.
     expect(callbacks).to.deep.equal(['onNavigate']);
+  });
+
+  it('omits apiUrl when no override is provided', async () => {
+    const iframe = stubIframe();
+    bridge = setupEgovBridge({ iframe, getProps: () => ({}) });
+    respondTo(connectRequests(iframe)[0], { internal: '1.0.0', consumer: '1.1' });
+    await settle();
+
+    const [{ simple }] = propsRequests(iframe)[0].params;
+    expect(simple).to.not.have.property('apiUrl');
   });
 
   it('reports the MFE\'s navigation through onNavigate', async () => {
