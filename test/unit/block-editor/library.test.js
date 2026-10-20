@@ -3,7 +3,9 @@ import {
   parseVariants, getBlockTableHtml, getBlockFieldTemplate, getBlockVariantOptions,
   getBlockVariantChoices,
 } from '../../../tools/block-editor/library.js';
-import { getConfig, validateBase } from '../../../tools/block-editor/config.js';
+import {
+  getConfig, validateBase, isLocalHost, setAdminEnvironment, ADMIN_URLS,
+} from '../../../tools/block-editor/config.js';
 
 describe('block editor library parsing', () => {
   it('preserves original templates, metadata labels, and variant headers', () => {
@@ -57,6 +59,39 @@ describe('block editor library parsing', () => {
 });
 
 describe('block editor configuration', () => {
+  it('limits local controls to loopback hostnames', () => {
+    ['localhost', '127.0.0.1', '[::1]', '::1'].forEach((hostname) => {
+      expect(isLocalHost(hostname)).to.equal(true);
+    });
+    ['da.live', 'localhost.example.com', 'example.com', 'stage--site.aem.live'].forEach((hostname) => {
+      expect(isLocalHost(hostname)).to.equal(false);
+    });
+  });
+  it('reloads the local extension with the chosen admin while preserving its URL state', () => {
+    for (const admin of Object.values(ADMIN_URLS)) {
+      let assigned;
+      const location = {
+        href: 'http://localhost:3001/tools/block-editor/block-editor.html?ref=local&library=http%3A%2F%2Flocalhost%3A3001%2Flibrary.json&admin=https%3A%2F%2Fcustom.example#selection',
+        assign: (href) => { assigned = new URL(href); },
+      };
+      setAdminEnvironment(admin, location);
+      expect(assigned.origin).to.equal('http://localhost:3001');
+      expect(assigned.pathname).to.equal('/tools/block-editor/block-editor.html');
+      expect(assigned.searchParams.get('ref')).to.equal('local');
+      expect(assigned.searchParams.get('library')).to.equal('http://localhost:3001/library.json');
+      expect(assigned.hash).to.equal('#selection');
+      expect(getConfig(assigned.search, assigned.hostname).admin).to.equal(admin);
+    }
+  });
+  it('rejects environment switches outside localhost and unsupported admin URLs', () => {
+    const location = {
+      href: 'https://extension.example/tools/block-editor/block-editor.html',
+      assign: () => { throw new Error('Unexpected navigation'); },
+    };
+    expect(() => setAdminEnvironment(ADMIN_URLS.prod, location)).to.throw('requires a local host');
+    location.href = 'http://localhost:3001/tools/block-editor/block-editor.html';
+    expect(() => setAdminEnvironment('https://custom.example', location)).to.throw('stage or prod');
+  });
   it('defaults to the main library and staging admin on localhost', () => {
     expect(getConfig('', 'localhost')).to.deep.equal({
       live: 'https://da.live', ref: 'main',

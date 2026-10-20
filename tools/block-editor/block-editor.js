@@ -1,8 +1,11 @@
 import { LitElement, html, nothing } from 'da-lit';
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { setConfig } from 'https://da.live/nx2/scripts/nx.js';
-import { config } from './config.js';
+import {
+  config, ADMIN_URLS, isLocalHost, setAdminEnvironment,
+} from './config.js';
 import { createDocumentActions, IMAGE_FILE_TYPES } from './document.js';
+import { createImagePreviews } from './image-preview.js';
 import {
   normalizeBlockName, buildBlockFieldDefinitions, resolveBlockFields,
   processBlockOptions, normalizeForSlashMenu, sameTarget, EditorSession,
@@ -58,6 +61,7 @@ export class EwBlockProperties extends LitElement {
     _refreshingLibrary: { state: true },
     _hostError: { state: true },
     _documentBusy: { state: true },
+    _imagePreviewError: { state: true },
   };
 
   connectedCallback() {
@@ -74,6 +78,7 @@ export class EwBlockProperties extends LitElement {
     this._fieldsGenerationRequested = false;
     this._session = new EditorSession();
     this._documentBusy = false;
+    this._imagePreviewError = '';
     this._imageUploadTarget = null;
     this._disabled = true;
     this._hostError = 'Connecting to editor…';
@@ -103,6 +108,14 @@ export class EwBlockProperties extends LitElement {
         },
       });
       configureLibrary(this._actions);
+      this._imagePreviews = createImagePreviews(sdk, {
+        admin: config.admin,
+        onChange: (error) => {
+          if (!this.isConnected || this._connection !== connection) return;
+          if (error) this._imagePreviewError = error;
+          this.requestUpdate();
+        },
+      });
       const context = sdk.context || {};
       const project = sdk.project || {};
       const org = context.org || project.org;
@@ -314,6 +327,7 @@ export class EwBlockProperties extends LitElement {
     this._unsubscribeLiveDocument = null;
     this._actions?.dispose?.();
     this._actions = null;
+    this._imagePreviews = null;
     this._imageUploadTarget = null;
     this._variantLoadId = (this._variantLoadId ?? 0) + 1;
     this._multiLoadId = (this._multiLoadId ?? 0) + 1;
@@ -507,7 +521,7 @@ export class EwBlockProperties extends LitElement {
     };
     const addImage = (field) => {
       if (field.value) {
-        content.push(html`<img class="ew-block-item-thumbnail" src=${field.previewSrc || field.value}
+        content.push(html`<img class="ew-block-item-thumbnail" src=${this._imagePreviews?.(field.previewSrc || field.value) ?? nothing}
           alt=${field.alt || ''} loading="lazy" decoding="async" draggable="false">`);
       }
     };
@@ -839,7 +853,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
             ${field.type === 'image' ? html`
               <label>${field.label}</label>
               ${field.value ? html`<img class="ew-block-field-image"
-                src=${field.previewSrc || field.value}
+                src=${this._imagePreviews?.(field.previewSrc || field.value) ?? nothing}
                 alt=${field.alt || ''}>` : nothing}
               <input type="file" hidden accept=${Object.values(IMAGE_FILE_TYPES).join(',')}
                 ?disabled=${disabled} @change=${this._uploadImage}>
@@ -922,7 +936,30 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     return this._run('showPanel', 'blocks');
   }
 
+  _renderAdminSelector(hostname = window.location.hostname) {
+    if (!isLocalHost(hostname)) return nothing;
+    return html`
+      <label class="nx-form-field ew-admin-selector">
+        <span>Admin environment</span>
+        <select class="nx-input"
+          ?disabled=${this._documentBusy}
+          @change=${(event) => setAdminEnvironment(event.target.value)}>
+          ${!Object.values(ADMIN_URLS).includes(config.admin)
+    ? html`<option value=${config.admin} selected disabled>Custom (${config.admin})</option>` : nothing}
+          <option value=${ADMIN_URLS.stage} ?selected=${config.admin === ADMIN_URLS.stage}>Stage</option>
+          <option value=${ADMIN_URLS.prod} ?selected=${config.admin === ADMIN_URLS.prod}>Prod</option>
+        </select>
+      </label>
+    `;
+  }
+
   render() {
+    return html`${this._renderAdminSelector()}
+      ${this._imagePreviewError ? html`<p class="nx-input-error-msg" role="alert">${this._imagePreviewError}</p>` : nothing}
+      ${this._renderEditor()}`;
+  }
+
+  _renderEditor() {
     const switchIcon = html`<svg aria-hidden="true" viewBox="0 0 20 20"><use href="${codeBase}/img/icons/s2-icon-switch-20-n.svg#icon"></use></svg>`;
     if (this._hostError) return html`<p class="ew-block-empty" role="status">${this._hostError}</p>`;
     if (!this._session?.snapshot) return html`<p class="ew-block-empty" role="status">Waiting for a live canvas document…</p>`;

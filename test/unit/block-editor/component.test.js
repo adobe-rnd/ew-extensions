@@ -1,4 +1,5 @@
 import { expect } from '@esm-bundle/chai';
+import { nothing } from 'da-lit';
 
 describe('block editor sidebar workflow', () => {
   let Component;
@@ -20,6 +21,7 @@ describe('block editor sidebar workflow', () => {
   before(async () => {
     calls = [];
     sdk = {
+      token: 'test-token',
       context: { org: 'org', site: 'site', path: '/page' },
       capabilities: { liveDocument: 1, sendHTMLReplace: 1 },
       listeners: new Set(),
@@ -83,6 +85,86 @@ describe('block editor sidebar workflow', () => {
     }];
   });
   afterEach(() => element.remove());
+
+  it('authenticates content image previews once for fields and repeating-item thumbnails', async () => {
+    const fetch = sdk.actions.daFetch;
+    const requests = [];
+    sdk.actions.daFetch = async (url, options) => {
+      requests.push({ url, options });
+      return new Response('');
+    };
+    const image = {
+      type: 'image', label: 'Image', value: 'https://content.da.live/org/site/.page/photo.jpg',
+      target: fieldTarget,
+    };
+    element._itemTable = { rows: [{ cells: [{ fields: [image] }] }] };
+    try {
+      expect(JSON.stringify(element._renderField(image))).not.to.include(image.value);
+      expect(JSON.stringify(element._renderItemPreview(0))).not.to.include(image.value);
+      await flush();
+      expect(requests).to.have.length(1);
+      expect(requests[0].url).to.equal('https://main--site--org.stage-preview.da.live/gimme_cookie');
+      expect(requests[0].options.credentials).to.equal('include');
+      const preview = 'https://main--site--org.stage-preview.da.live/.page/photo.jpg';
+      expect(JSON.stringify(element._renderField(image))).to.include(preview);
+      expect(JSON.stringify(element._renderItemPreview(0))).to.include(preview);
+      expect(image.value).to.equal('https://content.da.live/org/site/.page/photo.jpg');
+    } finally {
+      sdk.actions.daFetch = fetch;
+    }
+  });
+
+  it('reports preview cookie failures without blocking the editor or falling back', async () => {
+    const fetch = sdk.actions.daFetch;
+    sdk.actions.daFetch = async () => new Response('', { status: 403 });
+    const image = { type: 'image', label: 'Image', value: 'https://content.da.live/org/site/image.jpg' };
+    try {
+      element._renderField(image);
+      await flush();
+      expect(element._imagePreviewError).to.include('Preview cookie request failed: 403');
+      expect(JSON.stringify(element.render())).to.include(element._imagePreviewError);
+      expect(JSON.stringify(element._renderField(image))).not.to.include(image.value);
+      expect(element._hostError).to.equal('');
+    } finally {
+      sdk.actions.daFetch = fetch;
+    }
+  });
+
+  it('ignores late preview authentication callbacks after disconnect', async () => {
+    const fetch = sdk.actions.daFetch;
+    let finish;
+    sdk.actions.daFetch = () => new Promise((resolve) => { finish = resolve; });
+    try {
+      element._renderField({ type: 'image', value: 'https://content.da.live/org/site/image.jpg' });
+      await flush();
+      element.remove();
+      finish(new Response('', { status: 403 }));
+      await flush();
+      expect(element._imagePreviewError).to.equal('');
+      expect(element._imagePreviews).to.equal(null);
+    } finally {
+      sdk.actions.daFetch = fetch;
+    }
+  });
+
+  it('shows the local admin selector above connection and document states', () => {
+    for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
+      const selector = JSON.stringify(element._renderAdminSelector(hostname));
+      expect(selector).to.include('Admin environment');
+      expect(selector).to.include('https://stage-admin.da.live');
+      expect(selector).to.include('https://admin.da.live');
+      expect(selector).to.include('Stage');
+      expect(selector).to.include('Prod');
+    }
+    expect(element._renderAdminSelector('extension.example')).to.equal(nothing);
+    element._hostError = 'Connecting to editor…';
+    let rendered = JSON.stringify(element.render());
+    expect(rendered.indexOf('Admin environment')).to.be.lessThan(rendered.indexOf('Connecting to editor'));
+    element._hostError = '';
+    element._session.snapshot = null;
+    rendered = JSON.stringify(element.render());
+    expect(rendered.indexOf('Admin environment')).to.be.lessThan(rendered.indexOf('Waiting for a live canvas'));
+  });
 
   it('receives live caret updates and unsubscribes on removal', async () => {
     element._actions = element._sourceActions;

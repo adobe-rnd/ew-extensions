@@ -6,6 +6,10 @@
   padding-bottom: var(--s2-spacing-300, 24px);
 }
 
+.ew-admin-selector {
+  margin: var(--s2-spacing-200, 16px);
+}
+
 .ew-block-empty-state {
   display: flex;
   flex-direction: column;
