@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import { createDocumentActions, describeBlock, MAX_IMAGE_BYTES } from '../../../tools/block-editor/document.js';
+import { EditorSession } from '../../../tools/block-editor/fields.js';
 
 describe('block editor live HTML replacement adapter', () => {
   const original = `<main><div><p>Keep outside content</p><div class="cards compact">
@@ -111,6 +112,46 @@ describe('block editor live HTML replacement adapter', () => {
     expect(live).to.include('<a href="/new">New label</a>');
     await expectError(apply({ type: 'setLink', target: target({ fieldIndex: 1 }), href: 'javascript:alert(1)' }), 'INVALID_CHANGE');
     expect(calls).to.have.length(2);
+  });
+  it('rebases a second focused field onto an acknowledged HTML replacement', async () => {
+    select();
+    const session = new EditorSession();
+    session.receive(latest());
+    const [title, link] = latest().blocks[0].rows[0].cells[0].fields;
+    session.draft(title, 'value', 'New title');
+    const first = session.edit(title, 'value', 'New title');
+    const saving = apply({ type: 'setText', target: title.target, value: 'New title' }, first.request);
+    session.draft(link, 'value', 'New label');
+    await saving;
+    session.receive(latest());
+    expect(session.acknowledge(first, 'value', 'New title')).to.equal(true);
+    const second = session.edit(link, 'value', 'New label');
+    expect(second.conflict).to.equal(false);
+    expect(second.request.revision).to.equal(latest().html);
+    expect(second.request.liveBlockSignature).to.equal(latest().liveBlockSignature);
+    await apply({ type: 'setText', target: link.target, value: 'New label' }, second.request);
+    expect(live).to.include('<h3>New title</h3>').and.include('<a href="/old">New label</a>');
+    expect(calls).to.have.length(2);
+  });
+  it('rebases newer typing in the same field without losing acknowledged intermediate text', async () => {
+    select();
+    const session = new EditorSession();
+    session.receive(latest());
+    const title = latest().blocks[0].rows[0].cells[0].fields[0];
+    session.draft(title, 'value', 'First edit');
+    const first = session.edit(title, 'value', 'First edit');
+    const saving = apply({ type: 'setText', target: title.target, value: 'First edit' }, first.request);
+    session.draft(title, 'value', 'Second edit');
+    await saving;
+    session.receive(latest());
+    expect(session.acknowledge(first, 'value', 'First edit')).to.equal(true);
+    const second = session.edit(title, 'value', 'Second edit');
+    expect(second.conflict).to.equal(false);
+    await apply({ type: 'setText', target: title.target, value: 'Second edit' }, second.request);
+    session.receive(latest());
+    expect(session.acknowledge(second, 'value', 'Second edit')).to.equal(true);
+    expect(live).to.include('<h3>Second edit</h3>');
+    expect(session.drafts.size).to.equal(0);
   });
   it('sends the updated table when the host snapshot contains a raw block table', async () => {
     live = '<main><div><table><tr><td>hero</td></tr><tr><td><h1>Original</h1></td></tr></table></div></main>';

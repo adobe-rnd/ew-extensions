@@ -46,6 +46,7 @@ function describeField(element, target) {
     const images = element.matches('img') ? [element] : [...element.querySelectorAll('img')];
     return {
       type: 'image',
+      tagName: element.tagName,
       value: image.getAttribute('src') || '',
       alt: image.alt,
       target,
@@ -55,6 +56,7 @@ function describeField(element, target) {
   if (element.matches('ul, ol')) {
     return {
       type: 'list',
+      tagName: element.tagName,
       target,
       readOnly: [...element.children].some((item) => !item.matches('li')),
       items: [...element.children].map((item, itemIndex) => describeField(item, { ...target, itemIndex })),
@@ -68,6 +70,7 @@ function describeField(element, target) {
     || (link && text(container.textContent) !== text(link.textContent));
   return {
     type: 'text',
+    tagName: element.tagName,
     value: [...editable.childNodes].map((node) => (node.nodeName === 'BR' ? '\n' : node.textContent)).join(''),
     ...(link ? { href: link.getAttribute('href') || '' } : {}),
     multiline: !!editable.querySelector('br'),
@@ -87,6 +90,8 @@ export function describeBlock({ html, index = 0 }) {
   const target = targetFor(index);
   const rows = [...table.rows].slice(1).map((row, rowIndex) => ({
     cells: [...row.cells].map((cell, cellIndex) => ({
+      colspan: cell.colSpan,
+      rowspan: cell.rowSpan,
       fields: contentFields(cell).map((element, fieldIndex) => (
         describeField(element, { ...target, rowIndex, cellIndex, fieldIndex })
       )),

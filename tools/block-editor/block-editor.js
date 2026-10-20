@@ -36,6 +36,7 @@ const [formStyle, buttonsStyle, pageStyle, style] = await Promise.all([
 const ADD_ICON_SRC = `${codeBase}/img/icons/s2-icon-addcircle-20-n.svg`;
 const DELETE_ICON_SRC = `${codeBase}/img/icons/s2-icon-delete-20-n.svg`;
 const MAX_ITEM_TEXT_LENGTH = 30;
+const OUT_OF_SYNC_ERRORS = new Set(['STALE_REVISION', 'STALE_LIVE', 'WRONG_DOCUMENT', 'WRONG_SELECTION']);
 
 export class EwBlockProperties extends LitElement {
   static properties = {
@@ -56,6 +57,8 @@ export class EwBlockProperties extends LitElement {
     _fieldDefinitions: { state: true },
     _blockOptions: { state: true },
     _fieldError: { state: true },
+    _fieldErrorCode: { state: true },
+    _libraryError: { state: true },
     _generateFieldsContext: { state: true },
     _fieldsGenerationRequested: { state: true },
     _refreshingLibrary: { state: true },
@@ -73,11 +76,17 @@ export class EwBlockProperties extends LitElement {
     this._multiTemplateRow = null;
     this._fieldDefinitions = [];
     this._blockOptions = null;
+    this._fieldError = '';
+    this._fieldErrorCode = '';
+    this._fieldErrorGeneration = 0;
+    this._libraryError = '';
     this._expandedItems = new Set();
     this._generateFieldsContext = null;
     this._fieldsGenerationRequested = false;
     this._session = new EditorSession();
     this._documentBusy = false;
+    this._documentOperation = null;
+    this._fieldWriteQueue = Promise.resolve();
     this._imagePreviewError = '';
     this._imageUploadTarget = null;
     this._disabled = true;
@@ -140,6 +149,7 @@ export class EwBlockProperties extends LitElement {
   _discardDrafts() {
     this._session.drafts.clear();
     this._fieldError = '';
+    this._fieldErrorCode = '';
     this._refresh();
   }
 
@@ -163,27 +173,37 @@ export class EwBlockProperties extends LitElement {
     this._imageUploadTarget = null;
     if (!file) return;
     if (!request || !this._isFieldTargetCurrent(request)) {
+      this._fieldErrorCode = 'WRONG_SELECTION';
       this._fieldError = 'The selected image changed. Choose the intended image again.';
       return;
     }
     if (this._documentBusy) {
+      this._fieldErrorCode = 'BUSY';
       this._fieldError = 'Wait for the current document operation.';
       return;
     }
     const connection = this._connection;
     this._documentBusy = true;
-    try {
+    const operation = (async () => {
       const uploaded = await this._run('uploadImage', request, file);
       if (!uploaded || !this.isConnected || this._connection !== connection) return;
       if (!this._isFieldTargetCurrent(request)) {
+        this._fieldErrorCode = 'WRONG_SELECTION';
         this._fieldError = 'The document or selected image changed during upload. Choose the intended image again.';
         return;
       }
       await this._run('applyChanges', {
         ...request, changes: [{ type: 'setImage', target: request.target, src: uploaded.src }],
       });
+    })();
+    this._documentOperation = operation;
+    try {
+      await operation;
     } finally {
-      if (this._connection === connection) this._documentBusy = false;
+      if (this._connection === connection && this._documentOperation === operation) {
+        this._documentBusy = false;
+        this._documentOperation = null;
+      }
     }
   }
 
@@ -329,6 +349,8 @@ export class EwBlockProperties extends LitElement {
     this._imagePreviews?.dispose();
     this._imagePreviews = null;
     this._imageUploadTarget = null;
+    this._documentOperation = null;
+    this._fieldWriteQueue = Promise.resolve();
     this._variantLoadId = (this._variantLoadId ?? 0) + 1;
     this._multiLoadId = (this._multiLoadId ?? 0) + 1;
     this._fieldLoadId = (this._fieldLoadId ?? 0) + 1;
@@ -372,6 +394,8 @@ export class EwBlockProperties extends LitElement {
     this._itemTable = block || null;
     this._itemCount = block?.rows.length || 0;
     if (this._name !== prevName || this._variant !== prevVariant || documentChanged) {
+      this._fieldError = '';
+      this._fieldErrorCode = '';
       this._reloadLibrary();
     }
     this.requestUpdate();
@@ -383,7 +407,7 @@ export class EwBlockProperties extends LitElement {
       await Promise.all([this._loadVariants(), this._loadMultiBlock(), this._loadFields()]);
     } catch (error) {
       if (this.isConnected && identity === `${this._documentId}:${this._name}:${this._variant}`) {
-        this._fieldError = `Unable to load block library: ${error.message}`;
+        this._libraryError = `Unable to load block library: ${error.message}`;
       }
     }
   }
@@ -616,7 +640,7 @@ export class EwBlockProperties extends LitElement {
     this._fieldDefinitions = [];
     this._blockOptions = null;
     this._generateFieldsContext = null;
-    this._fieldError = '';
+    this._libraryError = '';
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     const variant = this._variant;
@@ -648,7 +672,7 @@ export class EwBlockProperties extends LitElement {
       if (definitions.length) this._generateFieldsContext = null;
     } catch (error) {
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
-      this._fieldError = `Unable to load block fields: ${error.message}`;
+      this._libraryError = `Unable to load block fields: ${error.message}`;
       if (this._generateFieldsContext) {
         this._generateFieldsContext = {
           ...this._generateFieldsContext,
@@ -762,7 +786,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
       await loading;
     } catch (error) {
       if (loadId === this._fieldLoadId && this.isConnected) {
-        this._fieldError = `Unable to refresh block library: ${error.message}`;
+        this._libraryError = `Unable to refresh block library: ${error.message}`;
       }
     } finally {
       this._refreshingLibrary = false;
@@ -804,27 +828,61 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   }
 
   async _commitValue(field, property, value, type) {
-    if (!this._captureField(field)) return;
-    const edit = this._session.edit(field, property, value);
-    if (!edit) return;
-    const result = await this._apply(edit.request, {
-      type, target: edit.request.target, [property === 'href' ? 'href' : 'value']: value,
+    if (this._disabled || !field.target || field.readOnly) return null;
+    const session = this._session;
+    const connection = this._connection;
+    const errorGeneration = this._fieldErrorGeneration;
+    const key = session.draft(field, property, value);
+    const draft = session.drafts.get(key);
+    const pending = this._fieldWriteQueue.then(async () => {
+      while (this.isConnected && this._connection === connection && this._documentOperation) {
+        // eslint-disable-next-line no-await-in-loop
+        await this._documentOperation;
+      }
+      if (!this.isConnected || this._connection !== connection
+        || this._session !== session || session.drafts.get(key) !== draft
+        || this._fieldErrorGeneration !== errorGeneration
+        || OUT_OF_SYNC_ERRORS.has(this._fieldErrorCode)) return null;
+      const edit = session.edit(field, property, value);
+      if (!edit) return null;
+      const current = this._fields.flatMap((entry) => [entry, ...(entry.items || [])])
+        .find((entry) => entry.key === field.key && !entry.readOnly);
+      if (edit.conflict || !current || this._disabled) {
+        this._setFieldError({ code: 'STALE_LIVE' });
+        return null;
+      }
+      const result = await this._apply(edit.request, {
+        type, target: edit.request.target, [property === 'href' ? 'href' : 'value']: value,
+      });
+      if (result && this.isConnected && this._connection === connection
+        && session.drafts.get(key) === draft && !session.acknowledge(edit, property, value)) {
+        this._setFieldError({ code: 'STALE_LIVE' });
+      }
+      this.requestUpdate();
+      return result;
     });
-    if (result && this._session.drafts.get(edit.key)?.value === value) this._session.drafts.delete(edit.key);
-    this.requestUpdate();
+    this._fieldWriteQueue = pending;
+    return pending;
+  }
+
+  _setFieldError(error, action) {
+    this._fieldErrorGeneration += 1;
+    this._fieldErrorCode = error.code || '';
+    this._fieldError = OUT_OF_SYNC_ERRORS.has(error.code)
+      ? `${error.code}: The document or selection changed. Discard changes to use the current values.`
+      : `${error.code || action}: ${error.message}`;
   }
 
   async _run(action, ...args) {
     const connection = this._connection;
     this._fieldError = '';
+    this._fieldErrorCode = '';
     try {
       if (!this._actions?.[action]) throw new Error('This feature is unavailable with the standard SDK.');
       return await this._actions[action](...args);
     } catch (error) {
       if (this.isConnected && this._connection === connection) {
-        this._fieldError = ['STALE_REVISION', 'WRONG_DOCUMENT'].includes(error.code)
-          ? `${error.code}: The document changed. Your draft was kept; review it against the current document before trying again.`
-          : `${error.code || action}: ${error.message}`;
+        this._setFieldError(error, action);
       }
       return null;
     }
@@ -832,13 +890,21 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
 
   async _apply(request, change) {
     if (this._documentBusy) {
+      this._fieldErrorCode = 'BUSY';
       this._fieldError = 'Wait for the current document operation.';
       return null;
     }
     this._documentBusy = true;
+    const operation = this._run('applyChanges', { ...request, changes: [change] });
+    this._documentOperation = operation;
     try {
-      return await this._run('applyChanges', { ...request, changes: [change] });
-    } finally { this._documentBusy = false; }
+      return await operation;
+    } finally {
+      if (this._documentOperation === operation) {
+        this._documentBusy = false;
+        this._documentOperation = null;
+      }
+    }
   }
 
   _renderField(field) {
@@ -867,6 +933,15 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
           </div>`;
   }
 
+  _renderEditError() {
+    if (!this._fieldError) return nothing;
+    return html`
+      <p class="nx-input-error-msg" role="alert">${this._fieldError}</p>
+      ${this._session.drafts.size || OUT_OF_SYNC_ERRORS.has(this._fieldErrorCode) ? html`
+        <button type="button" class="nx-form-btn-secondary"
+          @click=${this._discardDrafts}>Discard changes</button>` : nothing}`;
+  }
+
   _renderFields() {
     return html`
       ${this._generateFieldsContext ? html`
@@ -883,13 +958,8 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
         </button>
       ` : nothing}
       ${this._isMulti ? nothing : this._fields.map((field) => this._renderField(field))}
-      ${this._fieldError ? html`
-        <p class="nx-input-error-msg" role="alert">${this._fieldError}</p>
-        ${this._session.drafts.size ? html`<button type="button" class="nx-form-btn-secondary"
-          @click=${() => {
-            this._discardDrafts();
-          }}>Discard drafts</button>` : nothing}
-      ` : nothing}`;
+      ${this._libraryError ? html`<p class="nx-input-error-msg" role="alert">${this._libraryError}</p>` : nothing}
+      ${this._renderEditError()}`;
   }
 
   async _loadVariants() {
@@ -964,7 +1034,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     if (this._hostError) return html`<p class="ew-block-empty" role="status">${this._hostError}</p>`;
     if (!this._session?.snapshot) return html`<p class="ew-block-empty" role="status">Waiting for a live canvas document…</p>`;
     return html`
-      ${!this._hasBlock && this._fieldError ? html`<p class="nx-input-error-msg" role="alert">${this._fieldError}</p>` : nothing}
+      ${!this._hasBlock ? this._renderEditError() : nothing}
       <div class="ew-page-metadata" aria-busy=${!!this._documentBusy}>
         <div class="ew-pm-fields" ?inert=${this._documentBusy}>
           ${this._hasBlock ? html`<div class="nx-form-field ew-pm-control">
@@ -977,7 +1047,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
               @click=${this._openBlockLibrary}
               >${html`<span>${this._name}</span>`}${switchIcon}</button>
           </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}
-            ${this._fieldError ? html`
+            ${this._libraryError && !OUT_OF_SYNC_ERRORS.has(this._fieldErrorCode) ? html`
               <button type="button" class="nx-form-btn-secondary"
                 ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
                 ${this._refreshingLibrary ? 'Loading library…' : 'Retry loading library'}

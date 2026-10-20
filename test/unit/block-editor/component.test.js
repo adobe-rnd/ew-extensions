@@ -17,6 +17,18 @@ describe('block editor sidebar workflow', () => {
     documentId: 'doc', revision, html: '<main>Preview</main>', editable: true, blocks: [block], selectedBlock: blockTarget,
   });
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const showTextFields = (values = ['Hello', 'Second'], revision = 1) => {
+    const next = structuredClone(snapshot(revision));
+    next.blocks[0].rows[0].cells[0].fields = values.map((value, fieldIndex) => ({
+      ...field, value, target: { ...fieldTarget, fieldIndex },
+    }));
+    sdk.callback(next);
+    element._fieldDefinitions = values.map((value, fieldIndex) => ({
+      key: `field-${fieldIndex}`, label: `Field ${fieldIndex}`, rowIndex: 0, cellIndex: 0,
+      fieldIndex, type: 'text', rowCount: 1, cellCount: 1, fieldCount: values.length,
+    }));
+    return element._fields;
+  };
 
   before(async () => {
     calls = [];
@@ -35,6 +47,20 @@ describe('block editor sidebar workflow', () => {
         sendHTML: async () => ({ ok: true, html: liveHtml, selection: { blockIndex: 0 }, editable: true }),
         applyChanges: async (request) => {
           calls.push(['applyChanges', request]);
+          if (request.changes.every((change) => ['setText', 'setLink'].includes(change.type))) {
+            const next = structuredClone(element._session.snapshot);
+            next.revision = request.revision + 1;
+            request.changes.forEach((change) => {
+              const current = next.blocks.find((entry) => entry.target.index === change.target.index)
+                .rows[change.target.rowIndex].cells[change.target.cellIndex].fields[change.target.fieldIndex];
+              const value = change.target.itemIndex === undefined
+                ? current : current.items[change.target.itemIndex];
+              value[change.type === 'setText' ? 'value' : 'href'] = change.type === 'setText'
+                ? change.value : change.href;
+            });
+            sdk.callback(next);
+            return next;
+          }
           return { documentId: request.documentId, revision: request.revision + 1 };
         },
         uploadImage: async (request, file) => {
@@ -330,6 +356,9 @@ describe('block editor sidebar workflow', () => {
     } finally { sdk.context.path = '/page'; }
   });
   it('commits text and link changes using opaque field targets', async () => {
+    const linked = structuredClone(snapshot());
+    linked.blocks[0].rows[0].cells[0].fields[0].href = '/old';
+    sdk.callback(linked);
     const current = element._fields[0];
     await element._commitText(current, 'Updated');
     await element._commitLink({ ...current, href: '/old' }, '/new');
@@ -346,7 +375,217 @@ describe('block editor sidebar workflow', () => {
     await element._commitText({ ...element._fields[0], readOnly: true }, 'No');
     expect(calls).to.have.length(0);
   });
-  it('surfaces stale failures while preserving drafts and their original revisions', async () => {
+  it('queues a second field focused before the first acknowledgement and rebases it', async () => {
+    const [first, second] = showTextFields();
+    const apply = sdk.actions.applyChanges;
+    const started = [];
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => {
+      started.push(request);
+      if (started.length === 1) await gate;
+      return apply(request);
+    };
+    try {
+      const savingFirst = element._commitText(first, 'First edit');
+      await flush();
+      expect(element._documentBusy).to.equal(true);
+      element._session.draft(second, 'value', 'Second');
+      const savingSecond = element._commitText(second, 'Second edit');
+      await flush();
+      expect(started).to.have.length(1);
+      release();
+      await Promise.all([savingFirst, savingSecond]);
+      expect(started.map((request) => request.revision)).to.deep.equal([1, 2]);
+      expect(element._fields.map((entry) => entry.value)).to.deep.equal(['First edit', 'Second edit']);
+      expect(element._session.drafts.size).to.equal(0);
+      expect(element._fieldError).to.equal('');
+      expect(element._documentBusy).to.equal(false);
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  it('keeps newer typing in a saving field and commits it against the acknowledged value', async () => {
+    const current = element._fields[0];
+    const apply = sdk.actions.applyChanges;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => { await gate; return apply(request); };
+    try {
+      const saving = element._commitText(current, 'First edit');
+      await flush();
+      element._session.draft(current, 'value', 'More typing');
+      release();
+      await saving;
+      expect(element._session.value(element._fields[0], 'value')).to.equal('More typing');
+      await element._commitText(element._fields[0], 'More typing');
+      expect(calls.map((call) => call[1].revision)).to.deep.equal([1, 2]);
+      expect(element._fields[0].value).to.equal('More typing');
+      expect(element._session.drafts.size).to.equal(0);
+      expect(element._fieldError).to.equal('');
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  it('queues another blur from the same field without losing its newer value', async () => {
+    const current = element._fields[0];
+    const apply = sdk.actions.applyChanges;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => { await gate; return apply(request); };
+    try {
+      const first = element._commitText(current, 'First edit');
+      await flush();
+      const second = element._commitText(current, 'Second edit');
+      release();
+      await Promise.all([first, second]);
+      expect(calls.map((call) => call[1].revision)).to.deep.equal([1, 2]);
+      expect(element._fields[0].value).to.equal('Second edit');
+      expect(element._session.drafts.size).to.equal(0);
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  it('does not let a no-op blur cancel a newer queued edit', async () => {
+    const current = element._fields[0];
+    const first = element._commitText(current, 'Hello');
+    const second = element._commitText(current, 'Typed');
+    await Promise.all([first, second]);
+    expect(calls).to.have.length(1);
+    expect(element._fields[0].value).to.equal('Typed');
+    expect(element._session.drafts.size).to.equal(0);
+  });
+  it('rejects real same-field changes before sending and keeps the draft', async () => {
+    const [current] = showTextFields();
+    element._session.draft(current, 'value', 'Typing');
+    const [latest] = showTextFields(['Remote title', 'Second'], 2);
+    await element._commitText(latest, 'Typing');
+    expect(calls).to.have.length(0);
+    expect(element._fieldErrorCode).to.equal('STALE_LIVE');
+    expect(element._session.value(latest, 'value')).to.equal('Typing');
+    element._discardDrafts();
+    expect(element._session.value(latest, 'value')).to.equal('Remote title');
+  });
+  it('discards queued edits without replaying them after the pending write finishes', async () => {
+    const [first, second] = showTextFields();
+    const apply = sdk.actions.applyChanges;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => { await gate; return apply(request); };
+    try {
+      const saving = element._commitText(first, 'First edit');
+      await flush();
+      const queued = element._commitText(second, 'Second edit');
+      element._discardDrafts();
+      release();
+      await Promise.all([saving, queued]);
+      expect(calls).to.have.length(1);
+      expect(element._fields.map((entry) => entry.value)).to.deep.equal(['First edit', 'Second']);
+      expect(element._session.drafts.size).to.equal(0);
+      expect(element._fieldError).to.equal('');
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  it('keeps a failed save visible and stops already queued writes without losing their drafts', async () => {
+    const [first, second] = showTextFields();
+    const apply = sdk.actions.applyChanges;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => {
+      calls.push(['applyChanges', request]);
+      await gate;
+      throw Object.assign(new Error('Denied'), { code: 'PERMISSION_DENIED' });
+    };
+    try {
+      const saving = element._commitText(first, 'First edit');
+      await flush();
+      const queued = element._commitText(second, 'Second edit');
+      release();
+      await Promise.all([saving, queued]);
+      expect(calls).to.have.length(1);
+      expect(element._fieldErrorCode).to.equal('PERMISSION_DENIED');
+      expect(element._session.value(first, 'value')).to.equal('First edit');
+      expect(element._session.value(second, 'value')).to.equal('Second edit');
+      sdk.actions.applyChanges = apply;
+      await element._commitText(element._fields[1], 'Second edit');
+      expect(calls).to.have.length(2);
+      expect(element._fields[1].value).to.equal('Second edit');
+      expect(element._fieldError).to.equal('');
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  it('waits for an existing document operation before committing a queued field', async () => {
+    const [first, second] = showTextFields();
+    const apply = sdk.actions.applyChanges;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    sdk.actions.applyChanges = async (request) => { await gate; return apply(request); };
+    try {
+      const saving = element._apply(element._session.capture(first.target), {
+        type: 'setText', target: first.target, value: 'First edit',
+      });
+      const queued = element._commitText(second, 'Second edit');
+      await flush();
+      expect(calls).to.have.length(0);
+      release();
+      await Promise.all([saving, queued]);
+      expect(calls.map((call) => call[1].revision)).to.deep.equal([1, 2]);
+      expect(element._fields.map((entry) => entry.value)).to.deep.equal(['First edit', 'Second edit']);
+      expect(element._fieldError).to.equal('');
+    } finally {
+      release();
+      sdk.actions.applyChanges = apply;
+    }
+  });
+  for (const transition of ['document change', 'disconnect']) {
+    it(`cancels queued writes on ${transition}`, async () => {
+      const [first, second] = showTextFields();
+      const apply = sdk.actions.applyChanges;
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      sdk.actions.applyChanges = async (request) => {
+        calls.push(['applyChanges', request]);
+        await gate;
+        return { documentId: request.documentId, revision: 2 };
+      };
+      try {
+        const saving = element._commitText(first, 'First edit');
+        await flush();
+        const queued = element._commitText(second, 'Second edit');
+        if (transition === 'document change') sdk.callback({ ...snapshot(2), documentId: 'other' });
+        else element.remove();
+        release();
+        await Promise.all([saving, queued]);
+        expect(calls).to.have.length(1);
+        expect(element._fieldError).to.equal('');
+      } finally {
+        release();
+        sdk.actions.applyChanges = apply;
+      }
+    });
+  }
+  it('does not treat a newer conflicting snapshot as its own successful edit', async () => {
+    const [current] = showTextFields();
+    const apply = sdk.actions.applyChanges;
+    sdk.actions.applyChanges = async () => {
+      showTextFields(['Remote title', 'Second'], 3);
+      return element._session.snapshot;
+    };
+    try {
+      await element._commitText(current, 'Typing');
+      expect(element._fields[0].value).to.equal('Remote title');
+      expect(element._session.value(element._fields[0], 'value')).to.equal('Typing');
+      expect(element._fieldErrorCode).to.equal('STALE_LIVE');
+    } finally { sdk.actions.applyChanges = apply; }
+  });
+  it('surfaces host-side stale failures after rebasing while preserving drafts', async () => {
     const current = element._fields[0];
     element._session.draft(current, 'value', 'Typing');
     sdk.callback(snapshot(2));
@@ -357,10 +596,72 @@ describe('block editor sidebar workflow', () => {
     };
     try {
       await element._commitText(element._fields[0], 'Typing');
-      expect(calls[0][1].revision).to.equal(1);
+      expect(calls[0][1].revision).to.equal(2);
       expect(element._fieldError).to.include('STALE_REVISION');
       expect(element._session.value(element._fields[0], 'value')).to.equal('Typing');
+      const rendered = JSON.stringify(element.render());
+      expect(rendered).to.include('>Discard changes</button>');
+      expect(rendered).not.to.include('Retry loading library');
+      element._discardDrafts();
+      expect(element._session.drafts.size).to.equal(0);
+      expect(element._fieldError).to.equal('');
+      expect(element._session.value(element._fields[0], 'value')).to.equal('Hello');
     } finally { sdk.actions.applyChanges = original; }
+  });
+  it('offers only discard for out-of-sync errors even without a text draft', async () => {
+    const applyChanges = sdk.actions.applyChanges;
+    element._libraryError = 'Unable to load block library';
+    try {
+      for (const code of ['STALE_REVISION', 'STALE_LIVE', 'WRONG_DOCUMENT', 'WRONG_SELECTION']) {
+        sdk.actions.applyChanges = async () => { throw Object.assign(new Error('Out of sync'), { code }); };
+        await element._run('applyChanges', {});
+        expect(element._session.drafts.size).to.equal(0);
+        const rendered = JSON.stringify(element.render());
+        expect(rendered).to.include('>Discard changes</button>');
+        expect(rendered).not.to.include('Retry loading library');
+        element._discardDrafts();
+        expect(element._fieldError).to.equal('');
+        expect(element._fieldErrorCode).to.equal('');
+      }
+    } finally {
+      sdk.actions.applyChanges = applyChanges;
+    }
+  });
+  it('keeps the discard action available if the selection disappears', async () => {
+    const applyChanges = sdk.actions.applyChanges;
+    sdk.actions.applyChanges = async () => {
+      sdk.callback({ ...snapshot(), selectedBlock: null });
+      throw Object.assign(new Error('Selection changed'), { code: 'WRONG_SELECTION' });
+    };
+    try {
+      await element._run('applyChanges', {});
+      const rendered = JSON.stringify(element.render());
+      expect(element._hasBlock).to.equal(false);
+      expect(rendered).to.include('>Discard changes</button>');
+      expect(rendered).not.to.include('Retry loading library');
+      element._discardDrafts();
+      expect(element._fieldError).to.equal('');
+    } finally {
+      sdk.actions.applyChanges = applyChanges;
+    }
+  });
+  it('does not treat operation errors as library failures or clear real library failures', async () => {
+    const applyChanges = sdk.actions.applyChanges;
+    sdk.actions.applyChanges = async () => {
+      throw Object.assign(new Error('Denied'), { code: 'PERMISSION_DENIED' });
+    };
+    try {
+      await element._run('applyChanges', {});
+      expect(JSON.stringify(element.render())).not.to.include('Retry loading library');
+      element._libraryError = 'Unable to load block library';
+      await element._run('applyChanges', {});
+      const rendered = JSON.stringify(element.render());
+      expect(rendered).to.include('Unable to load block library');
+      expect(rendered).to.include('Retry loading library');
+      expect(element._libraryError).to.equal('Unable to load block library');
+    } finally {
+      sdk.actions.applyChanges = applyChanges;
+    }
   });
   it('enforces minimum one list item and final-index reorder bounds', async () => {
     const list = { ...element._fields[0], type: 'list', items: [field] };
@@ -580,7 +881,8 @@ describe('block editor sidebar workflow', () => {
       element._name = 'embed';
       element._itemTable = { ...block, name: 'embed' };
       await element._reloadLibrary();
-      expect(element._fieldError).to.include('template for embed is unavailable');
+      expect(element._libraryError).to.include('template for embed is unavailable');
+      expect(element._fieldError).to.equal('');
       expect(element._generateFieldsContext).to.equal(null);
       expect(JSON.stringify(element.render())).to.include('Retry loading library');
       recovered = true;
@@ -588,6 +890,7 @@ describe('block editor sidebar workflow', () => {
       expect((await library.loadBlockLibrary('org', 'site')).warnings).to.deep.equal([]);
       expect(warnings).to.have.length(1);
       expect(element._fieldError).to.equal('');
+      expect(element._libraryError).to.equal('');
       expect(element._generateFieldsContext.blockPath).to.include('/embed.html');
       expect(calls.some(([action]) => action === 'applyChanges')).to.equal(false);
     } finally {
