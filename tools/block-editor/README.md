@@ -1,179 +1,155 @@
-# Block editor extension (local prototype)
+# Block editor extension
 
-Experimental block-properties sidebar using `sdk.actions.subscribeLiveDocument`.
-Live HTML and the zero-based selected block index populate the sidebar on canvas
-changes and caret movement. Edits send the **whole selected block** through
-`sdk.actions.sendHTML(html, { replace: true })`, updating the live editor through
-its normal collaboration and autosave. No document source API reads or writes
-are needed. Parsing and editing are local to the extension, not the SDK.
+Edit a canvas block through a properties sidebar instead of changing its content
+directly on the page. The extension follows the block containing your caret and
+shows its configured fields, variant, images, and repeating items.
 
-## Run locally
+Changes update the live canvas, including unsaved content, and use the editor's
+normal undo/redo, collaboration, and autosave. Field labels come from your block
+library, so authors see names such as **Title**, **Image**, and **Link** rather than
+the underlying block structure.
 
-Serve this repository with your local HTTP development server (port 3001 in this
-example). Configure a sidebar extension in the canvas's library configuration
-using this tool URL; the canvas host and SDK must support live subscriptions and
-HTML replacement:
+## Installation
 
-```text
-http://localhost:3001/tools/block-editor/block-editor.html
-```
+Add the following URL as a sidebar extension in the `library` sheet of your
+organization or site configuration:
 
-`nx` is the base containing `utils/sdk.js`. The shared picker component and
-styles use `nx2`, derived as the sibling `/nx2` base unless explicitly overridden.
-The extension initializes nx2 configuration before loading those components.
-Lit is mapped statically in the HTML to `https://da.live/deps/lit/dist/index.js`
-before any module loads, avoiding Firefox's dynamic import-map timing issue.
-`live` still controls local library source resolution; it no longer changes Lit.
-Icons are copies of the DA SVG assets
-under this tool's `img/icons/`; both sidebar controls and the shared picker
-components use this same-origin asset base. External SVG `<use>` references
-cannot cross origins, including different localhost ports, even with CORS.
-Both accept HTTP(S) bases, including a path prefix, and reject credentials, query
-strings, and fragments. Defaults use the published SDK (`https://da.live/nx`),
-UI assets (`https://da.live/nx2`) and `ref=main`, including on localhost.
-Until the new SDK is deployed, set `nx` to the local da-nx `blockext` asset base;
-`nx2` defaults to its sibling path unless explicitly overridden. Each override
-applies only to its own base. `ref=local` resolves relative library index
-sources against `live`; otherwise they resolve to the site AEM live origin.
+`https://blockimg--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html`
 
-Open through the canvas extension panel, not a standalone tab: the SDK requires
-the parent handshake. The extension requires `sdk.capabilities.liveDocument === 1`
-and `sdk.capabilities.sendHTMLReplace === 1`, plus
-`sdk.actions.subscribeLiveDocument(callback)`, which returns an unsubscribe
-function. The callback supplies `{ html, selection: { blockIndex }, editable }`: `html` is
-EDS-shaped live `<main>` HTML and `blockIndex` is a zero-based document-wide block
-ordinal, or `null` outside a block. Both live document changes and caret-only
-selection changes update the sidebar. Image URLs retain the original editor
-sources, rather than site-preview-relative URLs, so unchanged images can be sent
-back without URL reconstruction. Unsupported hosts show a clear error rather
-than falling back to `getSelection` text matching. Removal unsubscribes and ignores
-late replacement replies. The extension resolves org/site/path from SDK `context` or
-`project` (`repo` is also accepted as the site). `daFetch`, `showPanel('blocks')`,
-and optionally `setPrompt` are used for API and panel operations. On localhost
-and loopback IPs, the default API is `https://stage-admin.da.live`; other hosts
-default to `https://admin.da.live`. An explicit `admin` query parameter
-(URL-encoded in the tool URL) overrides either default with a validated HTTP(S)
-API base.
-The extension's API environment must match the canvas; it cannot infer the
-parent's environment from the SDK.
 
-Place the caret inside a block to see live values; selected text is unnecessary.
-The sidebar follows the live block automatically, and clears its selection outside
-a block. Changes apply on blur/change through live HTML replacement, including
-unsaved canvas content. The acknowledgement supplies the updated live document,
-so consecutive edits do not require a reload. Read-only editors disable field
-editing. Conflict recovery offers **Discard drafts**, returning to the latest live
-values without making an API request or reloading the canvas.
+## Configs
 
-The block name button opens the host's existing **Blocks** library modal through
-`sdk.actions.showPanel('blocks')`. Choosing a template is handled by the canvas
-host; it replaces the selected live block. This action remains separate from
-sidebar field edits.
+Blocks must be part of the site's configured **Blocks** library. The extension
+matches the selected block's name and variant to a library template, then uses
+that template's `fields` metadata to label the sidebar controls.
 
-### Fixture library without IMS
+Configure each variant separately, including the version without a variant.
+Field definitions belong in the **library template document**, not in each page
+that uses the block. Existing page content must have a compatible structure for
+those fields to be editable.
 
-Append `&library=http%3A%2F%2Flocalhost%3A3001%2Ftools%2Fsdk-block-editor%2Flibrary.json`
-to bypass the host's library configuration lookup. The validated HTTP(S) index URL is fetched
-through SDK `actions.daFetch`, as are the referenced template documents. Refresh
-refetches that index and those documents. The SDK still supplies org/site/path context.
+### Using AI
 
-Failed template requests or parsing failures do not prevent other templates from
-loading. Unavailable templates are logged to the console without a sidebar
-warning. For failures affecting the selected block, the sidebar provides
-**Retry loading library** to refetch the index and templates. A selected block
-whose template failed cannot generate fields from that missing template. If every
-template fails, or the index itself cannot be loaded, the sidebar shows an error
-instead of treating the library as empty.
+The easiest way to create field definitions is the **Generate fields** button:
 
-Example `/tools/sdk-block-editor/library.json`:
+1. Place the caret inside the block you want to configure.
+2. Click **Generate fields** when the sidebar has no field definitions. This sends
+   a request to the host's AI assistant with the selected block, variant, and
+   library sources.
+3. Review the assistant's proposed changes to the matching library document.
+   The fields should describe the library template, not extra content added to
+   the current page. Keep the template content and other metadata intact.
+4. Save the library changes and click **Refresh** in the sidebar to reload them.
+5. Repeat for every variant you want to support.
 
-```json
-{
-  "data": [
-    { "name": "Cards", "path": "http://localhost:3001/tools/sdk-block-editor/cards.html" }
-  ],
-  "editor": { "data": [{ "block": "cards", "property": "multi" }] },
-  "options": { "data": [{ "blocks": "all", "key": "Color", "values": "Red=red|Blue=blue" }] }
-}
-```
+If existing metadata is invalid, the sidebar offers **Repair fields** instead.
+Review the repair and refresh the library in the same way. AI generation requires
+a host that supports sending prompts to its assistant; it does not generate
+fields locally in the sidebar.
 
-Example `/tools/sdk-block-editor/cards.html` (no `.plain.html` suffix is added to
-localhost document URLs):
+### Manually
 
-```html
-<main><div>
-  <div class="cards">
-    <div><div><h3>First title</h3><p>First body</p></div></div>
-    <div><div><h3>Second title</h3><p>Second body</p></div></div>
-  </div>
-  <div class="library-metadata">
-    <div><div>fields</div><div><table>
-      <tr><td>Fields</td></tr>
-      <tr><td><p>Title</p><p>Body</p></td></tr>
-    </table></div></div>
-  </div>
-</div></main>
-```
+In the library document, add a `fields` property to the block variant's
+**Library Metadata** table. Its value must be a nested table with:
 
-Only the first content row supplies the shared schema because the index's
-`editor` sheet explicitly configures this block as multi-item. Without that
-configuration, metadata must describe both content rows.
+- A first row containing a single cell titled **Fields**, spanning the table's
+  columns.
+- Content rows that mirror the library block's content rows, with the same cell
+  order and spans. Do not copy the block name/variant header as a content row.
+- One paragraph per field label inside each cell, in the same order as the
+  content it describes. Multiple fields in one cell need multiple paragraphs,
+  not additional table rows.
 
-## Expected functionality and limitations
+For example, here's a hero block configuration:
 
-| Feature | Status |
+![Example of manually configured fields metadata](docs/maunual-fields.png)
+
+Count each heading, paragraph, image/picture, or whole list as one field.
+Inline formatting and links do not need additional labels. For blockquotes,
+label the text blocks inside the quote rather than the wrapper. Empty spacer
+paragraphs around image-only content do not need labels.
+
+Use **IGNORE** as a label to hide a field while keeping its position. For example,
+in a key/value row containing `Color` and `Green`, label the key cell `IGNORE`
+and the value cell `Color`. Do not remove the hidden field's position from the
+metadata, or later labels will no longer match the template.
+
+### Repeating items
+
+For blocks such as Cards where each content row is a repeating item, add an entry
+to the block library index's `editor` sheet:
+
+| block | property |
 | --- | --- |
-| Block selection | Live zero-based block index, updated on caret movement; selection outside blocks clears the sidebar |
-| Plain text, headings, line breaks, simple links | Editable; rich/nested markup is read-only rather than flattened |
-| Library field labels and simple key/value dropdowns | Supported; library config is fetched directly from DA |
-| Lists | Plain items and simple links editable; add/delete/reorder supported |
-| Multi-item blocks | Library-configured row previews, expand, append/delete and keyboard/drag reorder supported |
-| Block variants | Supported by replacing the live block with updated classes |
-| Generate/repair fields and library refresh | Uses existing `setPrompt` when available; refresh refetches library sources |
-| Images | Replace single-image fields by PNG, JPEG, GIF or SVG upload (up to 20 MB); AEM Assets unavailable |
-| Replace block with library template | Block name button opens the existing host Blocks modal via SDK `showPanel('blocks')`; host replaces in live canvas |
-| Click item to navigate canvas | Unavailable; expands sidebar item only |
-| Canvas live updates, undo/redo, collaborative edits | Sidebar writes use the live editor's collaboration, history and autosave |
+| cards | multi |
 
-Each edit applies semantic changes to the selected live block and sends its full
-HTML with `replace: true` and an `expected` guard containing the captured live
-document HTML and selected zero-based block ordinal. The host verifies both before
-dispatching a single editor transaction. Changed content or a moved selection is
-rejected instead of overwriting a collaborator's edit or replacing the wrong block.
-Identical blocks are safe to target by ordinal within this guarded live snapshot.
-Success confirms the editor update, not completion of durable persistence.
+Use the block's base name, without its variant. Repetition is determined by this
+configuration, not by the block name or by similar-looking rows.
 
-Content outside the selected block remains untouched. The host parses the block
-into its existing schema and preserves local selection where possible without
-stealing focus from the sidebar. Drafts retain their original live revision and
-block signature; conflicts keep the draft and are shown explicitly, never silently
-rebased. Unchanged blur values do not write. Failed and timed-out replacements are
-not automatically retried.
+For a `multi` block, the fields table must contain **exactly two rows**: the
+**Fields** header and one row describing the first item's cells and fields.
+Every item reuses that schema, even if the library template contains several
+sample items. The first item also supplies the template for adding new items.
 
-**Replace image** uploads the chosen file through authenticated SDK `daFetch` to
-the DA source API, in the document's `.<document-name>/` media folder. Each upload
-uses a unique filename so replacing one image cannot overwrite a shared asset.
-Only the asset is uploaded through the API: its returned `contentUrl` is applied
-to the image and picture sources through the same guarded live block replacement
-as text edits. Alt text and enclosing links are preserved; old responsive URLs and
-dimensions are cleared. The image target and revision are captured before opening
-the file picker and rechecked after upload. Changed selections, collaborative edits
-and read-only state prevent replacement; a file already uploaded may remain unused.
-Mixed text/image fields and fields containing multiple images remain read-only.
-This upload path uses the DA source store, not the Helix 6 media-bus API or AEM Assets.
+Without `multi` configuration, field metadata must describe **all** content rows
+in the library template. A list inside a cell is still one field; it is not the
+same as a repeating block item.
 
-## Validate
+### Dropdown options
 
-```sh
-npx wtr --config ./web-test-runner.config.mjs \
-  'test/unit/block-editor/*.test.js' --node-resolve --port=2001
-npx eslint tools/block-editor/*.js
-npx stylelint 'tools/block-editor/*.css'
-```
+For simple key/value rows, you can provide predefined choices through the block
+library index's `options` sheet:
 
-Tests exercise pure schema/label matching, multi-row configuration, options,
-read-only/list rules, local URL validation, subscription lifecycle, SDK panel
-navigation, guarded live replacement, semantic operations, draft conflict behavior,
-and prompt generation.
-SDK adapter unit tests use the repository's existing Lit stub; real iframe
-rendering and integrated host dialog behavior require the live-capable host.
+| blocks | key | values |
+| --- | --- | --- |
+| hero | Color | Green=green\|Blue=blue\|Purple=purple |
+
+`blocks` is a comma-separated list of block names, or `all` for shared options.
+`key` matches the key in the block's key/value row. Separate choices with `|`;
+`Label=value` provides a display label and a stored value. If `=value` is omitted,
+the label itself is stored. These options are separate from the field labels in
+Library Metadata.
+
+## Using the sidebar
+
+Place the caret anywhere inside a block; selecting text is unnecessary. Moving
+to another block updates the sidebar, and moving outside all blocks clears it.
+
+| Task | How |
+| --- | --- |
+| Edit text or links | Change the field and move focus away to apply it. Simple links expose their text and destination. |
+| Change a configured value | Select an option from its dropdown. |
+| Change the variant | Use **Variant** to apply a variant available in the library. This changes the block's variant classes, not its content template. |
+| Replace the block | Click the block name to open the canvas's existing **Blocks** library and choose a replacement template. |
+| Edit repeating items | Expand an item to show its fields. Use **Add item** or its delete button to change the item count. |
+| Reorder repeating items | Drag an item by its header, or focus the item and press **Alt+ArrowUp** / **Alt+ArrowDown**. |
+| Edit lists | Change individual items, or use the list controls to add, delete, and reorder them. |
+| Replace an image | Click **Replace image** and choose a PNG, JPEG, GIF, or SVG file up to 20 MB. |
+
+Image uploads are stored with a unique filename in the document's media folder,
+so replacing an image does not overwrite an asset used elsewhere. Existing alt
+text and enclosing links are preserved. AEM Assets browsing is not supported.
+
+There is no separate sidebar save step. Changes enter the live editor and follow
+its normal autosave; a successful sidebar update is not a separate confirmation
+that durable saving has finished.
+
+## Troubleshooting and limitations
+
+| Symptom | What to check |
+| --- | --- |
+| No fields appear | Place the caret inside a block, check that its exact variant is in the Blocks library, and add its fields metadata. |
+| **Generate fields** or **Repair fields** appears | The selected template has missing or invalid field metadata. Generate or repair it, save the library document, then click **Refresh**. |
+| A field does not match the selected block structure | Compare the page block with its library template and check the metadata's row, cell, and field counts. Incompatible fields are not editable. |
+| A field is read-only | Check document permissions and content structure. Complex rich/nested markup, mixed text/image fields, and fields with multiple images are not editable through the sidebar. |
+| A library template cannot load | Check its library entry and document availability, then click **Retry loading library**. Other successfully loaded templates remain usable. |
+| An edit conflicts with a canvas update | Review the latest canvas content. **Discard drafts** clears pending text edits and returns to the latest live values without reloading the document. |
+
+Edits are checked against the captured document and selected block before being
+applied. If the selection moves or the document changes while you are editing,
+the extension rejects the stale operation rather than overwriting newer content.
+Failed updates are not automatically retried.
+
+Avoid switching blocks while an image upload is in progress. If the document or
+selection changes, the image replacement is rejected; an already-uploaded file
+may remain unused in the media folder.
