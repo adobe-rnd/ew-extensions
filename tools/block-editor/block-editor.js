@@ -1,5 +1,7 @@
 import { LitElement, html, nothing } from 'da-lit';
-import { runtime } from './runtime.js';
+import DA_SDK from 'https://da.live/nx/utils/sdk.js';
+import { setConfig } from 'https://da.live/nx2/scripts/nx.js';
+import { config } from './config.js';
 import { createDocumentActions, IMAGE_FILE_TYPES } from './document.js';
 import {
   normalizeBlockName, buildBlockFieldDefinitions, resolveBlockFields,
@@ -11,11 +13,9 @@ import {
   getBlockFieldTemplate, getBlockVariantChoices,
 } from './library.js';
 
-const { default: DA_SDK } = await import(`${runtime.nx}/utils/sdk.js`);
-const { setConfig } = await import(`${runtime.nx2}/scripts/nx.js`);
 const codeBase = new URL('.', import.meta.url).href.replace(/\/$/, '');
 await setConfig({ codeBase });
-await import(`${runtime.nx2}/blocks/shared/picker/picker.js`);
+await import('https://da.live/nx2/blocks/shared/picker/picker.js');
 async function getSheet(url) {
   const response = await fetch(String(url));
   if (!response.ok) throw new Error(`Unable to load styles: ${url}`);
@@ -24,8 +24,8 @@ async function getSheet(url) {
   return sheet;
 }
 const [formStyle, buttonsStyle, pageStyle, style] = await Promise.all([
-  getSheet(`${runtime.nx2}/styles/form.css`),
-  getSheet(`${runtime.nx2}/styles/buttons.css`),
+  getSheet('https://da.live/nx2/styles/form.css'),
+  getSheet('https://da.live/nx2/styles/buttons.css'),
   getSheet(new URL('./layout.css', import.meta.url)),
   getSheet(new URL('./block-editor.css', import.meta.url)),
 ]);
@@ -95,7 +95,7 @@ export class EwBlockProperties extends LitElement {
         return;
       }
       this._actions = createDocumentActions(sdk, {
-        admin: runtime.admin,
+        admin: config.admin,
         onSnapshot: (snapshot) => {
           if (!this.isConnected || this._connection !== connection) return;
           this._session.receive(snapshot);

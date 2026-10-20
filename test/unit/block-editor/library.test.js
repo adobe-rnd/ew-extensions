@@ -3,7 +3,7 @@ import {
   parseVariants, getBlockTableHtml, getBlockFieldTemplate, getBlockVariantOptions,
   getBlockVariantChoices,
 } from '../../../tools/block-editor/library.js';
-import { getRuntime, validateBase } from '../../../tools/block-editor/runtime.js';
+import { getConfig, validateBase } from '../../../tools/block-editor/config.js';
 
 describe('block editor library parsing', () => {
   it('preserves original templates, metadata labels, and variant headers', () => {
@@ -56,43 +56,41 @@ describe('block editor library parsing', () => {
   });
 });
 
-describe('block editor local asset configuration', () => {
-  it('defaults to published SDK and UI assets even on localhost', () => {
-    expect(getRuntime('', 'localhost')).to.deep.equal({
-      nx: 'https://da.live/nx', nx2: 'https://da.live/nx2',
+describe('block editor configuration', () => {
+  it('defaults to the main library and staging admin on localhost', () => {
+    expect(getConfig('', 'localhost')).to.deep.equal({
       live: 'https://da.live', ref: 'main',
       admin: 'https://stage-admin.da.live',
     });
   });
   it('uses staging for loopback hosts and production elsewhere', () => {
     ['localhost', '127.0.0.1', '[::1]', '::1'].forEach((hostname) => {
-      expect(getRuntime('', hostname).admin).to.equal('https://stage-admin.da.live');
+      expect(getConfig('', hostname).admin).to.equal('https://stage-admin.da.live');
     });
-    expect(getRuntime('', 'extension.example').admin).to.equal('https://admin.da.live');
+    expect(getConfig('', 'extension.example').admin).to.equal('https://admin.da.live');
   });
   it('lets an explicit admin override take precedence over the hostname default', () => {
-    expect(getRuntime('?admin=https://admin.da.live', 'localhost').admin).to.equal('https://admin.da.live');
-    expect(getRuntime('?admin=https://stage-admin.da.live', 'extension.example').admin)
+    expect(getConfig('?admin=https://admin.da.live', 'localhost').admin).to.equal('https://admin.da.live');
+    expect(getConfig('?admin=https://stage-admin.da.live', 'extension.example').admin)
       .to.equal('https://stage-admin.da.live');
-    expect(() => getRuntime('?admin=javascript:alert(1)', 'localhost')).to.throw();
+    expect(() => getConfig('?admin=javascript:alert(1)', 'localhost')).to.throw();
   });
-  it('applies explicit asset overrides without implicitly changing other defaults', () => {
-    const nx = getRuntime('?nx=http://localhost:4001');
-    expect(nx.nx).to.equal('http://localhost:4001');
-    expect(nx.nx2).to.equal('http://localhost:4001/nx2');
-    expect(nx.live).to.equal('https://da.live');
-    const live = getRuntime('?live=http://localhost:4000');
+  it('ignores obsolete NX asset overrides', () => {
+    expect(getConfig('?nx=http://localhost:4001&nx2=http://localhost:4002', 'localhost'))
+      .to.deep.equal(getConfig('', 'localhost'));
+  });
+  it('preserves library origin and ref overrides', () => {
+    const live = getConfig('?live=http://localhost:4000&ref=local');
     expect(live.live).to.equal('http://localhost:4000');
-    expect(live.nx).to.equal('https://da.live/nx');
-    expect(live.ref).to.equal('main');
+    expect(live.ref).to.equal('local');
   });
   it('rejects unsafe schemes, credentials, and ambiguous asset URLs', () => {
     ['javascript:alert(1)', 'https://user:pass@example.com', 'https://example.com/?a=b', 'https://example.com/#hash']
       .forEach((value) => expect(() => validateBase(value)).to.throw());
   });
   it('validates explicit local library indexes without production config loading', () => {
-    expect(getRuntime('?library=http%3A%2F%2Flocalhost%3A3001%2Flibrary.json', 'localhost').library)
+    expect(getConfig('?library=http%3A%2F%2Flocalhost%3A3001%2Flibrary.json', 'localhost').library)
       .to.equal('http://localhost:3001/library.json');
-    expect(() => getRuntime('?library=javascript%3Aalert(1)', 'localhost')).to.throw();
+    expect(() => getConfig('?library=javascript%3Aalert(1)', 'localhost')).to.throw();
   });
 });

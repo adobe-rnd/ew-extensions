@@ -46,10 +46,9 @@ describe('block editor sidebar workflow', () => {
     sdk.emit = (value) => [...sdk.listeners].forEach((callback) => callback(value));
     window.blockEditorTestSdk = sdk;
     const url = window.location.href;
-    const base = `${window.location.origin}/test/unit/block-editor/fixtures`;
     const indexUrl = `${window.location.origin}/fixture/library.json`;
     window.history.replaceState(null, '',
-      `?nx=${encodeURIComponent(base)}&nx2=${encodeURIComponent(base)}&live=${encodeURIComponent(window.location.origin)}&library=${encodeURIComponent(indexUrl)}`);
+      `?live=${encodeURIComponent(window.location.origin)}&library=${encodeURIComponent(indexUrl)}`);
     const originalFetch = window.fetch;
     window.fetch = (resource, options) => (String(resource).endsWith('.css')
       ? Promise.resolve(new Response('')) : originalFetch(resource, options));

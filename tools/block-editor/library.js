@@ -1,4 +1,4 @@
-import { runtime } from './runtime.js';
+import { config as libraryConfig } from './config.js';
 import { normalizeBlockName, normalizeVariant, isMultiBlockConfigured } from './fields.js';
 
 const libraries = new Map();
@@ -101,19 +101,19 @@ async function getBlockVariants(path) {
 
 async function load(org, site) {
   let sources;
-  if (runtime.library) sources = [runtime.library];
+  if (libraryConfig.library) sources = [libraryConfig.library];
   else {
     const { configs: fetched } = await dependencies.getEditorConfig();
     const configs = (fetched || []).filter((config) => config && !config.error).reverse();
     if (!configs.length) throw new Error(`Unable to load library configuration for ${org}/${site}.`);
     const rows = configs.flatMap((config) => config?.library?.data || []);
     const row = rows.find((entry) => entry.title?.trim().toLowerCase() === 'blocks'
-      && (!entry.ref || entry.ref === 'main' || runtime.ref === 'local' || entry.ref === runtime.ref));
+      && (!entry.ref || entry.ref === 'main' || libraryConfig.ref === 'local' || entry.ref === libraryConfig.ref));
     if (!row) return { ext: null, blocks: [], options: [], editor: [] };
     sources = (row.path || '').split(',').map((path) => {
       const value = path.trim();
       if (!value.startsWith('/')) return value;
-      return runtime.ref === 'local' ? `${runtime.live}${value}` : `https://${runtime.ref}--${site}--${org}.aem.live${value}`;
+      return libraryConfig.ref === 'local' ? `${libraryConfig.live}${value}` : `https://${libraryConfig.ref}--${site}--${org}.aem.live${value}`;
     }).filter(Boolean);
   }
   const indexes = await Promise.all(sources.map(fetchJson));
