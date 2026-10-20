@@ -86,26 +86,28 @@ describe('block editor sidebar workflow', () => {
   });
   afterEach(() => element.remove());
 
-  it('authenticates content image previews once for fields and repeating-item thumbnails', async () => {
+  it('downloads content image bytes once for fields and repeating-item thumbnails', async () => {
     const fetch = sdk.actions.daFetch;
     const requests = [];
     sdk.actions.daFetch = async (url, options) => {
       requests.push({ url, options });
-      return new Response('');
+      return new Response(new Blob(['image bytes'], { type: 'image/jpeg' }));
     };
     const image = {
       type: 'image', label: 'Image', value: 'https://content.da.live/org/site/.page/photo.jpg',
       target: fieldTarget,
     };
     element._itemTable = { rows: [{ cells: [{ fields: [image] }] }] };
+    const loaded = new Promise((resolve) => { element.requestUpdate = resolve; });
     try {
       expect(JSON.stringify(element._renderField(image))).not.to.include(image.value);
       expect(JSON.stringify(element._renderItemPreview(0))).not.to.include(image.value);
-      await flush();
+      await loaded;
       expect(requests).to.have.length(1);
-      expect(requests[0].url).to.equal('https://main--site--org.stage-preview.da.live/gimme_cookie');
-      expect(requests[0].options.credentials).to.equal('include');
-      const preview = 'https://main--site--org.stage-preview.da.live/.page/photo.jpg';
+      expect(requests[0].url).to.equal(image.value);
+      expect(requests[0].options.credentials).to.equal('omit');
+      const preview = element._imagePreviews.get(image.value);
+      expect(preview).to.match(/^blob:/);
       expect(JSON.stringify(element._renderField(image))).to.include(preview);
       expect(JSON.stringify(element._renderItemPreview(0))).to.include(preview);
       expect(image.value).to.equal('https://content.da.live/org/site/.page/photo.jpg');
@@ -114,14 +116,44 @@ describe('block editor sidebar workflow', () => {
     }
   });
 
-  it('reports preview cookie failures without blocking the editor or falling back', async () => {
+  it('styles global and inline errors as padded pale-red panels', async () => {
+    const response = await fetch('/tools/block-editor/block-editor.css');
+    expect(response.ok).to.equal(true);
+    const sheet = new CSSStyleSheet();
+    await sheet.replace(await response.text());
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    root.adoptedStyleSheets = [sheet];
+    root.innerHTML = `<p class="nx-input-error-msg" role="alert">Preview failed</p>
+      <div class="ew-pm-fields"><span class="nx-input-error-msg" role="alert">Invalid field</span></div>`;
+    document.body.append(host);
+    try {
+      const alerts = root.querySelectorAll('[role="alert"]');
+      for (const alert of alerts) {
+        const style = getComputedStyle(alert);
+        expect(style.display).to.equal('block');
+        expect(style.backgroundColor).to.equal('rgb(255, 241, 240)');
+        expect(style.color).to.equal('rgb(163, 33, 25)');
+        expect(style.borderTopWidth).to.equal('1px');
+        expect(style.borderRadius).to.equal('8px');
+        expect(style.paddingTop).to.equal('12px');
+        expect(style.overflowWrap).to.equal('anywhere');
+      }
+      expect(getComputedStyle(alerts[0]).marginLeft).to.equal('16px');
+      expect(getComputedStyle(alerts[1]).marginLeft).to.equal('0px');
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('reports image download failures without blocking the editor or falling back', async () => {
     const fetch = sdk.actions.daFetch;
     sdk.actions.daFetch = async () => new Response('', { status: 403 });
     const image = { type: 'image', label: 'Image', value: 'https://content.da.live/org/site/image.jpg' };
     try {
       element._renderField(image);
       await flush();
-      expect(element._imagePreviewError).to.include('Preview cookie request failed: 403');
+      expect(element._imagePreviewError).to.include('Image download failed: 403');
       expect(JSON.stringify(element.render())).to.include(element._imagePreviewError);
       expect(JSON.stringify(element._renderField(image))).not.to.include(image.value);
       expect(element._hostError).to.equal('');
@@ -130,7 +162,7 @@ describe('block editor sidebar workflow', () => {
     }
   });
 
-  it('ignores late preview authentication callbacks after disconnect', async () => {
+  it('ignores late image download callbacks after disconnect', async () => {
     const fetch = sdk.actions.daFetch;
     let finish;
     sdk.actions.daFetch = () => new Promise((resolve) => { finish = resolve; });

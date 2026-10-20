@@ -109,7 +109,6 @@ export class EwBlockProperties extends LitElement {
       });
       configureLibrary(this._actions);
       this._imagePreviews = createImagePreviews(sdk, {
-        admin: config.admin,
         onChange: (error) => {
           if (!this.isConnected || this._connection !== connection) return;
           if (error) this._imagePreviewError = error;
@@ -327,6 +326,7 @@ export class EwBlockProperties extends LitElement {
     this._unsubscribeLiveDocument = null;
     this._actions?.dispose?.();
     this._actions = null;
+    this._imagePreviews?.dispose();
     this._imagePreviews = null;
     this._imageUploadTarget = null;
     this._variantLoadId = (this._variantLoadId ?? 0) + 1;
@@ -521,7 +521,7 @@ export class EwBlockProperties extends LitElement {
     };
     const addImage = (field) => {
       if (field.value) {
-        content.push(html`<img class="ew-block-item-thumbnail" src=${this._imagePreviews?.(field.previewSrc || field.value) ?? nothing}
+        content.push(html`<img class="ew-block-item-thumbnail" src=${this._imagePreviews?.get(field.previewSrc || field.value) ?? nothing}
           alt=${field.alt || ''} loading="lazy" decoding="async" draggable="false">`);
       }
     };
@@ -853,7 +853,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
             ${field.type === 'image' ? html`
               <label>${field.label}</label>
               ${field.value ? html`<img class="ew-block-field-image"
-                src=${this._imagePreviews?.(field.previewSrc || field.value) ?? nothing}
+                src=${this._imagePreviews?.get(field.previewSrc || field.value) ?? nothing}
                 alt=${field.alt || ''}>` : nothing}
               <input type="file" hidden accept=${Object.values(IMAGE_FILE_TYPES).join(',')}
                 ?disabled=${disabled} @change=${this._uploadImage}>

@@ -4,6 +4,8 @@ Edit a canvas block through a properties sidebar instead of changing its content
 directly on the page. The extension follows the block containing your caret and
 shows its configured fields, variant, images, and repeating items.
 
+![Block editor sidebar showing block fields and image controls](docs/example.png)
+
 Changes update the live canvas, including unsaved content, and use the editor's
 normal undo/redo, collaboration, and autosave. Field labels come from your block
 library, so authors see names such as **Title**, **Image**, and **Link** rather than

@@ -7,122 +7,188 @@ describe('block editor authenticated image previews', () => {
   let sdk;
   let calls;
   let updates;
+  let managers;
+  let updateWaiters;
+  const imageBytes = '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="red"/></svg>';
+  const imageResponse = () => new Response(new Blob([imageBytes], { type: 'image/svg+xml' }));
 
   beforeEach(() => {
     calls = [];
     updates = [];
+    managers = [];
+    updateWaiters = [];
     sdk = {
       token: 'test-token',
       context: { org: 'org', site: 'site', ref: 'plugin-dev', branch: 'feature' },
       actions: {
         daFetch: async (url, options) => {
           calls.push({ url, options });
-          return new Response('');
+          return imageResponse();
         },
       },
     };
   });
 
-  const previews = (admin = 'https://admin.da.live') => createImagePreviews(sdk, {
-    admin, onChange: (error) => updates.push(error),
-  });
+  afterEach(() => managers.forEach((manager) => manager.dispose()));
 
-  it('waits for the authenticated cookie before returning a rewritten image URL', async () => {
-    const getPreview = previews();
-    expect(getPreview(source)).to.equal(undefined);
-    await flush();
-    expect(calls).to.have.length(1);
-    expect(calls[0]).to.deep.equal({
-      url: 'https://feature--site--org.preview.da.live/gimme_cookie',
-      options: {
-        credentials: 'include',
-        headers: { Authorization: 'Bearer test-token' },
-        noRedirect: true,
+  const previews = () => {
+    const manager = createImagePreviews(sdk, {
+      onChange: (error) => {
+        updates.push(error);
+        updateWaiters.forEach(({ count, resolve }) => { if (updates.length >= count) resolve(); });
       },
     });
-    expect(getPreview(source))
-      .to.equal('https://feature--site--org.preview.da.live/.page/photo.jpg?width=200#image');
+    managers.push(manager);
+    return manager;
+  };
+  const waitForUpdates = (count) => new Promise((resolve) => {
+    if (updates.length >= count) resolve();
+    else updateWaiters.push({ count, resolve });
+  });
+
+  it('downloads image bytes with authentication but without cookies', async () => {
+    const manager = previews();
+    expect(manager.get(source)).to.equal(undefined);
+    await waitForUpdates(1);
+    expect(calls).to.have.length(1);
+    expect(calls[0].url).to.equal('https://content.da.live/org/site/.page/photo.jpg?width=200');
+    expect(calls[0].options.credentials).to.equal('omit');
+    expect(calls[0].options.headers).to.deep.equal({ Authorization: 'Bearer test-token' });
+    expect(calls[0].options.noRedirect).to.equal(true);
+    expect(calls[0].options.signal).to.be.instanceOf(AbortSignal);
+    const blobUrl = manager.get(source);
+    expect(blobUrl).to.match(/^blob:/);
+    expect(blobUrl.endsWith('#image')).to.equal(true);
+    const image = new Image();
+    image.src = blobUrl;
+    await image.decode();
+    expect(image.naturalWidth).to.equal(2);
+    expect(image.naturalHeight).to.equal(2);
     expect(updates).to.deep.equal([undefined]);
   });
 
-  it('shares pending and completed cookie requests across images on the same origin', async () => {
+  it('shares pending and completed downloads for the same image', async () => {
     let finish;
     sdk.actions.daFetch = (url) => {
       calls.push(url);
       return new Promise((resolve) => { finish = resolve; });
     };
-    const getPreview = previews();
-    getPreview(source);
-    expect(getPreview('https://content.da.live/org/site/other.png')).to.equal(undefined);
+    const manager = previews();
+    manager.get(source);
+    expect(manager.get(source.replace('#image', '#other'))).to.equal(undefined);
     await flush();
     expect(calls).to.have.length(1);
-    expect(getPreview(source)).to.equal(undefined);
-    finish(new Response(''));
-    await flush();
-    expect(getPreview('https://content.da.live/org/site/other.png'))
-      .to.equal('https://feature--site--org.preview.da.live/other.png');
-    expect(calls).to.have.length(1);
-  });
-
-  it('matches the selected admin environment and supports stage-content images', async () => {
-    const getPreview = previews('https://stage-admin.da.live');
-    getPreview(source);
-    getPreview('https://stage-content.da.live/org/site/stage.png');
-    await flush();
-    expect(calls[0].url).to.equal('https://feature--site--org.stage-preview.da.live/gimme_cookie');
-    expect(getPreview(source)).to.include('.stage-preview.da.live/.page/photo.jpg');
-    expect(getPreview('https://stage-content.da.live/org/site/stage.png'))
-      .to.equal('https://feature--site--org.stage-preview.da.live/stage.png');
+    expect(manager.get(source)).to.equal(undefined);
+    finish(imageResponse());
+    await waitForUpdates(1);
+    expect(manager.get(source)).to.match(/^blob:/);
+    expect(manager.get(source.replace('#image', '#other'))).to.equal(manager.get(source).replace('#image', '#other'));
     expect(calls).to.have.length(1);
   });
 
-  it('uses main for local refs and uses each content image own organization and site', async () => {
-    sdk.context = { ref: 'local' };
-    const getPreview = previews();
-    getPreview(source);
-    getPreview('https://content.da.live/other-org/other-site/image.png');
-    await flush();
-    expect(calls.map(({ url }) => url)).to.deep.equal([
-      'https://main--site--org.preview.da.live/gimme_cookie',
-      'https://main--other-site--other-org.preview.da.live/gimme_cookie',
-    ]);
+  it('downloads separate images and supports stage-content without rewriting their origins', async () => {
+    const manager = previews();
+    manager.get(source);
+    const stage = 'https://stage-content.da.live/org/site/stage.png';
+    manager.get(stage);
+    await waitForUpdates(2);
+    expect(calls[1].url).to.equal(stage);
+    expect(manager.get(source)).to.match(/^blob:/);
+    expect(manager.get(stage)).to.match(/^blob:/);
+    expect(manager.get(stage)).not.to.equal(manager.get(source));
+    expect(calls).to.have.length(2);
   });
 
   it('leaves unrelated and relative URLs untouched without sending authentication', async () => {
-    const getPreview = previews();
+    const manager = previews();
     for (const src of [
       '/media.png', './media_123.png', 'https://example.com/image.png',
       'https://content.da.live.example.com/org/site/image.png',
       'https://main--site--org.preview.da.live/image.png',
-    ]) expect(getPreview(src)).to.equal(src);
+    ]) expect(manager.get(src)).to.equal(src);
     await flush();
     expect(calls).to.have.length(0);
   });
 
-  it('surfaces cookie failures without exposing the image or falling back to content URLs', async () => {
+  it('surfaces download failures without falling back to a cookie-dependent image URL', async () => {
     sdk.actions.daFetch = async () => new Response('', { status: 403 });
-    const getPreview = previews();
-    getPreview(source);
+    const manager = previews();
+    manager.get(source);
     await flush();
-    expect(updates[0]).to.include('Preview cookie request failed: 403');
-    expect(getPreview(source)).to.equal(undefined);
+    expect(updates[0]).to.include('Image download failed: 403');
+    expect(manager.get(source)).to.equal(undefined);
     await flush();
     expect(updates).to.have.length(1);
   });
 
   it('surfaces missing tokens and network failures', async () => {
     sdk.token = '';
-    let getPreview = previews();
-    getPreview(source);
+    let manager = previews();
+    manager.get(source);
     await flush();
     expect(updates[0]).to.include('did not supply an authentication token');
     expect(calls).to.have.length(0);
     sdk.token = 'test-token';
     sdk.actions.daFetch = async () => { throw new Error('Network error'); };
-    getPreview = previews();
-    getPreview(source);
+    manager = previews();
+    manager.get(source);
     await flush();
     expect(updates[1]).to.include('Network error');
-    expect(getPreview(source)).to.equal(undefined);
+    expect(manager.get(source)).to.equal(undefined);
+  });
+
+  it('rejects successful responses that are empty or are not images', async () => {
+    for (const response of [
+      new Response('', { headers: { 'Content-Type': 'image/jpeg' } }),
+      new Response('<html>Sign in</html>', { headers: { 'Content-Type': 'text/html' } }),
+    ]) {
+      sdk.actions.daFetch = async () => response;
+      const manager = previews();
+      manager.get(source);
+      await flush();
+      expect(updates[updates.length - 1]).to.include('empty or did not contain an image');
+      expect(manager.get(source)).to.equal(undefined);
+    }
+  });
+
+  it('revokes downloaded blob URLs and aborts requests when disposed', async () => {
+    const manager = previews();
+    manager.get(source);
+    await waitForUpdates(1);
+    const blobUrl = manager.get(source);
+    const revoke = URL.revokeObjectURL;
+    const revoked = [];
+    URL.revokeObjectURL = (url) => { revoked.push(url); revoke.call(URL, url); };
+    try {
+      manager.dispose();
+      manager.dispose();
+      expect(revoked).to.deep.equal([blobUrl.split('#')[0]]);
+      expect(calls[0].options.signal.aborted).to.equal(true);
+      expect(manager.get(source)).to.equal(undefined);
+    } finally {
+      URL.revokeObjectURL = revoke;
+    }
+  });
+
+  it('does not create blob URLs or notify after disposal during a download', async () => {
+    let finish;
+    sdk.actions.daFetch = () => new Promise((resolve) => { finish = resolve; });
+    const manager = previews();
+    manager.get(source);
+    await flush();
+    manager.dispose();
+    finish(imageResponse());
+    await flush();
+    expect(updates).to.have.length(0);
+    expect(manager.get(source)).to.equal(undefined);
+  });
+
+  it('does not begin downloads after immediate disposal', async () => {
+    const manager = previews();
+    manager.get(source);
+    manager.dispose();
+    await flush();
+    expect(calls).to.have.length(0);
+    expect(updates).to.have.length(0);
   });
 });

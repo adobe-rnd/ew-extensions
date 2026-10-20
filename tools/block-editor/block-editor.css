@@ -10,6 +10,24 @@
   margin: var(--s2-spacing-200, 16px);
 }
 
+.nx-input-error-msg[role='alert'] {
+  display: block;
+  box-sizing: border-box;
+  margin: var(--s2-spacing-200, 16px);
+  padding: var(--s2-spacing-150, 12px);
+  border: 1px solid #f6b9b2;
+  border-radius: var(--s2-corner-radius-200, 8px);
+  background: #fff1f0;
+  color: #a32119;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ew-pm-fields .nx-input-error-msg[role='alert'] {
+  margin: var(--s2-spacing-100, 8px) 0;
+}
+
 .ew-block-empty-state {
   display: flex;
   flex-direction: column;
