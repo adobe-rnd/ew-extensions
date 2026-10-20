@@ -102,6 +102,29 @@ describe('block editor sidebar workflow', () => {
     callback({ html: liveHtml.replace('Hello', 'Late'), selection: { blockIndex: 0 } });
     expect(element._session.snapshot.html).to.equal(liveHtml);
   });
+  it('shows the no-selection illustration only when no block is selected', async () => {
+    element._actions = element._sourceActions;
+    sdk.emit({ html: liveHtml, selection: { blockIndex: null } });
+    await flush();
+    const rendered = JSON.stringify(element.render());
+    const illustration = `${window.location.origin}/tools/block-editor/img/no-block-selected.svg`;
+    expect(rendered).to.include('No block selected');
+    expect(rendered).to.include(`${illustration}#icon`);
+    expect(rendered).not.to.include('Place the caret inside a canvas block');
+    const response = await fetch(illustration);
+    expect(response.ok).to.equal(true);
+    const doc = new DOMParser().parseFromString(await response.text(), 'image/svg+xml');
+    expect(doc.querySelector('parsererror')).to.equal(null);
+    expect(doc.documentElement.getAttribute('width')).to.equal('48');
+    expect(doc.documentElement.getAttribute('height')).to.equal('48');
+    expect(doc.documentElement.getAttribute('viewBox')).to.equal('0 0 48 48');
+    expect(doc.documentElement.id).to.equal('icon');
+    expect(doc.querySelector('path').getAttribute('fill')).to.equal('currentColor');
+    sdk.emit({ html: liveHtml, selection: { blockIndex: 0 } });
+    await flush();
+    expect(JSON.stringify(element.render())).not.to.include('No block selected');
+    expect(JSON.stringify(element.render())).not.to.include(illustration);
+  });
   it('uses extension-local icons for sidebar controls and shared component configuration', async () => {
     const codeBase = `${window.location.origin}/tools/block-editor`;
     expect(window.blockEditorTestNxConfig.codeBase).to.equal(codeBase);

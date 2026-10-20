@@ -945,7 +945,12 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
                 ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
                 ${this._refreshingLibrary ? 'Loading library…' : 'Retry loading library'}
               </button>` : nothing}
-          ` : html`<p class="ew-block-empty">Place the caret inside a canvas block to inspect its live values.</p>`}
+          ` : html`<div class="ew-block-empty-state">
+            <svg aria-hidden="true" width="48" height="48" viewBox="0 0 48 48">
+              <use href=${`${codeBase}/img/no-block-selected.svg#icon`}></use>
+            </svg>
+            <p class="ew-block-empty">No block selected</p>
+          </div>`}
         </div>
       </div>
       `;
