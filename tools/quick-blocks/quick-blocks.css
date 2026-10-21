@@ -7,6 +7,7 @@ ew-quick-blocks {
   display: block;
   box-sizing: border-box;
   min-height: 100vh;
+  padding-top: var(--s2-spacing-200, 16px);
   background: var(--s2-gray-25);
   color: var(--s2-gray-900);
   font-family: var(--s2-font-family);
@@ -20,7 +21,7 @@ ew-quick-blocks [hidden] {
 }
 
 .quick-header {
-  padding: 20px 16px 12px;
+  padding: 12px 16px;
 }
 
 .quick-header h1 {

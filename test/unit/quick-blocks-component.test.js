@@ -60,6 +60,17 @@ describe('Quick Blocks Properties shortcut', () => {
     element._actions = { showPanel: (name) => opened.push(name) };
   });
 
+  ['blocks', 'assets'].forEach((tab) => {
+    it(`keeps the tab row above the heading and instructions on the ${tab} tab`, () => {
+      element._tab = tab;
+      const template = element.render();
+      const parsed = new DOMParser().parseFromString(template.strings.join(''), 'text/html');
+      expect(parsed.body.firstElementChild.className).to.equal('quick-tabs');
+      expect(parsed.body.firstElementChild.nextElementSibling.className).to.equal('quick-header');
+      expect(parsed.querySelector('.quick-header h1').textContent).to.equal('Quick Blocks');
+    });
+  });
+
   it('opens the host Block panel without switching to a local Properties tab', () => {
     element._selectTab('properties');
     expect(opened).to.deep.equal(['block']);

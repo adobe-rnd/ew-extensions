@@ -309,10 +309,6 @@ class QuickBlocks extends LitElement {
       assets: 'Drag an image into the page.',
     };
     return html`
-      <header class="quick-header">
-        <h1>Quick Blocks</h1>
-        <p>${tabDescription[this._tab]}</p>
-      </header>
       <nav class="quick-tabs" role="tablist" aria-label="Quick Blocks tools">
         <button type="button" id="quick-blocks-tab" role="tab"
           aria-controls="quick-blocks-panel" aria-selected=${this._tab === 'blocks'}
@@ -324,6 +320,10 @@ class QuickBlocks extends LitElement {
           aria-selected="false" title="Open the Block panel"
           @click=${() => this._selectTab('properties')}>Properties</button>
       </nav>
+      <header class="quick-header">
+        <h1>Quick Blocks</h1>
+        <p>${tabDescription[this._tab]}</p>
+      </header>
       <section class="quick-blocks-content" id="quick-blocks-panel" role="tabpanel"
         aria-labelledby="quick-blocks-tab" ?hidden=${this._tab !== 'blocks'}>
       <section class="quick-elements" aria-label="Text elements">
