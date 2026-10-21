@@ -267,7 +267,9 @@ class QuickBlocks extends LitElement {
       @dragend=${() => this._dragEnd()}>
       <span><strong>${item.name}</strong>
         ${item.variants ? html`<small>${item.variants}</small>` : nothing}
-      </span><span class="quick-add-icon" aria-hidden="true">+</span>
+      </span><span class="quick-add-icon" aria-hidden="true">
+        <svg viewBox="0 0 12 12"><path d="M6 1v10M1 6h10"></path></svg>
+      </span>
     </button>`;
   }
 

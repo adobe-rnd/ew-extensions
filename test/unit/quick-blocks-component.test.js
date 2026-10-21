@@ -1,6 +1,55 @@
 import { expect } from '@esm-bundle/chai';
 import '../../tools/quick-blocks/quick-blocks.js';
 
+describe('Quick Blocks add icon alignment', () => {
+  let style;
+  let button;
+
+  before(async () => {
+    style = document.createElement('style');
+    const response = await fetch('/tools/quick-blocks/quick-blocks.css');
+    expect(response.ok).to.equal(true);
+    style.textContent = await response.text();
+    document.head.append(style);
+  });
+
+  after(() => style.remove());
+  afterEach(() => button.remove());
+
+  [13, 18, 24].forEach((fontSize) => {
+    it(`centers the plus independently of the ${fontSize}px inherited font`, () => {
+      const element = document.createElement('ew-quick-blocks');
+      const template = element._renderAdd({ name: 'Paragraph' }, '<p>Paragraph</p>');
+      const parsed = new DOMParser().parseFromString(template.strings.join(''), 'text/html');
+      const icon = parsed.querySelector('.quick-add-icon');
+      expect(icon.getAttribute('aria-hidden')).to.equal('true');
+      expect(icon.textContent.trim()).to.equal('');
+      expect(icon.querySelector('svg').getAttribute('viewBox')).to.equal('0 0 12 12');
+
+      button = document.createElement('button');
+      button.className = 'quick-add';
+      button.style.fontSize = `${fontSize}px`;
+      button.style.width = '360px';
+      button.append(document.createElement('span'), icon);
+      document.body.append(button);
+
+      const badge = icon.getBoundingClientRect();
+      const glyph = icon.querySelector('svg').getBoundingClientRect();
+      const bounds = button.getBoundingClientRect();
+      expect(badge.width).to.equal(22);
+      expect(badge.height).to.equal(22);
+      expect(glyph.width).to.equal(12);
+      expect(glyph.height).to.equal(12);
+      expect(Math.abs((glyph.left + glyph.width / 2) - (badge.left + badge.width / 2)))
+        .to.be.lessThan(0.5);
+      expect(Math.abs((glyph.top + glyph.height / 2) - (badge.top + badge.height / 2)))
+        .to.be.lessThan(0.5);
+      expect(Math.abs((badge.top + badge.height / 2) - (bounds.top + bounds.height / 2)))
+        .to.be.lessThan(0.5);
+    });
+  });
+});
+
 describe('Quick Blocks Properties shortcut', () => {
   let element;
   let opened;
