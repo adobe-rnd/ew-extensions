@@ -1,4 +1,4 @@
-import DA_SDK from 'https://da.live/nx/utils/sdk.js';
+import DA_SDK from 'https://devlive--da-nx--adobe.aem.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 import { parseAssetPage } from './assets.js';
 import {

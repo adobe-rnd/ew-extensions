@@ -31,6 +31,7 @@ export default {
           {
             "imports": {
               "da-lit": "/test/mocks/lit-stub.js",
+              "https://devlive--da-nx--adobe.aem.live/nx/utils/sdk.js": "/test/mocks/da-sdk.js",
               "https://da.live/nx/utils/sdk.js": "/test/mocks/da-sdk.js"
             }
           }
