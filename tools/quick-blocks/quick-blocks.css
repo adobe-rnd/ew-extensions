@@ -150,6 +150,48 @@ ew-quick-blocks [hidden] {
   font-weight: 600;
 }
 
+.quick-group-header {
+  display: flex;
+  align-items: center;
+}
+
+.quick-group-header .quick-group-button {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-library-button {
+  display: grid;
+  flex: 0 0 28px;
+  height: 28px;
+  margin-right: 6px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--s2-corner-radius-400);
+  background: transparent;
+  color: var(--s2-gray-700);
+  cursor: pointer;
+}
+
+.quick-library-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.quick-library-button:hover {
+  background: var(--s2-gray-100);
+}
+
+.quick-library-button:focus-visible {
+  outline: 2px solid var(--s2-blue-800);
+  outline-offset: -2px;
+}
+
 .quick-group-button[aria-expanded="true"] {
   background: var(--s2-gray-75);
 }

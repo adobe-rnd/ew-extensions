@@ -116,6 +116,7 @@ class QuickBlocks extends LitElement {
   }
 
   disconnectedCallback() {
+    this._unsubPanelOptions?.();
     window.removeEventListener('message', this._onHandleMessage);
     window.removeEventListener('resize', this._publishDragHandles);
     window.removeEventListener('scroll', this._publishDragHandles, true);
@@ -133,7 +134,9 @@ class QuickBlocks extends LitElement {
 
   async _init() {
     try {
-      const { project, actions, token } = await DA_SDK;
+      const {
+        project, actions, token, panelOptions,
+      } = await DA_SDK;
       this._actions = actions;
       this._token = token;
       if (!project?.org || !project?.repo) {
@@ -142,6 +145,8 @@ class QuickBlocks extends LitElement {
       this._project = project;
       this._editorOrigin = resolveEditorOrigin(project);
       this._daFetch = libraryFetch(token, project.daAdmin);
+      this._unsubPanelOptions = actions.onPanelOptions((options) => this._applyPanelOptions(options));
+      this._applyPanelOptions(panelOptions);
       if (this._tab === 'assets') this._selectTab('assets');
       await this._load();
     } catch (error) {
@@ -188,6 +193,18 @@ class QuickBlocks extends LitElement {
 
   _toggle(block) {
     this._expanded = this._expanded === block ? null : block;
+  }
+
+  _applyPanelOptions(options) {
+    if (options?.tab === 'blocks' || options?.tab === 'assets') this._selectTab(options.tab);
+  }
+
+  _openLibrary(block) {
+    if (!this._actions?.showPanel) {
+      this._error = 'The editor is not connected.';
+      return;
+    }
+    this._actions.showPanel('blocks', { blockPath: block.path });
   }
 
   _selectTab(tab) {
@@ -352,10 +369,20 @@ class QuickBlocks extends LitElement {
       ? (variants || []).filter((variant) => matches(this._search, block, variant))
       : variants;
     return html`<li class="quick-group">
-            <button type="button" class="quick-group-button" aria-expanded=${!!expanded}
-              @click=${() => this._toggle(block)}>
-              <span class="quick-chevron" aria-hidden="true"></span>${block.name}
-            </button>
+            <div class="quick-group-header">
+              <button type="button" class="quick-group-button" aria-expanded=${!!expanded}
+                @click=${() => this._toggle(block)}>
+                <span class="quick-chevron" aria-hidden="true"></span>${block.name}
+              </button>
+              <button type="button" class="quick-library-button"
+                aria-label=${`Open ${block.name} in block library`}
+                title=${`Open ${block.name} in block library`} aria-haspopup="dialog"
+                @click=${() => this._openLibrary(block)}>
+                <svg aria-hidden="true" viewBox="0 0 16 16">
+                  <path d="M9 3h4v4M13 3 7 9M6 3H3v10h10v-3"></path>
+                </svg>
+              </button>
+            </div>
             ${expanded ? html`<ul class="quick-variants">
               ${matching === undefined ? html`<li class="quick-state">Loading variants…</li>` : nothing}
               ${matching?.length === 0 ? html`<li class="quick-state">No variants found.</li>` : nothing}

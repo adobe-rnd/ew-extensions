@@ -67,6 +67,41 @@ describe('Quick Blocks Properties shortcut', () => {
     expect(element.render().strings.join('')).not.to.include('quick-properties-panel');
   });
 
+  it('opens the block library with the exact requested item without inserting content', () => {
+    const calls = [];
+    element._actions.showPanel = (...args) => calls.push(args);
+    element._openLibrary({ name: 'Cards', path: 'https://example.com/library/cards' });
+    expect(calls).to.deep.equal([
+      ['blocks', { blockPath: 'https://example.com/library/cards' }],
+    ]);
+    expect(element._tab).to.equal('blocks');
+  });
+
+  it('reports a disconnected editor when opening the block library', () => {
+    element._actions = {};
+    element._openLibrary({ name: 'Cards', path: 'https://example.com/library/cards' });
+    expect(element._error).to.equal('The editor is not connected.');
+  });
+
+  it('selects Assets from navigation options and does not reload already requested images', () => {
+    const messages = [];
+    element._editorOrigin = window.location.origin;
+    const original = window.parent.postMessage;
+    window.parent.postMessage = (message) => messages.push(message);
+    try {
+      element._applyPanelOptions({ tab: 'assets' });
+      expect(element._tab).to.equal('assets');
+      expect(messages).to.deep.equal([{ type: 'ew-asset-list-request', more: false }]);
+      element._assetLoading = false;
+      element._applyPanelOptions({ tab: 'blocks' });
+      expect(element._tab).to.equal('blocks');
+      element._applyPanelOptions({ tab: 'assets' });
+      expect(messages).to.have.length(1);
+    } finally {
+      window.parent.postMessage = original;
+    }
+  });
+
   it('preserves the Assets tab and its loaded images when opening the host panel', () => {
     element._tab = 'assets';
     element._assetsRequested = true;
