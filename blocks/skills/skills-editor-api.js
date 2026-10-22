@@ -955,6 +955,10 @@ export async function loadSkillsFromAo(org, site, loadedConfig = null) {
   aoSkills.forEach(({
     id, skillId, scope, description, displayName, lineCount,
   }) => {
+    // Skip skills the user just deleted: the bridge catalog is eventually
+    // consistent and may still return a freshly-removed skill for a short
+    // window, which would make a successful delete look like it did nothing.
+    if (isSkillRecentlyDeleted(id)) return;
     map[id] = daResult.map[id] || '';
     statuses[id] = daResult.statuses[id] || 'approved';
     scopes[id] = scope;

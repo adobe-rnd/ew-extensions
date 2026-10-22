@@ -218,7 +218,16 @@ function renderSkillDetail(vm) {
   const body = vm.skills[id] || '';
   const fm = parseFrontmatter(body);
   const name = fm?.fields?.name || id;
-  const description = vm.skillDescriptions[id] || fm?.fields?.description || extractTitle(body) || '';
+  // A bare block-scalar indicator (">", "|", with optional chomp/indent) means
+  // an upstream parser failed to fold a multi-line description — treat it as
+  // absent so we fall through to the locally-parsed SKILL.md value.
+  const isDegenerate = (s) => !s || /^[|>][+-]?\d*$/.test(s);
+  const aoDesc = (vm.skillDescriptions[id] || '').trim();
+  const fmDesc = (fm?.fields?.description || '').trim();
+  const description = (!isDegenerate(aoDesc) && aoDesc)
+    || (!isDegenerate(fmDesc) && fmDesc)
+    || extractTitle(body)
+    || '';
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const readOnly = !isPersonal;
 
