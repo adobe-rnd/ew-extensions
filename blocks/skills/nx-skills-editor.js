@@ -1526,6 +1526,21 @@ class NxSkillsEditor extends LitElement {
       this._setStatus(`Duplicate header name: ${dupes[0]}`, STATUS_TYPE.ERR);
       return;
     }
+    // Reject malformed registrations up front. A server with no name, or no
+    // usable http(s) URL, produces a nameless/tool-less card that can't be
+    // managed (and makes the bridge reject session-create). Validate before we
+    // persist it.
+    if (!String(this._mcpKey || '').trim()) {
+      this._setStatus('MCP server name is required', STATUS_TYPE.ERR);
+      return;
+    }
+    const trimmedUrl = String(this._mcpUrl || '').trim();
+    let parsedUrl = null;
+    try { parsedUrl = new URL(trimmedUrl); } catch { parsedUrl = null; }
+    if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol)) {
+      this._setStatus('Enter a valid http(s) URL for the MCP server', STATUS_TYPE.ERR);
+      return;
+    }
     this._isSaveBusy = true;
     const isUpdate = Boolean(this._editingMcpKey);
     const result = await registerMcpServer(

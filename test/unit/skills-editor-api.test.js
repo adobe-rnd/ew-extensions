@@ -20,6 +20,7 @@ import {
   registerMcpServer,
   setMcpServerEnabled,
   deleteMcpServer,
+  fetchMcpServersFromBridge,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -402,6 +403,29 @@ describe('AO / bridge backend switch', () => {
 
   describe('altHarness on (bridge)', () => {
     beforeEach(() => setSkillsBackend({ altHarness: true }));
+
+    it('fetchMcpServersFromBridge tags scope, carries key/url/tools, and dedupes by url (agent wins)', async () => {
+      const BRIDGE_MCP = {
+        agent: [{ name: 'AEM', url: 'https://aem-mcp.example/mcp', tools: [{ name: 'list_pages', description: '' }] }],
+        org: [{ key: 'org-tools', url: 'https://org.example/mcp' }],
+        // Same url as the agent server → deduped out (agent wins); plus a real
+        // personal override that must survive with scope/key/url.
+        user: [
+          { key: 'dupe', url: 'https://aem-mcp.example/mcp' },
+          { key: 'workfront-mcp', url: 'https://workfront.example/mcp' },
+        ],
+      };
+      trackFetch(() => ({ ok: true, json: async () => BRIDGE_MCP }));
+      const cards = await fetchMcpServersFromBridge();
+
+      const byKey = Object.fromEntries(cards.map((c) => [c.id, c]));
+      expect(byKey.AEM.scope).to.equal('agent');
+      expect(byKey.AEM.tools.map((t) => t.name)).to.include('list_pages');
+      expect(byKey['org-tools']).to.include({ scope: 'org', key: 'org-tools', url: 'https://org.example/mcp' });
+      expect(byKey['workfront-mcp']).to.include({ scope: 'user', key: 'workfront-mcp', url: 'https://workfront.example/mcp' });
+      // The user entry with the same url as the agent server is deduped away.
+      expect(cards.filter((c) => c.url === 'https://aem-mcp.example/mcp')).to.have.length(1);
+    });
 
     it('fetchSkillsFromAo hits the bridge base with x-user-id and maps skillId', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => BRIDGE_SKILLS_RESPONSE }));
