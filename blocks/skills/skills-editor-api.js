@@ -621,12 +621,18 @@ export async function fetchMcpServersFromBridge() {
       if (!id) return null;
       return {
         id,
+        // Carry the override entry's key + url explicitly so the UI can edit/
+        // delete user/org-scope servers (deleteMcpServer is keyed by `key`).
+        key: s.key || s.name || id,
+        url: s.url || s.value || '',
         description: s.url || s.value || scope,
         transport: 'built-in',
         scope,
         // Carry the agent group's resolved tools through (overrides.ts
         // getAgentMcpServersWithTools) instead of dropping them, so the MCP
-        // card can list them on the CMA/bridge path.
+        // card can list them on the CMA/bridge path. NOTE: these are the
+        // bridge's already-resolved tools, not a live tools/list probe against
+        // the server URL — the card renders them directly.
         tools: Array.isArray(s.tools) ? s.tools : [],
       };
     };

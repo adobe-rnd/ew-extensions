@@ -25,7 +25,6 @@ import {
 import { resolveEgovEmbedUrl } from './utils/egov-embed.js';
 import {
   isSensitiveHeaderName,
-  skillRowEnabled,
   skillRowStatus,
   AO_SCOPE_PERSONAL,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
@@ -798,11 +797,17 @@ export function renderMcpForm(vm) {
 export function renderMcpServerInfo(vm) {
   const serverId = vm.viewingMcpServerId;
   const builtin = BUILTIN_MCP_SERVERS.find((s) => s.id === serverId);
-  if (!builtin) return nothing;
+  const bridge = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  const server = builtin || bridge;
+  if (!server) return nothing;
+  // Scope-aware badge: agent/preset → built-in; user → personal; org → org.
+  let label = 'built-in';
+  if (!builtin && bridge?.scope === 'user') label = 'personal';
+  else if (!builtin && bridge?.scope === 'org') label = 'org';
   return html`
     <div class="mcp-server-info">
-      <p class="mcp-server-desc">${builtin.description}</p>
-      <span class="badge">built-in</span>
+      <p class="mcp-server-desc">${server.description || server.url || ''}</p>
+      <span class="badge">${label}</span>
     </div>
   `;
 }
@@ -1179,34 +1184,55 @@ export function renderPromptsCatalog(vm) {
 }
 
 function mcpShared(vm, s, isBuiltin) {
-  const key = isBuiltin ? s.id : (s.key || '');
+  // A bridge override (user/org scope) is user/admin-registered: it shows the
+  // bridge-resolved tools like a built-in, but is deletable and labelled by
+  // scope rather than "Built-in".
+  const isOverride = !isBuiltin && (s.scope === 'user' || s.scope === 'org');
+  const viewTools = isBuiltin || isOverride; // click opens the tools view vs the edit form
+  const key = (isBuiltin || isOverride) ? s.id : (s.key || '');
   const desc = isBuiltin ? s.description : (s.url || s.value || '');
-  const toolCount = isBuiltin
-    ? (BUILTIN_TOOL_DETAILS[s.id]?.length || 0)
-    : mcpServerToolData(vm, key).tools.length;
+  let toolCount;
+  if (isBuiltin || isOverride) {
+    toolCount = Array.isArray(s.tools) ? s.tools.length : (BUILTIN_TOOL_DETAILS[s.id]?.length || 0);
+  } else {
+    toolCount = mcpServerToolData(vm, key).tools.length;
+  }
   let transport = '';
   if (!isBuiltin) transport = s.url ? 'HTTP' : 'stdio';
-  const isSelected = isBuiltin
-    ? vm.viewingMcpServerId === s.id && !vm.editingMcpKey
+  // Scope-based label: agent/preset servers (the AEM MCPs) are ALWAYS
+  // "Built-in"; a server the user/admin registered is "Personal"/"Org"; a
+  // config-sheet row is "Custom".
+  let scopeLabel = 'Built-in';
+  if (!isBuiltin) {
+    if (s.scope === 'user') scopeLabel = 'Personal';
+    else if (s.scope === 'org') scopeLabel = 'Org';
+    else scopeLabel = 'Custom';
+  }
+  // Agent/preset built-ins are fixed; overrides and config rows are removable.
+  const canDelete = !isBuiltin;
+  const isSelected = viewTools
+    ? vm.viewingMcpServerId === key && !vm.editingMcpKey
     : vm.isEditorOpen && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
-  const onClick = isBuiltin
-    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))
+  const onClick = viewTools
+    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(key))
     : (e) => vm.onMcpCardClick(e, () => vm.onEditMcp(s));
-  const onKey = isBuiltin
-    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))
+  const onKey = viewTools
+    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(key))
     : (e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(s));
-  let badge = 'BUILT-IN';
-  if (!isBuiltin) badge = (skillRowStatus(s) === STATUS.APPROVED && skillRowEnabled(s)) ? 'CONNECTED' : 'DISABLED';
-  return { key, desc, toolCount, transport, isSelected, onClick, onKey, badge };
+  return {
+    key, desc, toolCount, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  };
 }
 
 function renderMcpCard(vm, s, isBuiltin) {
-  const { key, desc, toolCount, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
+  const {
+    key, desc, toolCount, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  } = mcpShared(vm, s, isBuiltin);
 
   return html`
     <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
       role="button" tabindex="0"
-      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      aria-label="${viewTools ? 'View' : 'Edit'} MCP server ${key}"
       data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
       data-mcp-key=${key}
       @click=${onClick} @keydown=${onKey}
@@ -1220,9 +1246,9 @@ function renderMcpCard(vm, s, isBuiltin) {
         ${transport ? html`<span class="plugin-card-badge">${transport}</span>` : nothing}
       </header>
       <footer class="plugin-card-meta">
-        <span class="skill-detail-badge plugin-card-badge">Personal</span>
+        <span class="skill-detail-badge plugin-card-badge">${scopeLabel}</span>
         <span class="plugin-card-count">${toolCount} tools</span>
-        ${!isBuiltin ? html`
+        ${canDelete ? html`
           <button type="button" class="plugin-card-action is-uninstall"
             aria-label="Delete MCP server ${key}"
             data-testid="mcp-delete-btn"
@@ -1235,11 +1261,13 @@ function renderMcpCard(vm, s, isBuiltin) {
 }
 
 function renderMcpRow(vm, s, isBuiltin) {
-  const { key, desc, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
+  const {
+    key, desc, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  } = mcpShared(vm, s, isBuiltin);
 
   return html`
     <div class="catalog-row ${isSelected ? 'is-selected' : ''}" role="button" tabindex="0"
-      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      aria-label="${viewTools ? 'View' : 'Edit'} MCP server ${key}"
       data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
       data-mcp-key=${key}
       @click=${onClick} @keydown=${onKey}
@@ -1248,10 +1276,10 @@ function renderMcpRow(vm, s, isBuiltin) {
       <div class="catalog-row-body">
         <div class="catalog-row-title-line">
           <span class="catalog-row-name">${key || '(unnamed)'}</span>
-          <span class="catalog-row-meta">${desc} · ${transport || 'built-in'}</span>
+          <span class="catalog-row-meta">${desc} · ${scopeLabel}${transport ? ` · ${transport}` : ''}</span>
         </div>
       </div>
-      ${!isBuiltin ? html`
+      ${canDelete ? html`
         <button type="button" class="plugin-row-action is-uninstall"
           aria-label="Delete MCP server ${key}"
           data-testid="mcp-delete-btn"
@@ -1266,9 +1294,35 @@ function renderMcpRow(vm, s, isBuiltin) {
 export function renderMcpsCatalog(vm) {
   const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
-  let filteredCustom = vm.mcpRows.filter((row) => filterPasses(skillRowStatus(row)));
+
+  // On the bridge/altHarness path the connected list is the CMA agent's real
+  // MCP servers (vm.builtinMcpServers), each tagged with a scope. Agent-scope
+  // servers are the true built-ins (e.g. the AEM MCPs) — view-only. user/org
+  // scope servers are user/admin-registered overrides the bridge returns here
+  // too; split them out so they render as deletable "Custom"/Personal entries
+  // instead of masquerading as built-ins.
+  const bridgeServers = vm.builtinMcpServers || [];
+  const hasBridge = bridgeServers.length > 0;
+  const connected = hasBridge
+    ? bridgeServers.filter((s) => (s.scope ?? 'agent') === 'agent')
+    : BUILTIN_MCP_SERVERS;
+  // Normalize overrides to the custom-row shape so the existing delete handler
+  // (keyed by `key`) works — the bridge card's `id` IS the override entry's key.
+  const overrideRows = hasBridge
+    ? bridgeServers
+      .filter((s) => s.scope === 'user' || s.scope === 'org')
+      .map((s) => ({
+        key: s.id,
+        id: s.id,
+        url: s.url || s.description || '',
+        scope: s.scope,
+        tools: Array.isArray(s.tools) ? s.tools : [],
+      }))
+    : [];
+
+  let custom = [...overrideRows, ...vm.mcpRows].filter((row) => filterPasses(skillRowStatus(row)));
   if (searchQuery) {
-    filteredCustom = filteredCustom.filter((row) => {
+    custom = custom.filter((row) => {
       const key = (row.key || '').toLowerCase();
       const url = (row.url || row.value || '').toLowerCase();
       return key.includes(searchQuery) || url.includes(searchQuery);
@@ -1276,9 +1330,6 @@ export function renderMcpsCatalog(vm) {
   }
   const showBuiltins = filterPasses(STATUS.APPROVED);
   const isGrid = vm.catalogViewMode === 'grid';
-  // On the bridge/altHarness path the connected list is the CMA agent's real
-  // MCP servers (vm.builtinMcpServers); otherwise fall back to the built-in presets.
-  const connected = vm.builtinMcpServers?.length ? vm.builtinMcpServers : BUILTIN_MCP_SERVERS;
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="MCP view controls">
@@ -1290,10 +1341,10 @@ export function renderMcpsCatalog(vm) {
         ? html`<div class="plugin-grid">${connected.map((s) => renderMcpCard(vm, s, true))}</div>`
         : html`<div class="catalog-list">${connected.map((s) => renderMcpRow(vm, s, true))}</div>`}
     ` : nothing}
-    <h3 class="section-h">Custom (${filteredCustom.length})</h3>
-    ${!filteredCustom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
-    ${filteredCustom.length && isGrid ? html`<div class="plugin-grid">${filteredCustom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
-    ${filteredCustom.length && !isGrid ? html`<div class="catalog-list">${filteredCustom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
+    <h3 class="section-h">Custom (${custom.length})</h3>
+    ${!custom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
+    ${custom.length && isGrid ? html`<div class="plugin-grid">${custom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
+    ${custom.length && !isGrid ? html`<div class="catalog-list">${custom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
   `;
 }
 
