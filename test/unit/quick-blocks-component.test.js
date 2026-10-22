@@ -136,4 +136,39 @@ describe('Quick Blocks Properties shortcut', () => {
     expect(element._tab).to.equal('assets');
     expect(opened).to.deep.equal([]);
   });
+
+  ['blocks', 'assets'].forEach((tab) => {
+    it(`opens the Block panel when a block is selected on the ${tab} tab`, () => {
+      element._tab = tab;
+      element._onBlockSelection();
+      expect(opened).to.deep.equal(['block']);
+      expect(element._tab).to.equal(tab);
+    });
+  });
+
+  it('ignores block selection right after its own insert', () => {
+    element._now = () => 1000;
+    element._actions.sendHTML = () => {};
+    element._add('<p>x</p>');
+    element._now = () => 1400;
+    element._onBlockSelection();
+    expect(opened).to.deep.equal([]);
+    element._now = () => 1501;
+    element._onBlockSelection();
+    expect(opened).to.deep.equal(['block']);
+  });
+
+  it('ignores block selection right after a drag', () => {
+    element._now = () => 1000;
+    element._dragEnd();
+    element._now = () => 1200;
+    element._onBlockSelection();
+    expect(opened).to.deep.equal([]);
+  });
+
+  it('ignores block selection silently without showPanel', () => {
+    element._actions = {};
+    element._onBlockSelection();
+    expect(element._error).to.equal('');
+  });
 });

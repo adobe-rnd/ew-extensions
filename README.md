@@ -47,6 +47,11 @@ The **Properties** tab opens EW's built-in **Block** panel for the selected bloc
 using the DA SDK's `showPanel('block')` action. Quick Blocks does not provide a
 separate properties editor. Select a block in Canvas before opening Properties;
 the host panel owns field editing, variants, images, and read-only behavior.
+While the Blocks or Assets tab is showing, selecting a block in the canvas (or
+placing the cursor in one of its cells) switches to the Block panel
+automatically. Selections caused by a Quick Blocks insert or drag in the
+previous half second are ignored. Requires an EW host that sends
+`ew-block-selection`.
 The **Assets** tab lists images from the site's configured AEM Assets repository
 (`aem.repositoryId`) in pages. Images are drag-only; clicking them does not insert
 anything. EW fetches the listing and thumbnails using its existing sign-in;

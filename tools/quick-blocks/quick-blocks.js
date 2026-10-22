@@ -6,6 +6,8 @@ import {
   resolveEditorOrigin, setHtmlDragData,
 } from './library.js';
 
+const INSERT_GUARD_MS = 500;
+
 class QuickBlocks extends LitElement {
   static properties = {
     _blocks: { state: true },
@@ -41,6 +43,8 @@ class QuickBlocks extends LitElement {
     this._assetRetry = false;
     this._assetDragError = false;
     this._assetObjectUrls = new Set();
+    this._now = () => Date.now();
+    this._lastInsertAt = -Infinity;
     this._publishDragHandles = () => {
       if (!this._editorOrigin) return;
       const handles = [...this.querySelectorAll(
@@ -79,6 +83,8 @@ class QuickBlocks extends LitElement {
       } else if (type === 'ew-table-drag-handle-wheel'
         && Number.isFinite(event.data?.deltaY)) {
         window.scrollBy(0, event.data.deltaY);
+      } else if (type === 'ew-block-selection') {
+        this._onBlockSelection();
       } else if (type === 'ew-asset-list-result') {
         this._assetLoading = false;
         try {
@@ -247,9 +253,22 @@ class QuickBlocks extends LitElement {
       return;
     }
     this._actions.sendHTML(markup);
+    this._markInsert();
+  }
+
+  _markInsert() {
+    this._lastInsertAt = this._now();
+  }
+
+  // An insert moves the cursor into the new content; don't treat that as a selection.
+  _onBlockSelection() {
+    if (!['blocks', 'assets'].includes(this._tab)) return;
+    if (this._now() - this._lastInsertAt <= INSERT_GUARD_MS) return;
+    this._actions?.showPanel?.('block');
   }
 
   _dragStart(event, markup) {
+    this._markInsert();
     setHtmlDragData(event.dataTransfer, markup);
     if (!this._editorOrigin) {
       this._error = 'The editor origin is unavailable; drag into the page is disabled.';
@@ -263,6 +282,7 @@ class QuickBlocks extends LitElement {
   }
 
   _dragEnd() {
+    this._markInsert();
     if (this._editorOrigin) {
       window.parent.postMessage({ type: 'ew-table-drag-end' }, this._editorOrigin);
     }
