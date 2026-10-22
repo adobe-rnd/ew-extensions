@@ -146,6 +146,7 @@ class NxSkillsEditor extends LitElement {
     _confirmDialog: { state: true },
     _configError: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
+    chatAoImportUrl: { type: String, attribute: 'chat-ao-import-url' },
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
 
@@ -161,6 +162,14 @@ class NxSkillsEditor extends LitElement {
   _editorTriggerSelector = null; // CSS selector for the element that opened the drawer
 
   _chatLoaded = false;
+
+  // The chat module currently imported ('' until one loads). Tracked so the
+  // altHarness flip (da-agent nx-chat ↔ CMA nx-chat-ao) re-imports the right
+  // component. The activation key (ew.altHarness value) rides nx-chat-ao's
+  // harnessConfig so its socket authorizes/routes to the bridge.
+  _loadedChatUrl = '';
+
+  _chatActivationKey = null;
 
   _agentsLoadInFlight = false;
 
@@ -256,9 +265,9 @@ class NxSkillsEditor extends LitElement {
     this._isChatOpen = this.chatImportUrl
       ? sessionStorage.getItem('nx-skills-editor-chat-open') === '1'
       : false;
-    if (this._isChatOpen && this.chatImportUrl) {
-      import(this.chatImportUrl).then(() => { this._chatLoaded = true; });
-    }
+    // Defer the chat import until _reload resolves altHarness, so an
+    // altHarness site loads nx-chat-ao (CMA) directly instead of flashing the
+    // da-agent nx-chat first.
 
     // BroadcastChannel listeners (future da-nx + cross-tab)
     this._unsubBC = [
@@ -543,8 +552,12 @@ class NxSkillsEditor extends LitElement {
       // otherwise missed here while the chat still sees it, so the editor would
       // show no CMA skills and no bridge MCP servers on an org-flagged site.
       const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
-      const altHarness = !!String(ewFlags[EW_ALT_HARNESS_FLAG] ?? '').trim();
+      const activationKey = String(ewFlags[EW_ALT_HARNESS_FLAG] ?? '').trim();
+      const altHarness = !!activationKey;
       setSkillsBackend({ altHarness });
+      this._chatActivationKey = altHarness ? activationKey : null;
+      // altHarness is now known: (re)load the matching chat component if open.
+      if (this._isChatOpen) this._ensureChatLoaded();
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -689,13 +702,29 @@ class NxSkillsEditor extends LitElement {
     if (!this._isFormDirty) this._clearForm();
   }
 
+  // The chat component to mount: nx-chat-ao (CMA) on the alt harness, else the
+  // da-agent nx-chat. Falls back to the da-agent URL if the AO one wasn't
+  // provided.
+  _activeChatImportUrl() {
+    return isSkillsBackendAltHarness() && this.chatAoImportUrl
+      ? this.chatAoImportUrl
+      : this.chatImportUrl;
+  }
+
+  async _ensureChatLoaded() {
+    const url = this._activeChatImportUrl();
+    if (!url) return;
+    if (this._loadedChatUrl !== url) {
+      await import(url);
+      this._loadedChatUrl = url;
+    }
+    this._chatLoaded = true;
+  }
+
   async _toggleChat() {
     this._isChatOpen = !this._isChatOpen;
     sessionStorage.setItem('nx-skills-editor-chat-open', this._isChatOpen ? '1' : '0');
-    if (this._isChatOpen && !this._chatLoaded && this.chatImportUrl) {
-      await import(this.chatImportUrl);
-      this._chatLoaded = true;
-    }
+    if (this._isChatOpen) await this._ensureChatLoaded();
   }
 
   _setStatus(msg, type = STATUS_TYPE.OK) {
@@ -1472,8 +1501,10 @@ class NxSkillsEditor extends LitElement {
     // (canvas/browse mount nx-chat at the document level).
     if (this.chatImportUrl && !this._isChatOpen) await this._toggleChat();
     await this.updateComplete;
-    const chat = this.shadowRoot.querySelector('nx-chat')
-      ?? document.querySelector('nx-chat');
+    // The drawer mounts nx-chat (da-agent) or nx-chat-ao (CMA) depending on the
+    // harness, so match either.
+    const chat = this.shadowRoot.querySelector('nx-chat, nx-chat-ao')
+      ?? document.querySelector('nx-chat, nx-chat-ao');
     if (!chat) {
       this._setStatus('Chat is not available', STATUS_TYPE.ERR);
       return;
@@ -1780,6 +1811,12 @@ class NxSkillsEditor extends LitElement {
       catalogFilter: this._catalogFilter,
       isChatOpen: this._isChatOpen,
       chatAgentId: this.chatAgentId,
+      chatAltHarness: isSkillsBackendAltHarness(),
+      chatHarnessConfig: {
+        key: this._org && this._site ? `${this._org}/${this._site}` : null,
+        altHarness: isSkillsBackendAltHarness(),
+        activationKey: this._chatActivationKey ?? null,
+      },
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,
       isFormEdit: this._isFormEdit,
