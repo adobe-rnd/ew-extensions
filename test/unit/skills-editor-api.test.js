@@ -10,6 +10,7 @@ import {
   parseActionsHasWrite,
   fetchSkillsPermission,
   setSkillsBackend,
+  fetchEwFlags,
   fetchSkillsFromAo,
   fetchSkillFileFromAo,
   fetchSkillFileResultFromAo,
@@ -584,5 +585,64 @@ describe('AO / bridge backend switch', () => {
       await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
       expect(calls.every((c) => !String(c.url).includes('claudebridge'))).to.be.true;
     });
+  });
+});
+
+describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
+  const realFetch = window.fetch;
+  afterEach(() => { window.fetch = realFetch; });
+
+  // Site config URL has two path segments after /config/ (…/config/org/site/);
+  // org config has one (…/config/org/). Used to route the mock response.
+  const isSiteUrl = (url) => /\/config\/[^/]+\/[^/]+\/$/.test(String(url));
+
+  function mockConfigs({
+    orgFlags = null, siteFlags = null, orgStatus = 200, siteStatus = 200,
+  } = {}) {
+    window.fetch = async (url) => {
+      const site = isSiteUrl(url);
+      const status = site ? siteStatus : orgStatus;
+      const flags = site ? siteFlags : orgFlags;
+      if (status !== 200) return { ok: false, status, json: async () => ({}) };
+      return {
+        ok: true, status: 200, json: async () => (flags ? { flags: { data: flags } } : {}),
+      };
+    };
+  }
+
+  it('reads ew.altHarness set only at the ORG level (the reported bug)', async () => {
+    mockConfigs({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
+    const flags = await fetchEwFlags('ew-orgonly', 'site-a');
+    expect(flags['ew.altHarness']).to.equal('cma-key');
+  });
+
+  it('lets the site-level value override the org-level value', async () => {
+    mockConfigs({
+      orgFlags: [{ key: 'ew.altHarness', value: 'org-key' }],
+      siteFlags: [{ key: 'ew.altHarness', value: 'site-key' }],
+    });
+    const flags = await fetchEwFlags('ew-override', 'site-b');
+    expect(flags['ew.altHarness']).to.equal('site-key');
+  });
+
+  it('keeps only ew.* keys and tolerates a 404 org config', async () => {
+    mockConfigs({
+      orgStatus: 404,
+      siteFlags: [{ key: 'ew.altHarness', value: 'k' }, { key: 'other', value: 'x' }],
+    });
+    const flags = await fetchEwFlags('ew-404', 'site-c');
+    expect(flags['ew.altHarness']).to.equal('k');
+    expect(flags).to.not.have.property('other');
+  });
+
+  it('does not materialize (POST) an org config when it 404s', async () => {
+    const methods = [];
+    window.fetch = async (url, opts = {}) => {
+      methods.push(opts.method || 'GET');
+      if (isSiteUrl(url)) return { ok: true, status: 200, json: async () => ({ flags: { data: [] } }) };
+      return { ok: false, status: 404, json: async () => ({}) };
+    };
+    await fetchEwFlags('ew-nomat', 'site-d');
+    expect(methods).to.not.include('POST');
   });
 });

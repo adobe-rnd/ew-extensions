@@ -6,6 +6,7 @@ import './shared/card/card.js';
 import './shared/popover/popover.js';
 import {
   fetchDaConfigSheets,
+  fetchEwFlags,
   loadSkillsFromAo,
   fetchSkillFileResultFromAo,
   uploadSkillFileToAo,
@@ -536,9 +537,13 @@ class NxSkillsEditor extends LitElement {
       // 'true' — so enablement is a non-empty check, matching da-nx chat
       // (`!!flags['ew.altHarness']` in chat-ao.js). The old `=== 'true'` check
       // never matched a real key, so the editor always fell back to AO.
-      const flagRows = configResult.json?.flags?.data ?? [];
-      const altHarnessRow = flagRows.find((r) => r?.key === EW_ALT_HARNESS_FLAG);
-      const altHarness = !!String(altHarnessRow?.value ?? '').trim();
+      //
+      // Read flags merged across ORG + SITE config (site overrides org), same
+      // as da-nx's getEWFlags — an `ew.altHarness` set only at the org level is
+      // otherwise missed here while the chat still sees it, so the editor would
+      // show no CMA skills and no bridge MCP servers on an org-flagged site.
+      const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
+      const altHarness = !!String(ewFlags[EW_ALT_HARNESS_FLAG] ?? '').trim();
       setSkillsBackend({ altHarness });
 
       const permKey = `${this._org}/${this._site}`;

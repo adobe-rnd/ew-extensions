@@ -192,6 +192,9 @@ const EMPTY_CONFIG = Object.freeze({
 
 const TOOL_OVERRIDES_SHEET = 'tool-overrides';
 
+// Experience Workspace flags live in the `flags` sheet, keyed `ew.*`.
+const EW_FLAG_PREFIX = 'ew.';
+
 const AUTH_FAIL = {
   ok: false,
   status: 401,
@@ -219,6 +222,9 @@ export async function fetchDaConfigSheets(org, site, options = {}) {
       let resp = await daFetch(url);
       if (resp.status === 401) return { ...AUTH_FAIL };
       if (resp.status === 404) {
+        // Org-level flag reads must not create an org config doc as a side
+        // effect — callers pass skipMaterialize to just resolve to empty.
+        if (options.skipMaterialize) return { ...EMPTY_CONFIG };
         await materializeConfigAfter404(org, site);
         resp = await daFetch(url);
         if (resp.status === 401) return { ...AUTH_FAIL };
@@ -292,6 +298,33 @@ export async function fetchDaConfigSheets(org, site, options = {}) {
   })();
   inflightConfig.set(cacheKey, promise);
   return promise;
+}
+
+/**
+ * Reads `ew.*` flags merged across the ORG-level and SITE-level DA config, with
+ * site overriding org — mirroring da-nx's getEWFlags (nx2/utils/ewFlags.js) so
+ * the editor's altHarness detection agrees with the chat. Without the org-level
+ * read, an `ew.altHarness` set only at the org level is missed and the editor
+ * silently falls back to the empty da-agent path (no CMA skills, no bridge MCP
+ * servers). `siteConfig` lets a caller pass an already-fetched site config to
+ * avoid a duplicate request; the org read skips 404-materialization so it never
+ * creates an org config doc as a side effect.
+ */
+export async function fetchEwFlags(org, site, siteConfig = null) {
+  const [orgConfig, resolvedSite] = await Promise.all([
+    fetchDaConfigSheets(org, undefined, { skipMaterialize: true }),
+    siteConfig || fetchDaConfigSheets(org, site),
+  ]);
+  const flags = {};
+  // Org first, site last: site-level values overwrite org-level ones.
+  for (const cfg of [orgConfig, resolvedSite]) {
+    for (const row of cfg?.json?.flags?.data ?? []) {
+      if (typeof row?.key === 'string' && row.key.startsWith(EW_FLAG_PREFIX)) {
+        flags[row.key] = row.value;
+      }
+    }
+  }
+  return flags;
 }
 
 // ─── generic config sheet mutation helpers ──────────────────────────────────
