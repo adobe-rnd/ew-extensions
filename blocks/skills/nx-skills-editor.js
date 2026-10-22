@@ -4,6 +4,7 @@ import { toSafeId } from './utils/sheet-utils.js';
 import './shared/tabs/tabs.js';
 import './shared/card/card.js';
 import './shared/popover/popover.js';
+import { showToast, VARIANT_SUCCESS, VARIANT_ERROR, VARIANT_WARNING } from './shared/toast/toast.js';
 import {
   fetchDaConfigSheets,
   fetchEwFlags,
@@ -12,6 +13,7 @@ import {
   uploadSkillFileToAo,
   updateSkillOnAo,
   removePersonalSkillSource,
+  markSkillDeleted,
   setSkillsBackend,
   isSkillsBackendAltHarness,
   fetchMcpServersFromBridge,
@@ -702,6 +704,12 @@ class NxSkillsEditor extends LitElement {
     clearTimeout(this._statusTimer);
     this._statusMsg = msg;
     this._statusType = type;
+    if (msg) {
+      let variant = VARIANT_SUCCESS;
+      if (type === STATUS_TYPE.ERR) variant = VARIANT_ERROR;
+      else if (type === STATUS_TYPE.WARN) variant = VARIANT_WARNING;
+      showToast({ text: msg, variant });
+    }
     if (type === 'ok') {
       this._statusTimer = setTimeout(() => { this._statusMsg = ''; }, 3000);
     }
@@ -1044,10 +1052,14 @@ class NxSkillsEditor extends LitElement {
         this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
         return;
       }
+      // Guard against the bridge's eventual consistency resurrecting the skill
+      // on the immediate reload: hide it locally until the catalog catches up.
+      markSkillDeleted(id);
       this._viewingSkillId = null;
       this._clearForm();
       this._isEditorOpen = false;
       await this._reload();
+      this._setStatus('Skill deleted');
       return;
     }
 
@@ -1091,10 +1103,14 @@ class NxSkillsEditor extends LitElement {
       this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
       return;
     }
+    // Guard against the bridge's eventual consistency resurrecting the skill
+    // on the immediate reload: hide it locally until the catalog catches up.
+    markSkillDeleted(id);
     this._viewingSkillId = null;
     this._clearForm();
     this._isEditorOpen = false;
     await this._reload();
+    this._setStatus('Skill deleted');
   }
 
   _openSkillMenu(e, id) {
@@ -1124,6 +1140,19 @@ class NxSkillsEditor extends LitElement {
     this._isFormEdit = false;
     this._catalogTab = 'skills';
     this._isEditorOpen = true;
+    // Lazily pull the SKILL.md so the detail view can parse the real
+    // description locally — the bridge-stored description can be a degenerate
+    // YAML block-scalar indicator (e.g. a bare ">") for multi-line fields.
+    this._ensureSkillBody(skillId);
+  }
+
+  async _ensureSkillBody(id) {
+    if (!id || this._skills[id]) return;
+    const result = await fetchSkillFileResultFromAo(id, 'SKILL.md', this._skillIds[id]);
+    const body = result?.content || '';
+    if (body && this._viewingSkillId === id) {
+      this._skills = { ...this._skills, [id]: body };
+    }
   }
 
   _openSkillMdModal() {
