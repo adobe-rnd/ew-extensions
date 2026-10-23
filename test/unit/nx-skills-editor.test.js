@@ -11,6 +11,7 @@
  */
 import { expect } from '@esm-bundle/chai';
 import '../../blocks/skills/nx-skills-editor.js';
+import { renderChatDrawer } from '../../blocks/skills/renderers.js';
 import { setSkillsBackend } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -119,5 +120,95 @@ describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () 
     // No bridge traffic and no bridge-sourced MCP servers on the AO path.
     expect(el._builtinMcpServers).to.deep.equal([]);
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
+  });
+
+  // ─── chat harness selection (legacy da-agent must keep working) ──────────
+  const CHAT_URL = 'https://da.live/nx2/blocks/chat/chat.js';
+  const CHAT_AO_URL = 'https://da.live/nx2/blocks/chat-ao/chat-ao.js';
+
+  // The stub LitElement does no attribute↔property reflection, so set the
+  // import-url properties directly. _isChatOpen stays false (element never
+  // connected), so _reload's finally does NOT trigger a real dynamic import of
+  // the external da.live URL — we only assert the selection logic.
+  function makeChatEditor(org, site) {
+    const el = makeEditor(org, site);
+    el._isChatOpen = false; // guard: keep _reload's finally from importing a real URL
+    el.chatImportUrl = CHAT_URL;
+    el.chatAoImportUrl = CHAT_AO_URL;
+    return el;
+  }
+
+  it('legacy: with no ew.altHarness, the drawer selects the da-agent chat URL', async () => {
+    stubFetch({ orgFlags: [], siteFlags: [] });
+    const el = makeChatEditor('ew-unflagged', 'site-chat-1');
+
+    await el._reload();
+
+    expect(el._activeChatImportUrl()).to.equal(CHAT_URL);
+    expect(el._chatActivationKey).to.equal(null);
+  });
+
+  it('alt harness: the drawer selects the nx-chat-ao URL and carries the activation key', async () => {
+    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
+    const el = makeChatEditor('ew-site-flagged', 'site-chat-2');
+
+    await el._reload();
+
+    expect(el._activeChatImportUrl()).to.equal(CHAT_AO_URL);
+    expect(el._chatActivationKey).to.equal('cma-key');
+  });
+
+  it('falls back to the da-agent chat URL when no chat-ao URL is provided', async () => {
+    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
+    const el = makeEditor('ew-site-flagged', 'site-chat-3');
+    el._isChatOpen = false;
+    el.chatImportUrl = CHAT_URL; // chatAoImportUrl intentionally unset
+
+    await el._reload();
+
+    expect(el._activeChatImportUrl()).to.equal(CHAT_URL);
+  });
+});
+
+/**
+ * Pure regression guard for the drawer branching: the legacy da-agent path
+ * must keep mounting <nx-chat>, and only the alt harness mounts <nx-chat-ao>.
+ * da-lit is stubbed (html -> { strings, values }), so flatten the template to
+ * text and assert on the tag it renders.
+ */
+describe('renderChatDrawer — harness branching', () => {
+  function flattenTemplate(node) {
+    if (node == null || typeof node === 'boolean' || typeof node === 'function') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flattenTemplate).join('');
+    if (node.strings) {
+      return node.strings.reduce((acc, s, i) => acc + s + flattenTemplate(node.values[i]), '');
+    }
+    return '';
+  }
+
+  const baseVm = {
+    isChatOpen: true,
+    chatAgentId: 'skills-engineer',
+    chatHarnessConfig: { key: 'org/site', altHarness: true, activationKey: 'k' },
+    onToggleChat() {},
+  };
+
+  it('mounts the legacy da-agent nx-chat when altHarness is off', () => {
+    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatAltHarness: false }));
+    expect(out).to.include('<nx-chat ');
+    expect(out).to.not.include('nx-chat-ao');
+  });
+
+  it('mounts nx-chat-ao when altHarness is on', () => {
+    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatAltHarness: true }));
+    expect(out).to.include('nx-chat-ao');
+  });
+
+  it('mounts no chat element while the drawer is closed (either harness)', () => {
+    const legacyClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatAltHarness: false }));
+    const cmaClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatAltHarness: true }));
+    expect(legacyClosed).to.not.include('<nx-chat');
+    expect(cmaClosed).to.not.include('<nx-chat');
   });
 });
