@@ -1,0 +1,131 @@
+import { expect } from '@esm-bundle/chai';
+import {
+  parseVariants, getBlockTableHtml, getBlockFieldTemplate, getBlockVariantOptions,
+  getBlockVariantChoices,
+} from '../../../tools/block-editor/library.js';
+import {
+  getConfig, validateBase, isLocalHost, setAdminEnvironment, ADMIN_URLS,
+} from '../../../tools/block-editor/config.js';
+
+describe('block editor library parsing', () => {
+  it('preserves original templates, metadata labels, and variant headers', () => {
+    const [item] = parseVariants(`<main><div><h2>Cards Display</h2>
+      <div class="cards compact"><div><div><h3>Original</h3><p>Text</p></div></div></div>
+      <div class="library-metadata"><div><div>fields</div><div><table>
+      <tr><td>Fields</td></tr><tr><td><p>Title</p><p>Body</p></td></tr>
+      </table></div></div><div><div>description</div><div>Keep me</div></div></div>
+      </div></main>`, 'https://example.com/library');
+    expect(item.name).to.equal('Cards Display');
+    expect(item.dom.rows[0].textContent).to.equal('cards (compact)');
+    expect(item.dom.rows[1].cells[0].innerHTML).to.equal('<h3>Original</h3><p>Text</p>');
+    expect(item.fields.rows[1].textContent).to.equal('TitleBody');
+    expect(item.description).to.equal('Keep me');
+    expect(item.dom.querySelector('.library-metadata')).to.equal(null);
+  });
+  it('pads only the final cell of a short row', () => {
+    const block = document.createElement('div');
+    block.className = 'example';
+    block.innerHTML = '<div><div>A</div><div>B</div><div>C</div></div><div><div>D</div><div>E</div></div>';
+    const table = getBlockTableHtml(block);
+    expect(table.rows[2].cells[0].colSpan).to.equal(1);
+    expect(table.rows[2].cells[1].colSpan).to.equal(2);
+  });
+  it('matches host-normalized original table descriptors, not DOM heuristics', async () => {
+    const [item] = parseVariants('<main><div><div class="cards compact"><div><div>Text</div></div></div></div></main>', 'https://example.com/library');
+    let request;
+    const blocks = [{ path: '/library/cards', loadVariants: Promise.resolve([item]) }];
+    const matched = await getBlockFieldTemplate(blocks, 'Cards', 'compact', {
+      describeBlock: async (args) => { request = args; return { name: 'cards', variant: 'compact', rows: [] }; },
+    });
+    expect(request.html).to.equal(item.dom.outerHTML);
+    expect(matched.path).to.equal('/library/cards');
+    expect(await getBlockVariantOptions(blocks, 'cards')).to.deep.equal(['compact']);
+  });
+  it('associates preceding and nested metadata', () => {
+    const source = `<main><div><h2>Display</h2><div class="library-metadata">
+      <div><div>description</div><div>Description</div></div></div>
+      <div class="cards"><div><div>Text</div></div></div></div></main>`;
+    const [item] = parseVariants(source, 'https://example.com/library');
+    expect(item.name).to.equal('Display');
+    expect(item.description).to.equal('Description');
+  });
+  it('uses library display labels without writing them as source variants', async () => {
+    const items = parseVariants(`<main><div><h2>Hero (Text Start)</h2>
+      <div class="hero left"><div><div>Title</div></div></div></div></main>`,
+    'https://example.com/library');
+    const choices = await getBlockVariantChoices([{ loadVariants: Promise.resolve(items) }], 'hero');
+    expect(choices).to.deep.equal([{ value: 'left', label: 'Text Start' }]);
+  });
+});
+
+describe('block editor configuration', () => {
+  it('limits local controls to loopback hostnames', () => {
+    ['localhost', '127.0.0.1', '[::1]', '::1'].forEach((hostname) => {
+      expect(isLocalHost(hostname)).to.equal(true);
+    });
+    ['da.live', 'localhost.example.com', 'example.com', 'stage--site.aem.live'].forEach((hostname) => {
+      expect(isLocalHost(hostname)).to.equal(false);
+    });
+  });
+  it('reloads the local extension with the chosen admin while preserving its URL state', () => {
+    for (const admin of Object.values(ADMIN_URLS)) {
+      let assigned;
+      const location = {
+        href: 'http://localhost:3001/tools/block-editor/block-editor.html?ref=local&library=http%3A%2F%2Flocalhost%3A3001%2Flibrary.json&admin=https%3A%2F%2Fcustom.example#selection',
+        assign: (href) => { assigned = new URL(href); },
+      };
+      setAdminEnvironment(admin, location);
+      expect(assigned.origin).to.equal('http://localhost:3001');
+      expect(assigned.pathname).to.equal('/tools/block-editor/block-editor.html');
+      expect(assigned.searchParams.get('ref')).to.equal('local');
+      expect(assigned.searchParams.get('library')).to.equal('http://localhost:3001/library.json');
+      expect(assigned.hash).to.equal('#selection');
+      expect(getConfig(assigned.search, assigned.hostname).admin).to.equal(admin);
+    }
+  });
+  it('rejects environment switches outside localhost and unsupported admin URLs', () => {
+    const location = {
+      href: 'https://extension.example/tools/block-editor/block-editor.html',
+      assign: () => { throw new Error('Unexpected navigation'); },
+    };
+    expect(() => setAdminEnvironment(ADMIN_URLS.prod, location)).to.throw('requires a local host');
+    location.href = 'http://localhost:3001/tools/block-editor/block-editor.html';
+    expect(() => setAdminEnvironment('https://custom.example', location)).to.throw('stage or prod');
+  });
+  it('defaults to the main library and staging admin on localhost', () => {
+    expect(getConfig('', 'localhost')).to.deep.equal({
+      live: 'https://da.live', ref: 'main',
+      admin: 'https://stage-admin.da.live',
+    });
+  });
+  it('uses staging for loopback hosts and production elsewhere', () => {
+    ['localhost', '127.0.0.1', '[::1]', '::1'].forEach((hostname) => {
+      expect(getConfig('', hostname).admin).to.equal('https://stage-admin.da.live');
+    });
+    expect(getConfig('', 'extension.example').admin).to.equal('https://admin.da.live');
+  });
+  it('lets an explicit admin override take precedence over the hostname default', () => {
+    expect(getConfig('?admin=https://admin.da.live', 'localhost').admin).to.equal('https://admin.da.live');
+    expect(getConfig('?admin=https://stage-admin.da.live', 'extension.example').admin)
+      .to.equal('https://stage-admin.da.live');
+    expect(() => getConfig('?admin=javascript:alert(1)', 'localhost')).to.throw();
+  });
+  it('ignores obsolete NX asset overrides', () => {
+    expect(getConfig('?nx=http://localhost:4001&nx2=http://localhost:4002', 'localhost'))
+      .to.deep.equal(getConfig('', 'localhost'));
+  });
+  it('preserves library origin and ref overrides', () => {
+    const live = getConfig('?live=http://localhost:4000&ref=local');
+    expect(live.live).to.equal('http://localhost:4000');
+    expect(live.ref).to.equal('local');
+  });
+  it('rejects unsafe schemes, credentials, and ambiguous asset URLs', () => {
+    ['javascript:alert(1)', 'https://user:pass@example.com', 'https://example.com/?a=b', 'https://example.com/#hash']
+      .forEach((value) => expect(() => validateBase(value)).to.throw());
+  });
+  it('validates explicit local library indexes without production config loading', () => {
+    expect(getConfig('?library=http%3A%2F%2Flocalhost%3A3001%2Flibrary.json', 'localhost').library)
+      .to.equal('http://localhost:3001/library.json');
+    expect(() => getConfig('?library=javascript%3Aalert(1)', 'localhost')).to.throw();
+  });
+});
