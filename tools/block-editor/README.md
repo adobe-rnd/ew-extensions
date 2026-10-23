@@ -18,6 +18,11 @@ organization or site configuration:
 
 `https://blockimg--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html`
 
+Library sheet:
+| title | path | format | experience | icon | ref
+| --- | --- | --- | --- | --- | --- |
+| Block Inspector | https://blockimg--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html | | | | |
+
 
 ## Configs
 
