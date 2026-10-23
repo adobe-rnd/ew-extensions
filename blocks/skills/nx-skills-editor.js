@@ -556,8 +556,6 @@ class NxSkillsEditor extends LitElement {
       const altHarness = !!activationKey;
       setSkillsBackend({ altHarness });
       this._chatActivationKey = altHarness ? activationKey : null;
-      // altHarness is now known: (re)load the matching chat component if open.
-      if (this._isChatOpen) this._ensureChatLoaded();
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -607,6 +605,11 @@ class NxSkillsEditor extends LitElement {
     } finally {
       if (!silent) this._isLoading = false;
       if (showRefreshIndicator) this._refreshingCount = Math.max(0, this._refreshingCount - 1);
+      // Load the chat in `finally` so a restored-open chat always mounts even if
+      // the config/altHarness load above threw. _ensureChatLoaded falls back to
+      // the da-agent nx-chat when altHarness is unresolved (legacy path must
+      // keep working); on success it picks nx-chat-ao for CMA sites. Idempotent.
+      if (this._isChatOpen) this._ensureChatLoaded();
     }
   }
 
