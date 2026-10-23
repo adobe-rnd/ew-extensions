@@ -439,13 +439,20 @@ export function renderTopNav(vm) {
 }
 
 export function renderChatDrawer(vm) {
+  // CMA/alt-harness sites get nx-chat-ao (which routes to the bridge via its
+  // harnessConfig); everything else gets the da-agent nx-chat. The editor
+  // imports the matching component before this renders (_ensureChatLoaded).
+  const chatEl = vm.chatAltHarness
+    ? html`<nx-chat-ao
+        agent-id=${vm.chatAgentId || nothing}
+        .harnessConfig=${vm.chatHarnessConfig}
+      ></nx-chat-ao>`
+    : html`<nx-chat agent-id=${vm.chatAgentId || nothing}></nx-chat>`;
   return html`
     <div class="chat-drawer" aria-hidden=${vm.isChatOpen ? 'false' : 'true'}
       ?inert=${!vm.isChatOpen}
       @nx-panel-close=${(e) => { e.stopPropagation(); vm.onToggleChat(); }}>
-      ${vm.isChatOpen ? html`
-        <nx-chat agent-id=${vm.chatAgentId || nothing}></nx-chat>
-      ` : nothing}
+      ${vm.isChatOpen ? chatEl : nothing}
     </div>
   `;
 }
