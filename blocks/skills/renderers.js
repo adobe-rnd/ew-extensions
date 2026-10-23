@@ -81,9 +81,18 @@ function mcpServerToolData(vm, serverId) {
   // with their resolved tools attached; vm.mcpTools is only populated for the
   // config-sheet path. Use the bridge server's own tools when present.
   const bridgeServer = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
-  if (bridgeServer && Array.isArray(bridgeServer.tools) && bridgeServer.tools.length) {
-    const tools = bridgeServer.tools.map((t) => ({ name: t.name, description: t.description || '' }));
-    return { tools, error: null, source: 'live' };
+  if (bridgeServer) {
+    const bridgeTools = Array.isArray(bridgeServer.tools) ? bridgeServer.tools : [];
+    if (bridgeTools.length) {
+      const tools = bridgeTools.map((t) => ({ name: t.name, description: t.description || '' }));
+      return { tools, error: null, source: 'live' };
+    }
+    // The bridge resolves each server's tools once, up front — a bridge server
+    // that came back with no tools is NOT "still loading". It couldn't be
+    // reached, failed to authenticate, or exposes none. Surface a terminal
+    // disconnected state (with retry/remove) instead of an endless
+    // "Connecting…" spinner.
+    return { tools: [], error: null, source: 'disconnected' };
   }
 
   if (!vm.mcpTools) return { tools: [], error: null, source: 'pending' };
@@ -837,6 +846,13 @@ export function renderMcpToolsList(vm) {
   const emptyMsg = () => {
     if (source === 'pending') return 'Connecting to agent to discover tools…';
     if (source === 'unconfigured') return 'Enable this server to discover its tools';
+    if (source === 'disconnected') {
+      return html`
+        <strong>Can’t connect to this MCP server.</strong><br>
+        No tools could be retrieved — it may be unreachable, misconfigured, or
+        failing to authenticate. Retry the connection, or remove the server.
+      `;
+    }
     if (source === 'error') {
       const urlMatch = error?.match(/https?:\/\/\S+/);
       const hint = urlMatch?.[0];
@@ -860,6 +876,10 @@ export function renderMcpToolsList(vm) {
     return 'Server reported 0 tools';
   };
 
+  const bridge = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  const removable = Boolean(bridge && (bridge.scope === 'user' || bridge.scope === 'org'));
+  const isBroken = source === 'error' || source === 'disconnected';
+
   return html`
     <div class="mcp-tools-section">
       <h4 class="tools-selector-heading">Tools (${tools.length})</h4>
@@ -871,7 +891,23 @@ export function renderMcpToolsList(vm) {
         >
       ` : nothing}
       ${!tools.length
-      ? html`<div class="empty ${source === 'error' ? 'empty-err' : ''}">${emptyMsg()}</div>`
+      ? html`
+          <div class="empty ${isBroken ? 'empty-err' : ''}">${emptyMsg()}</div>
+          ${source === 'disconnected' ? html`
+            <div class="mcp-tools-actions">
+              <button type="button" data-variant="secondary"
+                ?disabled=${vm.isSaveBusy}
+                @click=${() => vm.onRetryMcpTools?.()}
+              >Retry connection</button>
+              ${removable ? html`
+                <button type="button" data-variant="negative"
+                  ?disabled=${vm.isSaveBusy}
+                  @click=${() => vm.onDeleteMcpDirect({ key: bridge.key })}
+                >Remove server</button>
+              ` : nothing}
+            </div>
+          ` : nothing}
+        `
       : html`
           <ul class="tools-group-list" aria-label="Tools for ${serverId}">
             ${filtered.map((t) => {

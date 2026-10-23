@@ -1580,6 +1580,12 @@ class NxSkillsEditor extends LitElement {
     await this._reload();
   }
 
+  async _onRetryMcpTools() {
+    // Re-run the load so bridge MCP servers (and their resolved tools) are
+    // re-fetched; a server that was unreachable may now connect.
+    await this._reload({ showRefreshIndicator: true });
+  }
+
   _clearMcpForm() {
     this._mcpKey = '';
     this._mcpUrl = '';
@@ -1928,6 +1934,7 @@ class NxSkillsEditor extends LitElement {
       onRegisterMcp: this._onRegisterMcp.bind(this),
       onToggleMcpEnabled: (row) => this._onToggleMcpEnabled(row),
       onDeleteMcpDirect: (row) => this._onDeleteMcpDirect(row),
+      onRetryMcpTools: () => this._onRetryMcpTools(),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (
