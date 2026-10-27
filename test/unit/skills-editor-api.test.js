@@ -21,6 +21,12 @@ import {
   setMcpServerEnabled,
   deleteMcpServer,
   fetchMcpServersFromBridge,
+  loadInstalledPlugins,
+  installPlugin,
+  setPluginEnabled,
+  uninstallPlugin,
+  fetchMarketplaceCatalog,
+  __resetMarketplaceCatalogCacheForTests,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -600,6 +606,145 @@ describe('AO / bridge backend switch', () => {
       expect(result.ok).to.be.true;
       const sent = JSON.parse(calls[1].opts.body).value;
       expect(sent.map((x) => x.key)).to.deep.equal(['a']);
+    });
+
+    // Plugins (aem-sites-claudebridge#163/#189): GET the overrides bag, mutate
+    // plugins.installed, PUT it back - same shape as the MCP servers tests above.
+    const PLUGINS_BAG = (installed) => ({
+      settings: {
+        skills: { sources: [], disabled_skills: [] },
+        mcp_servers: [],
+        plugins: { installed },
+      },
+    });
+    const MANIFEST = { name: 'web', description: 'Browser skills', repository: 'https://github.com/adobe/skills' };
+
+    it('loadInstalledPlugins GETs overrides and returns the installed array', async () => {
+      trackFetch(() => ({ ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST }]) }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.have.length(1);
+      expect(result[0].ref).to.equal('web');
+    });
+
+    it('loadInstalledPlugins degrades to [] on a failed read rather than throwing', async () => {
+      trackFetch(() => ({ ok: false, status: 502 }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.deep.equal([]);
+    });
+
+    it('installPlugin appends a new ref + manifest and PUTs the result', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => PLUGINS_BAG([]) };
+        return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: true }]) };
+      });
+      const result = await installPlugin(MANIFEST);
+      expect(result.ok).to.be.true;
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user/settings/plugins');
+      expect(calls[1].opts.method).to.equal('PUT');
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ ref: 'web', enabled: true });
+      expect(sent[0].manifest).to.deep.equal(MANIFEST);
+    });
+
+    it('installPlugin re-installs (refresh + re-enable) an existing ref instead of duplicating it', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      await installPlugin(MANIFEST);
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent).to.have.length(1);
+      expect(sent[0].enabled).to.be.true;
+    });
+
+    it('setPluginEnabled toggles enabled on the matching ref', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: true }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setPluginEnabled('web', false);
+      expect(result.ok).to.be.true;
+      expect(JSON.parse(calls[1].opts.body).value.installed[0].enabled).to.be.false;
+    });
+
+    it('setPluginEnabled fails without writing when the ref is not installed', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => PLUGINS_BAG([]) };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setPluginEnabled('missing', true);
+      expect(result.ok).to.be.false;
+      expect(calls).to.have.length(1);
+    });
+
+    it('uninstallPlugin removes the entry by ref and PUTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return {
+            ok: true,
+            json: async () => PLUGINS_BAG([
+              { ref: 'web', manifest: MANIFEST },
+              { ref: 'other', manifest: { name: 'other' } },
+            ]),
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await uninstallPlugin('web');
+      expect(result.ok).to.be.true;
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent.map((r) => r.ref)).to.deep.equal(['other']);
+    });
+
+    it('fetchMarketplaceCatalog normalizes marketplace.json entries and reports no error on success', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          plugins: [
+            { name: 'web', description: 'Browser skills', version: '1.0.0', repository: 'https://github.com/adobe/skills' },
+            { name: '' }, // malformed entry, dropped
+          ],
+        }),
+      }));
+      const { entries, hadError } = await fetchMarketplaceCatalog();
+      expect(hadError).to.be.false;
+      expect(entries).to.have.length(1);
+      expect(entries[0]).to.deep.include({ name: 'web', description: 'Browser skills', version: '1.0.0' });
+    });
+
+    it('fetchMarketplaceCatalog reports hadError without throwing when the source is unreachable', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch(() => ({ ok: false, status: 404 }));
+      const { entries, hadError } = await fetchMarketplaceCatalog();
+      expect(hadError).to.be.true;
+      expect(entries).to.deep.equal([]);
+    });
+  });
+
+  describe('Plugins altHarness off (CMA-only, no AO equivalent)', () => {
+    beforeEach(() => setSkillsBackend({ altHarness: false }));
+
+    it('loadInstalledPlugins returns [] without calling any endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.deep.equal([]);
+      expect(calls).to.have.length(0);
+    });
+
+    it('installPlugin/setPluginEnabled/uninstallPlugin all fail closed with a clear error', async () => {
+      const installResult = await installPlugin({ name: 'web', repository: 'https://github.com/adobe/skills' });
+      const enableResult = await setPluginEnabled('web', true);
+      const uninstallResult = await uninstallPlugin('web');
+      for (const result of [installResult, enableResult, uninstallResult]) {
+        expect(result.ok).to.be.false;
+        expect(result.error).to.match(/CMA harness/);
+      }
     });
   });
 
