@@ -29,7 +29,7 @@ const HAS_AUTH = process.env.DA_AUTH_OK === '1';
  * Minimum required catalog tabs. The test reads actual tab names from the DOM
  * so it can't go stale, but we still assert these are present at minimum.
  */
-const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'Plugins', 'MCPs', 'Memory', 'Experience Context'];
+const REQUIRED_TAB_NAMES = ['Skills', 'Prompts', 'Agents', 'MCPs', 'Memory', 'Experience Context'];
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -174,7 +174,7 @@ test.describe('Top-nav pill UI', () => {
     await expect(page.getByRole('button', { name: 'Open Assistant' })).toBeVisible();
 
     // All catalog tabs visible
-    for (const name of ['Prompts', 'Plugins', 'Skills', 'MCPs', 'Memory', 'Experience Context']) {
+    for (const name of ['Prompts', 'Agents', 'Skills', 'MCPs', 'Memory', 'Experience Context']) {
       await expect(page.getByRole('tab', { name })).toBeVisible();
     }
     await expect(page.getByRole('tab', { name: 'Enterprise Context', exact: true })).not.toBeAttached();
@@ -743,7 +743,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Plugins' }).click();
+    await page.getByRole('tab', { name: 'Agents' }).click();
 
     const catalog = page.getByRole('region', { name: 'Catalog' });
     await expect(catalog.getByTestId('agent-builtin-card')).toBeVisible({ timeout: 10000 });
@@ -755,7 +755,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Plugins' }).click();
+    await page.getByRole('tab', { name: 'Agents' }).click();
 
     const agentCard = page.getByTestId('agent-builtin-card').first();
     await expect(agentCard).toBeVisible({ timeout: 10000 });
@@ -769,7 +769,7 @@ test.describe('Agents', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Plugins' }).click();
+    await page.getByRole('tab', { name: 'Agents' }).click();
     await page.getByTestId('agent-builtin-card').first().click();
 
     // Detail view should open with the agent's tools selector
@@ -1134,7 +1134,7 @@ test.describe('Accessibility — keyboard primary actions', () => {
     await page.goto(getSkillsLabURL(TEST_ORG, TEST_SITE));
     await waitForReady(page);
 
-    await page.getByRole('tab', { name: 'Plugins' }).click();
+    await page.getByRole('tab', { name: 'Agents' }).click();
     const agentCard = page.getByTestId('agent-builtin-card').first();
     await expect(agentCard).toBeVisible({ timeout: 10000 });
 
@@ -1264,7 +1264,7 @@ test.describe('Performance UX', () => {
     await waitForReady(page);
     expect(agentListCalls).toBe(0);
 
-    await page.getByRole('tab', { name: 'Plugins' }).click();
+    await page.getByRole('tab', { name: 'Agents' }).click();
     await expect.poll(() => agentListCalls).toBeGreaterThan(0);
   });
 

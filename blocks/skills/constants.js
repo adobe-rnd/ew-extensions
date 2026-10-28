@@ -1,6 +1,6 @@
 /** Canonical tab ID strings — use these instead of bare string literals. */
 const TAB_SKILLS = 'skills';
-const TAB_AGENTS = 'agents'; // UI label: "Plugins"
+const TAB_AGENTS = 'agents'; // UI label: "Agents" (agent presets - bundled skills + MCP access; distinct from the Marketplace tab's installable plugins, see TAB_MARKETPLACE)
 const TAB_PROMPTS = 'prompts';
 const TAB_MCPS = 'mcps';
 const TAB_MARKETPLACE = 'marketplace';
@@ -23,7 +23,7 @@ const EW_COWORKER_FLAG = 'ew.coworker';
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
   { id: TAB_PROMPTS, label: 'Prompts' },
-  { id: TAB_AGENTS, label: 'Plugins' },
+  { id: TAB_AGENTS, label: 'Agents' },
   { id: TAB_MARKETPLACE, label: 'Marketplace' },
   { id: TAB_SKILLS, label: 'Skills' },
   { id: TAB_MCPS, label: 'MCPs' },

@@ -306,9 +306,9 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
           <span class="plugin-card-badge is-builtin">Built-in</span>
         ` : html`
           <button type="button" class="plugin-card-action is-uninstall"
-            aria-label="Uninstall agent ${title}"
+            aria-label="Remove agent ${title}"
             @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-          >Uninstall</button>
+          >Remove</button>
         `}
       </footer>
     </article>
@@ -340,9 +340,9 @@ function renderAgentRow(vm, agent, isBuiltin = false) {
       </div>
       ${isBuiltin ? nothing : html`
         <button type="button" class="plugin-row-action is-uninstall"
-          aria-label="Uninstall agent ${title}"
+          aria-label="Remove agent ${title}"
           @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-        >× Uninstall</button>
+        >× Remove</button>
       `}
       ${DRILL_CHEVRON}
     </div>
@@ -376,7 +376,7 @@ function renderPluginDetail(vm) {
           <div class="skill-detail-actions">
             <button type="button" class="skill-detail-action-btn is-negative"
               @click=${() => vm.onDeleteAgent(agent)}
-            >Uninstall</button>
+            >Remove</button>
           </div>
         ` : nothing}
       </header>
@@ -497,7 +497,7 @@ function renderDetailView(vm) {
       <div class="detail-view">
         <button type="button" class="detail-back-btn"
           @click=${() => vm.onCloseEditor()}
-        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Plugins'}</span></button>
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Agents'}</span></button>
         ${renderPluginDetail(vm)}
       </div>
     `;
@@ -1178,7 +1178,7 @@ export function renderAgentsCatalog(vm) {
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
-      <div class="filter-pills" role="tablist" aria-label="Filter plugins">
+      <div class="filter-pills" role="tablist" aria-label="Filter agents">
         <button type="button" class="filter-pill ${filter === 'all' ? 'is-active' : ''}"
           role="tab" aria-selected=${filter === 'all'}
           @click=${() => vm.onSetAgentFilter('all')}
