@@ -35,6 +35,11 @@ import {
   registerMcpServer,
   setMcpServerEnabled,
   deleteMcpServer,
+  fetchMarketplaceCatalog,
+  loadInstalledPlugins,
+  installPlugin,
+  setPluginEnabled,
+  uninstallPlugin,
   setToolOverride,
   deleteToolOverride,
   skillRowStatus,
@@ -51,6 +56,7 @@ import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
   EW_ALT_HARNESS_FLAG,
+  EW_COWORKER_FLAG,
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
@@ -97,6 +103,10 @@ class NxSkillsEditor extends LitElement {
     _skillIds: { state: true },
     _prompts: { state: true },
     _agents: { state: true },
+    _plugins: { state: true },
+    _marketplaceCatalog: { state: true },
+    _marketplaceCatalogError: { state: true },
+    _pluginBusyRef: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
     _builtinMcpServers: { state: true },
@@ -173,7 +183,16 @@ class NxSkillsEditor extends LitElement {
 
   _chatActivationKey = null;
 
+  // Marketplace/plugins (bridge-only, Claude marketplace concept) require
+  // BOTH the site to be on Coworker (`ew.coworker === 'true'`) and routed
+  // through the bridge (`ew.altHarness` set) - altHarness alone isn't enough,
+  // since a site can be altHarness-routed without Coworker being the active
+  // experience there. Computed in _reload() alongside the other ew.* flags.
+  _marketplaceAvailable = false;
+
   _agentsLoadInFlight = false;
+
+  _pluginsLoadInFlight = false;
 
   _mcpToolsLoadInFlight = false;
 
@@ -208,6 +227,10 @@ class NxSkillsEditor extends LitElement {
     this._skillIds = {};
     this._prompts = [];
     this._agents = [];
+    this._plugins = [];
+    this._marketplaceCatalog = [];
+    this._marketplaceCatalogError = false;
+    this._pluginBusyRef = {};
     this._agentRows = [];
     this._mcpRows = [];
     this._builtinMcpServers = [];
@@ -372,6 +395,9 @@ class NxSkillsEditor extends LitElement {
     if (changed?.has('_catalogTab') && this._catalogTab === 'agents') {
       this._ensureAgentsLoaded();
     }
+    if (changed?.has('_catalogTab') && this._catalogTab === 'marketplace' && this._marketplaceAvailable) {
+      this._ensurePluginsLoaded();
+    }
     if (changed?.has('_catalogTab') && this._catalogTab === 'mcps') {
       this._ensureMcpToolsLoaded();
     }
@@ -432,6 +458,8 @@ class NxSkillsEditor extends LitElement {
       configuredMcpServerHeaders: this._configuredMcpServerHeaders,
       toolOverrides: this._toolOverrides,
       agents: this._agents,
+      plugins: this._plugins,
+      marketplaceCatalog: this._marketplaceCatalog,
     };
     try {
       sessionStorage.setItem(this._dataSnapshotStorageKey(), JSON.stringify(snapshot));
@@ -459,6 +487,8 @@ class NxSkillsEditor extends LitElement {
       this._configuredMcpServerHeaders = snap.configuredMcpServerHeaders || {};
       this._toolOverrides = snap.toolOverrides || {};
       this._agents = Array.isArray(snap.agents) ? snap.agents : [];
+      this._plugins = Array.isArray(snap.plugins) ? snap.plugins : [];
+      this._marketplaceCatalog = Array.isArray(snap.marketplaceCatalog) ? snap.marketplaceCatalog : [];
       return true;
     } catch {
       return false;
@@ -558,6 +588,7 @@ class NxSkillsEditor extends LitElement {
       const altHarness = !!activationKey;
       setSkillsBackend({ altHarness });
       this._chatActivationKey = altHarness ? activationKey : null;
+      this._marketplaceAvailable = altHarness && ewFlags[EW_COWORKER_FLAG] === 'true';
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -630,6 +661,39 @@ class NxSkillsEditor extends LitElement {
       // non-fatal: agent presets unavailable
     } finally {
       this._agentsLoadInFlight = false;
+      this._refreshingCount = Math.max(0, this._refreshingCount - 1);
+    }
+  }
+
+  /**
+   * Loads the Marketplace tab's two lists in parallel: the caller's
+   * personally-installed plugins (bridge-backed, per-site like everything
+   * else here even though the data itself is personal/global to the user -
+   * same org/site change-guard as _ensureAgentsLoaded so a slow load from a
+   * since-abandoned org/site never clobbers a newer one) and the fixed
+   * marketplace catalog (not org/site-scoped at all, but loaded here too so
+   * the tab has one loading lifecycle).
+   */
+  async _ensurePluginsLoaded() {
+    if (this._pluginsLoadInFlight || this._plugins.length || this._marketplaceCatalog.length) return;
+    const loadKey = this._loadedKey;
+    this._pluginsLoadInFlight = true;
+    this._refreshingCount += 1;
+    try {
+      const [installed, catalog] = await Promise.all([
+        loadInstalledPlugins(),
+        fetchMarketplaceCatalog(),
+      ]);
+      if (`${this._org}/${this._site}` === loadKey) {
+        this._plugins = installed;
+        this._marketplaceCatalog = catalog.entries;
+        this._marketplaceCatalogError = catalog.hadError;
+        this._saveDataSnapshot();
+      }
+    } catch {
+      if (`${this._org}/${this._site}` === loadKey) this._marketplaceCatalogError = true;
+    } finally {
+      this._pluginsLoadInFlight = false;
       this._refreshingCount = Math.max(0, this._refreshingCount - 1);
     }
   }
@@ -1620,6 +1684,73 @@ class NxSkillsEditor extends LitElement {
     await this._reload({ showRefreshIndicator: true });
   }
 
+  async _reloadPlugins() {
+    // Unlike _reload() (the whole-config reload), the Marketplace tab's own
+    // lists are loaded lazily on first visit (_ensurePluginsLoaded) and kept
+    // in memory after that - so a mutation here re-fetches just the installed
+    // list directly rather than clearing state and waiting for the tab-switch
+    // guard to fire again (which wouldn't re-fire on an already-active tab).
+    try {
+      this._plugins = await loadInstalledPlugins();
+    } catch {
+      // non-fatal: keep whatever was previously loaded
+    }
+  }
+
+  async _onInstallPlugin(entry) {
+    const ref = String(entry?.name || '').trim();
+    if (!ref || this._pluginBusyRef[ref]) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await installPlugin(entry);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to install plugin', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${ref} installed`);
+    await this._reloadPlugins();
+  }
+
+  async _onTogglePlugin(ref, enabled) {
+    if (!ref || this._pluginBusyRef[ref]) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await setPluginEnabled(ref, enabled);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not update plugin state', STATUS_TYPE.ERR);
+      return;
+    }
+    await this._reloadPlugins();
+  }
+
+  async _onUninstallPlugin(ref) {
+    if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref)) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await uninstallPlugin(ref);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to uninstall plugin', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${ref} uninstalled`);
+    await this._reloadPlugins();
+  }
+
+  async _onRetryMarketplace() {
+    try {
+      const catalog = await fetchMarketplaceCatalog();
+      this._marketplaceCatalog = catalog.entries;
+      this._marketplaceCatalogError = catalog.hadError;
+    } catch {
+      this._marketplaceCatalogError = true;
+    }
+  }
+
+  _openMarketplaceTab() {
+    this._onTabChange('marketplace');
+  }
+
   _clearMcpForm() {
     this._mcpKey = '';
     this._mcpUrl = '';
@@ -1850,6 +1981,7 @@ class NxSkillsEditor extends LitElement {
       isChatOpen: this._isChatOpen,
       chatAgentId: this.chatAgentId,
       chatAltHarness: isSkillsBackendAltHarness(),
+      marketplaceAvailable: this._marketplaceAvailable,
       chatHarnessConfig: {
         key: this._org && this._site ? `${this._org}/${this._site}` : null,
         altHarness: isSkillsBackendAltHarness(),
@@ -1873,6 +2005,10 @@ class NxSkillsEditor extends LitElement {
       skillLineCounts: this._skillLineCounts,
       prompts: this._prompts,
       agents: this._agents,
+      plugins: this._plugins,
+      marketplaceCatalog: this._marketplaceCatalog,
+      marketplaceCatalogError: this._marketplaceCatalogError,
+      pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
       builtinMcpServers: this._builtinMcpServers,
@@ -1975,6 +2111,10 @@ class NxSkillsEditor extends LitElement {
       onToggleMcpEnabled: (row) => this._onToggleMcpEnabled(row),
       onDeleteMcpDirect: (row) => this._onDeleteMcpDirect(row),
       onRetryMcpTools: () => this._onRetryMcpTools(),
+      onInstallPlugin: (entry) => this._onInstallPlugin(entry),
+      onTogglePlugin: (ref, enabled) => this._onTogglePlugin(ref, enabled),
+      onUninstallPlugin: (ref) => this._onUninstallPlugin(ref),
+      onRetryMarketplace: () => this._onRetryMarketplace(),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (
@@ -1987,6 +2127,7 @@ class NxSkillsEditor extends LitElement {
       // ── TAB_ACTIONS openers ────────────────────────────────────────────────
       onPickSkillFile: () => this._onPickSkillFile(),
       openNewAgentEditor: () => this._openNewAgentEditor(),
+      openMarketplaceTab: () => this._openMarketplaceTab(),
       openNewEditor: () => this._openNewEditor(),
       openNewMcpEditor: () => this._openNewMcpEditor(),
     };

@@ -1397,6 +1397,193 @@ export async function fetchMcpToolsFromAgent(servers, serverHeaders = {}) {
   } catch { return null; }
 }
 
+// ─── plugins (Claude marketplace, CMA bridge only) ──────────────────────────
+// Issue aem-sites-claudebridge#163 made plugin installation do real work on
+// the bridge: an enabled installed plugin's manifest `repository` is
+// resolved and its skills/MCP servers are registered + composed into new
+// sessions. There is still no marketplace/discovery service to browse
+// (aem-sites-claudebridge#189's open question) - v1 ships a single fixed
+// catalog source (the public `adobe/skills` marketplace, the same repo the
+// bridge's own plugin resolver was verified against) rather than inventing a
+// registration mechanism. AO has no plugin-install equivalent at all, so
+// every function here is bridge-only, same posture as updateSkillOnAo.
+const MARKETPLACE_CATALOG_SOURCES = [
+  { owner: 'adobe', repo: 'skills' },
+];
+
+const MARKETPLACE_CATALOG_TTL_MS = 5 * 60 * 1000;
+const marketplaceCatalogCache = new Map(); // `${owner}/${repo}` -> { entries, fetchedAt }
+
+/**
+ * Test-only: clears the in-memory marketplace catalog cache so each test can
+ * control whether fetchMarketplaceCatalog re-fetches.
+ */
+export function __resetMarketplaceCatalogCacheForTests() {
+  marketplaceCatalogCache.clear();
+}
+
+async function fetchPublicGithubJson(owner, repo, path) {
+  try {
+    const resp = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/${path}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The browsable plugin catalog: every entry in each configured marketplace
+ * source's `.claude-plugin/marketplace.json`, normalized to the manifest
+ * shape `PUT .../settings/plugins` expects (`{ name, description, version,
+ * author, repository, license, keywords }` - see
+ * docs/claudebridge-skills-spec.md section 9.3 in aem-sites-claudebridge).
+ * In-memory cached per source for MARKETPLACE_CATALOG_TTL_MS so switching
+ * tabs doesn't re-fetch every time. Never throws; `hadError` is true if any
+ * configured source failed to load (network/parse failure), so the caller
+ * can tell that apart from a source that's just legitimately empty.
+ */
+export async function fetchMarketplaceCatalog() {
+  const entries = [];
+  let hadError = false;
+  await Promise.all(MARKETPLACE_CATALOG_SOURCES.map(async ({ owner, repo }) => {
+    const cacheKey = `${owner}/${repo}`;
+    const cached = marketplaceCatalogCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < MARKETPLACE_CATALOG_TTL_MS) {
+      entries.push(...cached.entries);
+      return;
+    }
+    const marketplace = await fetchPublicGithubJson(owner, repo, '.claude-plugin/marketplace.json');
+    if (marketplace == null) {
+      hadError = true;
+      return;
+    }
+    const plugins = Array.isArray(marketplace?.plugins) ? marketplace.plugins : [];
+    const sourceEntries = plugins
+      .filter((p) => p && typeof p.name === 'string' && p.name.trim())
+      .map((p) => ({
+        name: p.name,
+        description: p.description || '',
+        version: p.version,
+        author: p.author,
+        repository: p.repository || `https://github.com/${owner}/${repo}`,
+        license: p.license,
+        keywords: Array.isArray(p.keywords) ? p.keywords : [],
+      }));
+    marketplaceCatalogCache.set(cacheKey, { entries: sourceEntries, fetchedAt: Date.now() });
+    entries.push(...sourceEntries);
+  }));
+  return { entries, hadError };
+}
+
+function pluginRefMatches(ref) {
+  return (r) => (r?.ref || r?.manifest?.name) === ref;
+}
+
+async function bridgeGetPlugins(ctx) {
+  const resp = await fetch(`${ctx.base}/api/v1/overrides/user`, { headers: bridgeHeaders(ctx) });
+  if (!resp.ok) throw new Error(`Could not load overrides (${resp.status})`);
+  const json = await resp.json();
+  const installed = json?.settings?.plugins?.installed;
+  return Array.isArray(installed) ? installed : [];
+}
+
+async function bridgePutPlugins(ctx, installed) {
+  const resp = await fetch(`${ctx.base}/api/v1/overrides/user/settings/plugins`, {
+    method: 'PUT',
+    headers: { ...bridgeHeaders(ctx), 'content-type': 'application/json' },
+    body: JSON.stringify({ value: { installed } }),
+  });
+  if (!resp.ok) throw new Error(`Save failed (${resp.status})`);
+  const json = await resp.json().catch(() => null);
+  return Array.isArray(json?.settings?.plugins?.installed)
+    ? json.settings.plugins.installed
+    : installed;
+}
+
+/**
+ * Loads the caller's personally-installed plugins. Bridge-only; returns `[]`
+ * off-bridge (no AO equivalent) and on any failure (best-effort, same as
+ * loadAgentPresets - an unreachable settings store degrades to an empty
+ * list rather than breaking the tab).
+ * TODO: org-scope install needs an admin-gated scope selector in the UI,
+ * same deferred gap as registerMcpServer's org-scope TODO above; personal
+ * only for now.
+ */
+export async function loadInstalledPlugins() {
+  const ctx = await aoAuthContext();
+  if (!ctx || !ctx.bridge) return [];
+  try {
+    return await bridgeGetPlugins(ctx);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Installs a plugin from the marketplace catalog: appends `{ ref, manifest,
+ * enabled: true }` to the caller's personal `settings.plugins.installed`, or
+ * refreshes+re-enables an existing entry for the same ref (reinstall). The
+ * bridge resolves/materializes the plugin's skills+MCP as part of this write
+ * (aem-sites-claudebridge#163) - a resolution failure (bad/unreachable
+ * repository) still returns `ok: true` here (the plugin IS installed, same
+ * "record first, materialize best-effort" contract the bridge itself
+ * follows) with no `resolved` block on its entry, which the catalog card
+ * surfaces as "Installed (not yet available)" rather than silently looking
+ * identical to a working install.
+ */
+export async function installPlugin(manifest) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+  if (!ctx.bridge) return { ok: false, error: 'Plugins are only supported on the CMA harness' };
+  const ref = String(manifest?.name || '').trim();
+  if (!ref) return { ok: false, error: 'Plugin manifest has no name' };
+  try {
+    const current = await bridgeGetPlugins(ctx);
+    const idx = current.findIndex(pluginRefMatches(ref));
+    const entry = { ref, manifest, enabled: true };
+    const next = idx >= 0
+      ? current.map((r, i) => (i === idx ? { ...r, ...entry } : r))
+      : [...current, entry];
+    const installed = await bridgePutPlugins(ctx, next);
+    return { ok: true, installed };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+export async function setPluginEnabled(ref, enabled) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+  if (!ctx.bridge) return { ok: false, error: 'Plugins are only supported on the CMA harness' };
+  try {
+    const current = await bridgeGetPlugins(ctx);
+    const idx = current.findIndex(pluginRefMatches(ref));
+    if (idx < 0) return { ok: false, error: 'Plugin not installed' };
+    const next = current.map((r, i) => (i === idx ? { ...r, enabled: !!enabled } : r));
+    const installed = await bridgePutPlugins(ctx, next);
+    return { ok: true, installed };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+export async function uninstallPlugin(ref) {
+  const ctx = await aoAuthContext();
+  if (!ctx) return { ok: false, error: 'Not signed in' };
+  if (!ctx.bridge) return { ok: false, error: 'Plugins are only supported on the CMA harness' };
+  try {
+    const current = await bridgeGetPlugins(ctx);
+    const next = current.filter((r) => !pluginRefMatches(ref)(r));
+    const installed = await bridgePutPlugins(ctx, next);
+    return { ok: true, installed };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
 // ─── agent presets ──────────────────────────────────────────────────────────
 
 const AGENTS_PATH = '.da/agents';

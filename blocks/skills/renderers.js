@@ -420,6 +420,13 @@ const CHAT_TOGGLE_ICON = html`<svg class="chat-toggle-icon" viewBox="0 0 20 20" 
 // ─── exported render functions ────────────────────────────────────────────────
 
 export function renderTopNav(vm) {
+  // Marketplace (bridge-only, Claude-plugin concept) needs both Coworker
+  // enabled AND the bridge activation key in place - altHarness alone isn't
+  // enough (see EW_COWORKER_FLAG's doc comment in constants.js). Everything
+  // else keeps the static tab list.
+  const items = vm.marketplaceAvailable
+    ? TAB_ITEMS
+    : TAB_ITEMS.filter((t) => t.id !== TAB_MARKETPLACE);
   return html`
     <nav class="top-nav" aria-label="Skills Editor navigation">
       ${!vm.isChatOpen ? html`<button type="button"
@@ -429,7 +436,7 @@ export function renderTopNav(vm) {
       >${CHAT_TOGGLE_ICON}</button>` : nothing}
       <div class="nav-pill">
         <nx-tabs
-          .items=${TAB_ITEMS}
+          .items=${items}
           .active=${vm.catalogTab}
           @tab-change=${(e) => vm.onTabChange(e.detail.id)}
         ></nx-tabs>
@@ -543,6 +550,13 @@ function renderDetailView(vm) {
   `;
 }
 
+function renderMarketplaceTabContent(vm) {
+  if (!vm.marketplaceAvailable) {
+    return html`<div class="empty">Marketplace requires Coworker to be enabled on the bridge harness for this site.</div>`;
+  }
+  return renderMarketplaceCatalog(vm);
+}
+
 function renderCatalogView(vm) {
   const { catalogTab: tab } = vm;
   const showSearch = [TAB_SKILLS, TAB_PROMPTS, TAB_MCPS].includes(tab);
@@ -559,7 +573,9 @@ function renderCatalogView(vm) {
           </div>
           ${TAB_ACTIONS[tab] ? html`
             <button type="button" class="new-btn"
-              ?disabled=${TAB_ACTIONS[tab].disabled || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])}
+              ?disabled=${TAB_ACTIONS[tab].disabled
+                || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])
+                || (TAB_ACTIONS[tab].requiresKey && !vm[TAB_ACTIONS[tab].requiresKey])}
               @click=${() => {
         const { opener } = TAB_ACTIONS[tab];
         if (opener && typeof vm[opener] === 'function') vm[opener]();
@@ -584,7 +600,7 @@ function renderCatalogView(vm) {
       ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
       ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
       ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
-      ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
+      ${tab === TAB_MARKETPLACE ? renderMarketplaceTabContent(vm) : nothing}
     </div>
   `;
 }
@@ -1397,6 +1413,113 @@ export function renderMcpsCatalog(vm) {
     ${!custom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
     ${custom.length && isGrid ? html`<div class="plugin-grid">${custom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
     ${custom.length && !isGrid ? html`<div class="catalog-list">${custom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
+  `;
+}
+
+// ─── Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) ─────────
+
+function marketplaceInstalledEntry(vm, name) {
+  return (vm.plugins || []).find((p) => (p?.ref || p?.manifest?.name) === name);
+}
+
+function renderMarketplaceInstalledCard(vm, installed) {
+  const ref = installed?.ref || installed?.manifest?.name || '';
+  const name = installed?.manifest?.name || ref;
+  const description = installed?.manifest?.description || '';
+  const enabled = installed?.enabled !== false;
+  const resolved = installed?.resolved;
+  const skillCount = resolved?.skills?.length || 0;
+  const mcpCount = resolved?.mcpServers?.length || 0;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  const statusLabel = mcpCount
+    ? `${skillCount} Skill${skillCount === 1 ? '' : 's'} \u00b7 ${mcpCount} MCP${mcpCount === 1 ? '' : 's'}`
+    : `${skillCount} Skill${skillCount === 1 ? '' : 's'}`;
+
+  return html`
+    <article class="plugin-card" data-testid="plugin-installed-card" data-plugin-ref=${ref}>
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${name}</span>
+          <span class="plugin-card-source" title=${description || nothing}>${description}</span>
+        </div>
+        <span class="plugin-card-badge">${enabled ? 'Enabled' : 'Disabled'}</span>
+      </header>
+      <footer class="plugin-card-meta">
+        <span class="plugin-card-count"
+          title=${resolved ? nothing : 'Could not resolve this plugin\'s repository - its skills/MCP servers are not available yet'}
+        >${resolved ? statusLabel : 'Not yet available'}</span>
+        <button type="button" class="plugin-card-action"
+          aria-label="${enabled ? 'Disable' : 'Enable'} plugin ${name}"
+          data-testid="plugin-toggle-btn"
+          ?disabled=${isBusy}
+          @click=${(e) => { e.stopPropagation(); vm.onTogglePlugin(ref, !enabled); }}
+        >${enabled ? 'Disable' : 'Enable'}</button>
+        <button type="button" class="plugin-card-action is-uninstall"
+          aria-label="Uninstall plugin ${name}"
+          data-testid="plugin-uninstall-btn"
+          ?disabled=${isBusy}
+          @click=${(e) => { e.stopPropagation(); vm.onUninstallPlugin(ref); }}
+        >${TRASH_ICON}</button>
+      </footer>
+    </article>
+  `;
+}
+
+function renderMarketplaceCatalogCard(vm, entry) {
+  const installed = marketplaceInstalledEntry(vm, entry.name);
+  const isBusy = !!vm.pluginBusyRef?.[entry.name];
+  return html`
+    <article class="plugin-card" data-testid="plugin-catalog-card" data-plugin-name=${entry.name}>
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${entry.name}</span>
+          <span class="plugin-card-source" title=${entry.description || nothing}>${entry.description}</span>
+        </div>
+      </header>
+      <footer class="plugin-card-meta">
+        ${entry.version ? html`<span class="plugin-card-count">v${entry.version}</span>` : nothing}
+        ${installed ? html`
+          <span class="plugin-card-badge">Installed</span>
+        ` : html`
+          <button type="button" class="plugin-card-action"
+            aria-label="Install plugin ${entry.name}"
+            data-testid="plugin-install-btn"
+            ?disabled=${isBusy}
+            @click=${(e) => { e.stopPropagation(); vm.onInstallPlugin(entry); }}
+          >Install</button>
+        `}
+      </footer>
+    </article>
+  `;
+}
+
+/**
+ * The Marketplace tab (issue #189): the caller's personally-installed
+ * plugins (with their materialized skill/MCP counts - or "Not yet
+ * available" when the bridge couldn't resolve the manifest's repository,
+ * see aem-sites-claudebridge#163) above a browsable catalog fetched from the
+ * fixed marketplace source(s) (skills-editor-api.js fetchMarketplaceCatalog).
+ * Bridge-only - renderTopNav hides this tab entirely off the CMA harness.
+ */
+export function renderMarketplaceCatalog(vm) {
+  const installed = vm.plugins || [];
+  const catalog = vm.marketplaceCatalog || [];
+
+  return html`
+    ${vm.marketplaceCatalogError ? html`
+      <div class="empty">
+        Could not load the marketplace catalog.
+        <button type="button" class="plugin-card-action" @click=${() => vm.onRetryMarketplace()}>Retry</button>
+      </div>
+    ` : nothing}
+    <h3 class="section-h">Installed (${installed.length})</h3>
+    ${!installed.length ? html`<div class="empty">No plugins installed yet</div>` : nothing}
+    ${installed.length ? html`<div class="plugin-grid">${installed.map((p) => renderMarketplaceInstalledCard(vm, p))}</div>` : nothing}
+    <h3 class="section-h">Browse marketplace (${catalog.length})</h3>
+    ${!catalog.length && !vm.marketplaceCatalogError ? html`<div class="empty">Loading\u2026</div>` : nothing}
+    ${catalog.length ? html`<div class="plugin-grid">${catalog.map((entry) => renderMarketplaceCatalogCard(vm, entry))}</div>` : nothing}
   `;
 }
 

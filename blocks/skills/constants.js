@@ -11,13 +11,22 @@ const TAB_CONTEXT = 'context'; // UI label: "Experience Context"; embeds the Exp
 // key. Present + non-empty => route skills/MCP to the bridge instead of AO.
 const EW_ALT_HARNESS_FLAG = 'ew.altHarness';
 
+// Site-config `flags` key gating the Coworker experience itself (da-nx's
+// getCoworkerConfig: `flags['ew.coworker'] === 'true'`), independent of
+// EW_ALT_HARNESS_FLAG (which only says *where* Coworker talks to - bridge vs
+// AO). Plugins/Marketplace are a Coworker-specific (Claude marketplace
+// plugin) concept, so showing that tab requires both flags, not altHarness
+// alone - a site can be altHarness-routed without Coworker being the active
+// experience there.
+const EW_COWORKER_FLAG = 'ew.coworker';
+
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
   { id: TAB_PROMPTS, label: 'Prompts' },
   { id: TAB_AGENTS, label: 'Plugins' },
+  { id: TAB_MARKETPLACE, label: 'Marketplace' },
   { id: TAB_SKILLS, label: 'Skills' },
   { id: TAB_MCPS, label: 'MCPs' },
-  // { id: TAB_MARKETPLACE, label: 'Marketplace', disabled: true },
   { id: TAB_MEMORY, label: 'Memory' },
   { id: TAB_CONTEXT, label: 'Experience Context' },
 ];
@@ -36,7 +45,14 @@ const TAB_DESCRIPTIONS = {
 /** Per-tab metadata for the "new" button label and the opener method name. */
 const TAB_ACTIONS = {
   [TAB_SKILLS]: { btnLabel: 'Upload New Skill', opener: 'onPickSkillFile', canWriteKey: 'canWrite' },
-  [TAB_AGENTS]: { btnLabel: 'Browse Marketplace', disabled: true, icon: 'storefront' },
+  // Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) live on
+  // their own tab now; this button just jumps there instead of being a dead
+  // end (used to be permanently disabled). requiresKey mirrors canWriteKey's
+  // pattern: disabled unless vm[requiresKey] is truthy (see EW_COWORKER_FLAG's
+  // doc comment - altHarness alone isn't enough).
+  [TAB_AGENTS]: {
+    btnLabel: 'Browse Marketplace', opener: 'openMarketplaceTab', icon: 'storefront', requiresKey: 'marketplaceAvailable',
+  },
   [TAB_PROMPTS]: { btnLabel: '+ New Prompt', opener: 'openNewEditor' },
   [TAB_MCPS]: { btnLabel: '+ Register MCP', opener: 'openNewMcpEditor' },
 };
@@ -160,6 +176,7 @@ export {
   DEP_TREE_MAX_TOOLS,
   EGOV_MFE,
   EW_ALT_HARNESS_FLAG,
+  EW_COWORKER_FLAG,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,
