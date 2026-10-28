@@ -21,7 +21,7 @@ organization or site configuration:
 Library sheet:
 | title | path | format | experience | icon | ref
 | --- | --- | --- | --- | --- | --- |
-| Block Inspector | https://blockimg--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html | | | | |
+| Block Inspector | https://main--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html | | | | |
 
 
 ## Configs
