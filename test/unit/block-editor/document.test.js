@@ -113,6 +113,51 @@ describe('block editor live HTML replacement adapter', () => {
     await expectError(apply({ type: 'setLink', target: target({ fieldIndex: 1 }), href: 'javascript:alert(1)' }), 'INVALID_CHANGE');
     expect(calls).to.have.length(2);
   });
+  it('edits uniformly formatted fields without removing headings or inline wrappers', async () => {
+    live = original.replace('<h3>Unique title</h3>',
+      '<h3 class="title"> <em><strong>Uniform heading</strong></em> </h3><p><strong>Display feature</strong></p>');
+    select();
+    const fields = latest().blocks[0].rows[0].cells[0].fields;
+    expect(fields.slice(0, 2).map((field) => field.readOnly)).to.deep.equal([false, false]);
+    await apply({ type: 'setText', target: target(), value: 'New <heading>\nNext line' });
+    await apply({ type: 'setText', target: target({ fieldIndex: 1 }), value: 'New feature' });
+    const doc = new DOMParser().parseFromString(live, 'text/html');
+    expect(doc.querySelector('h3').outerHTML)
+      .to.equal('<h3 class="title"> <em><strong>New &lt;heading&gt;<br>Next line</strong></em> </h3>');
+    expect(doc.querySelector('.cards p strong').outerHTML).to.equal('<strong>New feature</strong>');
+    expect(latest().blocks[0].rows[0].cells[0].fields[0].value).to.equal('New <heading>\nNext line');
+  });
+  it('preserves uniform formatting around and inside links and list items', async () => {
+    live = original.replace('<h3>Unique title</h3>',
+      '<h3><strong><a href="/old"><em>Uniform link</em></a></strong></h3>')
+      .replace('<li>One</li>', '<li><p><strong>One</strong></p></li>');
+    select();
+    expect(latest().blocks[0].rows[0].cells[0].fields[0].readOnly).to.equal(false);
+    expect(latest().blocks[0].rows[0].cells[0].fields[2].items[0].readOnly).to.equal(false);
+    await apply({ type: 'setText', target: target(), value: 'New link' });
+    await apply({ type: 'setLink', target: target(), href: '/new' });
+    await apply({ type: 'setText', target: target({ fieldIndex: 2, itemIndex: 0 }), value: 'New item' });
+    expect(live).to.include('<h3><strong><a href="/new"><em>New link</em></a></strong></h3>');
+    expect(live).to.include('<li><p><strong>New item</strong></p></li>');
+  });
+  it('keeps partially formatted text and ambiguous links read-only without posting changes', async () => {
+    const cases = [
+      '<h3>Plain <strong>bold</strong></h3>',
+      '<h3><strong>Bold <em>partially italic</em></strong></h3>',
+      '<p><strong>$99.99 </strong><s><strong>$349.99</strong></s></p>',
+      '<p>Prefix <a href="/old">link</a></p>',
+      '<p><a href="/one">One</a><a href="/two">Two</a></p>',
+    ];
+    for (const html of cases) {
+      live = original.replace('<h3>Unique title</h3>', html);
+      select();
+      expect(latest().blocks[0].rows[0].cells[0].fields[0].readOnly).to.equal(true);
+      const before = live;
+      await expectError(apply({ type: 'setText', target: target(), value: 'No' }), 'READ_ONLY');
+      expect(live).to.equal(before);
+    }
+    expect(calls).to.have.length(0);
+  });
   it('rebases a second focused field onto an acknowledged HTML replacement', async () => {
     select();
     const session = new EditorSession();
@@ -244,8 +289,8 @@ describe('block editor live HTML replacement adapter', () => {
     await expectError(apply({ type: 'setText', target: target(), value: 'No' }), 'INVALID_RESPONSE');
     expect(() => actions.receiveLiveDocument({ html: live, selection: { blockIndex: -1 } })).to.throw('valid live document');
   });
-  it('allows single images but keeps rich text and ambiguous image fields read-only', () => {
-    const block = describeBlock({ html: '<table><tr><td>Hero (wide)</td></tr><tr><td><p><strong>Rich</strong></p><picture><img src="/image.png"></picture></td></tr></table>' });
+  it('allows single images but keeps partially formatted text and ambiguous image fields read-only', () => {
+    const block = describeBlock({ html: '<table><tr><td>Hero (wide)</td></tr><tr><td><p>Partially <strong>rich</strong></p><picture><img src="/image.png"></picture></td></tr></table>' });
     expect(block.name).to.equal('Hero');
     expect(block.variant).to.equal('wide');
     expect(block.rows[0].cells[0].fields.map((field) => field.readOnly)).to.deep.equal([true, false]);

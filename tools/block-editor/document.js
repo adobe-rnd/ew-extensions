@@ -36,8 +36,15 @@ function contentFields(cell) {
 
 function textContainer(element) {
   const child = element.firstElementChild;
-  return element.matches('li') && element.children.length === 1 && child.matches('p')
+  let container = element.matches('li') && element.children.length === 1 && child.matches('p')
     && text(element.textContent) === text(child.textContent) ? child : element;
+  while (container.children.length === 1) {
+    const formatted = container.firstElementChild;
+    if (!formatted.matches('strong, b, em, i, u, s, strike, del, ins, code, sub, sup, mark, small, span')
+      || [...container.childNodes].some((node) => node !== formatted && node.textContent.trim())) break;
+    container = formatted;
+  }
+  return container;
 }
 
 function describeField(element, target) {
@@ -65,7 +72,7 @@ function describeField(element, target) {
   const container = textContainer(element);
   const links = container.matches('a') ? [container] : [...container.querySelectorAll('a')];
   const link = links.length === 1 ? links[0] : null;
-  const editable = link || container;
+  const editable = textContainer(link || container);
   const readOnly = links.length > 1 || [...editable.children].some((child) => child.tagName !== 'BR')
     || (link && text(container.textContent) !== text(link.textContent));
   return {
@@ -180,7 +187,7 @@ function applyChange(table, change) {
       source.removeAttribute('type');
     });
   } else if (change.type === 'setText' && descriptor.type === 'text') {
-    replaceText(element.querySelector('a') || textContainer(element), change.value);
+    replaceText(textContainer(element.matches('a') ? element : element.querySelector('a') || element), change.value);
   } else if (change.type === 'setLink' && descriptor.href !== undefined) {
     const { protocol } = new URL(change.href, 'https://example.invalid/');
     // eslint-disable-next-line no-script-url -- This is a rejection list, not a navigable URL.
