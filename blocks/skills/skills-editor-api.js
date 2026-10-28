@@ -1401,15 +1401,55 @@ export async function fetchMcpToolsFromAgent(servers, serverHeaders = {}) {
 // Issue aem-sites-claudebridge#163 made plugin installation do real work on
 // the bridge: an enabled installed plugin's manifest `repository` is
 // resolved and its skills/MCP servers are registered + composed into new
-// sessions. There is still no marketplace/discovery service to browse
-// (aem-sites-claudebridge#189's open question) - v1 ships a single fixed
-// catalog source (the public `adobe/skills` marketplace, the same repo the
-// bridge's own plugin resolver was verified against) rather than inventing a
-// registration mechanism. AO has no plugin-install equivalent at all, so
-// every function here is bridge-only, same posture as updateSkillOnAo.
-const MARKETPLACE_CATALOG_SOURCES = [
+// sessions. Browsing/discovery (aem-sites-claudebridge#189's open question)
+// is solved on the ew-extensions side only: one permanent, non-removable
+// built-in source (the public `adobe/skills` marketplace, the same repo the
+// bridge's own plugin resolver was verified against) plus any number of
+// site-registered custom sources the user adds (stored in the `.da` config
+// sheet below, same per-site storage as mcp-servers/agents - a shared/org
+// concern, not a personal bridge override). AO has no plugin-install
+// equivalent at all, so install/enable/disable/uninstall stay bridge-only,
+// same posture as updateSkillOnAo; browsing the catalog itself has no such
+// restriction.
+export const BUILT_IN_MARKETPLACE_SOURCES = [
   { owner: 'adobe', repo: 'skills' },
 ];
+
+const MARKETPLACE_SOURCES_SHEET = 'marketplace-sources';
+
+function sourceKey({ owner, repo } = {}) {
+  return `${String(owner || '').toLowerCase()}/${String(repo || '').toLowerCase()}`;
+}
+
+// GitHub owner/repo charset: letters, digits, hyphens (not leading/trailing
+// for owners), dots/underscores allowed in repo names. Deliberately strict -
+// this value is used to build a `raw.githubusercontent.com` URL path, so
+// rejecting anything outside this charset (slashes, `..`, whitespace, etc.)
+// rules out path traversal / request-smuggling via a pasted source string.
+const GITHUB_OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const GITHUB_REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
+
+/**
+ * Parses a user-entered marketplace source - `owner/repo`, or a
+ * `https://github.com/owner/repo` URL (optionally with a trailing `.git`,
+ * `/`, or further path segments, which are ignored) - into `{ owner, repo }`.
+ * Returns `null` for anything that doesn't resolve to a well-formed,
+ * safe-charset owner/repo pair.
+ */
+export function parseMarketplaceSourceInput(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+  let rest = raw;
+  const urlMatch = raw.match(/^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+)/i);
+  if (urlMatch) {
+    rest = `${urlMatch[1]}/${urlMatch[2]}`;
+  }
+  const parts = rest.replace(/\.git$/i, '').split('/').filter(Boolean);
+  if (parts.length !== 2) return null;
+  const [owner, repo] = parts;
+  if (!GITHUB_OWNER_RE.test(owner) || !GITHUB_REPO_RE.test(repo)) return null;
+  return { owner, repo };
+}
 
 const MARKETPLACE_CATALOG_TTL_MS = 5 * 60 * 1000;
 const marketplaceCatalogCache = new Map(); // `${owner}/${repo}` -> { entries, fetchedAt }
@@ -1444,38 +1484,142 @@ async function fetchPublicGithubJson(owner, repo, path) {
  * tabs doesn't re-fetch every time. Never throws; `hadError` is true if any
  * configured source failed to load (network/parse failure), so the caller
  * can tell that apart from a source that's just legitimately empty.
+ *
+ * `sources` defaults to just the built-in source; callers that also want the
+ * caller's registered custom sources should pass
+ * `[...BUILT_IN_MARKETPLACE_SOURCES, ...customSources]` (see
+ * `loadMarketplaceSources`). A plugin `name` that appears in more than one
+ * source keeps its first (built-in-first, then registration order) entry -
+ * a later duplicate never silently shadows/overwrites an earlier source's
+ * manifest for the same name.
  */
-export async function fetchMarketplaceCatalog() {
+export async function fetchMarketplaceCatalog(sources = BUILT_IN_MARKETPLACE_SOURCES) {
   const entries = [];
+  const seenNames = new Set();
   let hadError = false;
-  await Promise.all(MARKETPLACE_CATALOG_SOURCES.map(async ({ owner, repo }) => {
-    const cacheKey = `${owner}/${repo}`;
-    const cached = marketplaceCatalogCache.get(cacheKey);
-    if (cached && Date.now() - cached.fetchedAt < MARKETPLACE_CATALOG_TTL_MS) {
-      entries.push(...cached.entries);
-      return;
+  await Promise.all(sources.map(async ({ owner, repo }) => {
+    const cacheKey = sourceKey({ owner, repo });
+    const builtIn = BUILT_IN_MARKETPLACE_SOURCES.some((s) => sourceKey(s) === cacheKey);
+    let sourceEntries = marketplaceCatalogCache.get(cacheKey);
+    if (sourceEntries && Date.now() - sourceEntries.fetchedAt < MARKETPLACE_CATALOG_TTL_MS) {
+      sourceEntries = sourceEntries.entries;
+    } else {
+      const marketplace = await fetchPublicGithubJson(owner, repo, '.claude-plugin/marketplace.json');
+      if (marketplace == null) {
+        hadError = true;
+        return;
+      }
+      const plugins = Array.isArray(marketplace?.plugins) ? marketplace.plugins : [];
+      sourceEntries = plugins
+        .filter((p) => p && typeof p.name === 'string' && p.name.trim())
+        .map((p) => ({
+          name: p.name,
+          description: p.description || '',
+          version: p.version,
+          author: p.author,
+          repository: p.repository || `https://github.com/${owner}/${repo}`,
+          license: p.license,
+          keywords: Array.isArray(p.keywords) ? p.keywords : [],
+          sourceOwner: owner,
+          sourceRepo: repo,
+          builtIn,
+        }));
+      marketplaceCatalogCache.set(cacheKey, { entries: sourceEntries, fetchedAt: Date.now() });
     }
-    const marketplace = await fetchPublicGithubJson(owner, repo, '.claude-plugin/marketplace.json');
-    if (marketplace == null) {
-      hadError = true;
-      return;
-    }
-    const plugins = Array.isArray(marketplace?.plugins) ? marketplace.plugins : [];
-    const sourceEntries = plugins
-      .filter((p) => p && typeof p.name === 'string' && p.name.trim())
-      .map((p) => ({
-        name: p.name,
-        description: p.description || '',
-        version: p.version,
-        author: p.author,
-        repository: p.repository || `https://github.com/${owner}/${repo}`,
-        license: p.license,
-        keywords: Array.isArray(p.keywords) ? p.keywords : [],
-      }));
-    marketplaceCatalogCache.set(cacheKey, { entries: sourceEntries, fetchedAt: Date.now() });
-    entries.push(...sourceEntries);
+    sourceEntries.forEach((entry) => {
+      if (seenNames.has(entry.name)) return;
+      seenNames.add(entry.name);
+      entries.push(entry);
+    });
   }));
   return { entries, hadError };
+}
+
+/**
+ * Registered marketplace sources for a site: the permanent built-in source
+ * plus whatever the user has added, read from the `marketplace-sources` `.da`
+ * config sheet (a shared/site-level concern - same storage class as
+ * `mcp-servers`/`agents` - independent of the personal, bridge-only
+ * install/enable/disable state above). Best-effort: an unreachable config
+ * degrades to just the built-in source rather than breaking the tab.
+ */
+export async function loadMarketplaceSources(org, site) {
+  const loaded = await fetchDaConfigSheets(org, site);
+  if (!loaded.ok) return [];
+  const rows = loaded.json?.[MARKETPLACE_SOURCES_SHEET]?.data;
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set();
+  const sources = [];
+  rows.forEach((row) => {
+    const parsed = parseMarketplaceSourceInput(row?.source);
+    if (!parsed) return;
+    const key = sourceKey(parsed);
+    if (seen.has(key)) return;
+    seen.add(key);
+    sources.push(parsed);
+  });
+  return sources;
+}
+
+/**
+ * Registers a new marketplace source for the site (GitHub `owner/repo` or a
+ * `github.com` URL). Rejects anything that doesn't parse to a well-formed
+ * owner/repo (`parseMarketplaceSourceInput`), the built-in source, or one
+ * already registered (case-insensitive) - all before writing, so the sheet
+ * never accumulates unreachable or duplicate rows. Does not validate that
+ * the repo actually has a `.claude-plugin/marketplace.json`; that surfaces
+ * as this source's `hadError`/empty-catalog state on the next fetch, same as
+ * the built-in source's own failure mode, rather than blocking registration
+ * on a synchronous network round trip.
+ */
+export async function addMarketplaceSource(org, site, input) {
+  const parsed = parseMarketplaceSourceInput(input);
+  if (!parsed) {
+    return { ok: false, error: 'Enter a GitHub repo as owner/repo or a github.com URL' };
+  }
+  const key = sourceKey(parsed);
+  const label = `${parsed.owner}/${parsed.repo}`;
+  if (BUILT_IN_MARKETPLACE_SOURCES.some((s) => sourceKey(s) === key)) {
+    return { ok: false, error: `${label} is already built in` };
+  }
+  const loaded = await fetchDaConfigSheets(org, site, { force: true });
+  if (!loaded.ok) return { ok: false, error: loaded.error || `Could not load config (${loaded.status})` };
+  const cfg = { ...(loaded.json || {}) };
+  const sheet = cfg[MARKETPLACE_SOURCES_SHEET] || { total: 0, limit: 1000, offset: 0, data: [] };
+  const data = [...(sheet.data || [])];
+  const alreadyRegistered = data.some((row) => {
+    const existing = parseMarketplaceSourceInput(row?.source);
+    return existing && sourceKey(existing) === key;
+  });
+  if (alreadyRegistered) {
+    return { ok: false, error: `${label} is already registered` };
+  }
+  data.push({ source: label });
+  cfg[MARKETPLACE_SOURCES_SHEET] = { ...sheet, data, total: data.length };
+  const save = await saveDaConfig(org, site, cfg);
+  if (!save.ok) return { ok: false, error: `Save failed (${save.status})` };
+  return { ok: true };
+}
+
+/**
+ * Unregisters a custom marketplace source. The built-in source can't be
+ * removed through this path (no matching row exists for it in the sheet);
+ * removing a source only stops it being browsed going forward - it does not
+ * touch any plugin already installed from it (installPlugin's record is
+ * keyed by the plugin's own `ref`/`repository`, not by source).
+ */
+export async function removeMarketplaceSource(org, site, owner, repo) {
+  const key = sourceKey({ owner, repo });
+  return deleteSheetRow(
+    org,
+    site,
+    MARKETPLACE_SOURCES_SHEET,
+    (row) => {
+      const parsed = parseMarketplaceSourceInput(row?.source);
+      return !!parsed && sourceKey(parsed) === key;
+    },
+    'marketplace source',
+  );
 }
 
 function pluginRefMatches(ref) {

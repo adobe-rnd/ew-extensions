@@ -37,6 +37,10 @@ import {
   deleteMcpServer,
   fetchMarketplaceCatalog,
   loadInstalledPlugins,
+  loadMarketplaceSources,
+  addMarketplaceSource,
+  removeMarketplaceSource,
+  BUILT_IN_MARKETPLACE_SOURCES,
   installPlugin,
   setPluginEnabled,
   uninstallPlugin,
@@ -106,6 +110,9 @@ class NxSkillsEditor extends LitElement {
     _plugins: { state: true },
     _marketplaceCatalog: { state: true },
     _marketplaceCatalogError: { state: true },
+    _marketplaceSources: { state: true },
+    _marketplaceSourceInput: { state: true },
+    _marketplaceSourceBusy: { state: true },
     _pluginBusyRef: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
@@ -230,6 +237,9 @@ class NxSkillsEditor extends LitElement {
     this._plugins = [];
     this._marketplaceCatalog = [];
     this._marketplaceCatalogError = false;
+    this._marketplaceSources = [];
+    this._marketplaceSourceInput = '';
+    this._marketplaceSourceBusy = false;
     this._pluginBusyRef = {};
     this._agentRows = [];
     this._mcpRows = [];
@@ -504,6 +514,7 @@ class NxSkillsEditor extends LitElement {
       agents: this._agents,
       plugins: this._plugins,
       marketplaceCatalog: this._marketplaceCatalog,
+      marketplaceSources: this._marketplaceSources,
     };
     try {
       sessionStorage.setItem(this._dataSnapshotStorageKey(), JSON.stringify(snapshot));
@@ -533,6 +544,7 @@ class NxSkillsEditor extends LitElement {
       this._agents = Array.isArray(snap.agents) ? snap.agents : [];
       this._plugins = Array.isArray(snap.plugins) ? snap.plugins : [];
       this._marketplaceCatalog = Array.isArray(snap.marketplaceCatalog) ? snap.marketplaceCatalog : [];
+      this._marketplaceSources = Array.isArray(snap.marketplaceSources) ? snap.marketplaceSources : [];
       return true;
     } catch {
       return false;
@@ -710,13 +722,13 @@ class NxSkillsEditor extends LitElement {
   }
 
   /**
-   * Loads the Marketplace tab's two lists in parallel: the caller's
-   * personally-installed plugins (bridge-backed, per-site like everything
-   * else here even though the data itself is personal/global to the user -
-   * same org/site change-guard as _ensureAgentsLoaded so a slow load from a
-   * since-abandoned org/site never clobbers a newer one) and the fixed
-   * marketplace catalog (not org/site-scoped at all, but loaded here too so
-   * the tab has one loading lifecycle).
+   * Loads the Marketplace tab's three lists in parallel-ish: the site's
+   * registered marketplace sources (built-in + custom, from the `.da`
+   * config), the caller's personally-installed plugins (bridge-backed, per-
+   * site like everything else here even though the data itself is personal/
+   * global to the user - same org/site change-guard as _ensureAgentsLoaded
+   * so a slow load from a since-abandoned org/site never clobbers a newer
+   * one), and the catalog fetched from those sources.
    */
   async _ensurePluginsLoaded() {
     if (this._pluginsLoadInFlight || this._plugins.length || this._marketplaceCatalog.length) return;
@@ -724,11 +736,13 @@ class NxSkillsEditor extends LitElement {
     this._pluginsLoadInFlight = true;
     this._refreshingCount += 1;
     try {
+      const sources = await loadMarketplaceSources(this._org, this._site);
       const [installed, catalog] = await Promise.all([
         loadInstalledPlugins(),
-        fetchMarketplaceCatalog(),
+        fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]),
       ]);
       if (`${this._org}/${this._site}` === loadKey) {
+        this._marketplaceSources = sources;
         this._plugins = installed;
         this._marketplaceCatalog = catalog.entries;
         this._marketplaceCatalogError = catalog.hadError;
@@ -1784,13 +1798,58 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onRetryMarketplace() {
+    await this._reloadMarketplace();
+  }
+
+  /**
+   * Re-loads registered sources + catalog (not the installed-plugins list,
+   * which _reloadPlugins already handles separately) after a source is
+   * added/removed, or as the Retry action's full refresh.
+   */
+  async _reloadMarketplace() {
     try {
-      const catalog = await fetchMarketplaceCatalog();
+      const sources = await loadMarketplaceSources(this._org, this._site);
+      const catalog = await fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]);
+      this._marketplaceSources = sources;
       this._marketplaceCatalog = catalog.entries;
       this._marketplaceCatalogError = catalog.hadError;
     } catch {
       this._marketplaceCatalogError = true;
     }
+  }
+
+  _onMarketplaceSourceInput(value) {
+    this._marketplaceSourceInput = value;
+  }
+
+  async _onAddMarketplaceSource() {
+    const input = this._marketplaceSourceInput.trim();
+    if (!input || this._marketplaceSourceBusy) return;
+    this._marketplaceSourceBusy = true;
+    const result = await addMarketplaceSource(this._org, this._site, input);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not add marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._marketplaceSourceInput = '';
+    this._setStatus(`${input} added to Marketplace`);
+    await this._reloadMarketplace();
+  }
+
+  async _onRemoveMarketplaceSource(owner, repo) {
+    const label = `${owner}/${repo}`;
+    if (this._marketplaceSourceBusy) return;
+    if (!await this._confirm('marketplace source', label)) return;
+    this._marketplaceSourceBusy = true;
+    const result = await removeMarketplaceSource(this._org, this._site, owner, repo);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not remove marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${label} removed`);
+    await this._reloadMarketplace();
   }
 
   _openMarketplaceTab() {
@@ -2054,6 +2113,9 @@ class NxSkillsEditor extends LitElement {
       plugins: this._plugins,
       marketplaceCatalog: this._marketplaceCatalog,
       marketplaceCatalogError: this._marketplaceCatalogError,
+      marketplaceSources: this._marketplaceSources,
+      marketplaceSourceInput: this._marketplaceSourceInput,
+      marketplaceSourceBusy: this._marketplaceSourceBusy,
       pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -2161,6 +2223,9 @@ class NxSkillsEditor extends LitElement {
       onTogglePlugin: (ref, enabled) => this._onTogglePlugin(ref, enabled),
       onUninstallPlugin: (ref) => this._onUninstallPlugin(ref),
       onRetryMarketplace: () => this._onRetryMarketplace(),
+      onMarketplaceSourceInput: (v) => this._onMarketplaceSourceInput(v),
+      onAddMarketplaceSource: () => this._onAddMarketplaceSource(),
+      onRemoveMarketplaceSource: (owner, repo) => this._onRemoveMarketplaceSource(owner, repo),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (

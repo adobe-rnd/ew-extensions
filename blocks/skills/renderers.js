@@ -1496,18 +1496,64 @@ function renderMarketplaceCatalogCard(vm, entry) {
 }
 
 /**
+ * The "Marketplace sources" strip: the permanent built-in source plus any
+ * custom ones the caller has registered, each with a Remove action (except
+ * the built-in one, which has none). Sits above the Install cards so it's
+ * clear the catalog below is the union of these sources, not one fixed list.
+ */
+function renderMarketplaceSources(vm) {
+  const custom = vm.marketplaceSources || [];
+  const busy = !!vm.marketplaceSourceBusy;
+  return html`
+    <div class="marketplace-sources">
+      <span class="marketplace-source-chip is-builtin" data-testid="marketplace-source-builtin">
+        adobe/skills <span class="marketplace-source-badge">Built-in</span>
+      </span>
+      ${custom.map((s) => html`
+        <span class="marketplace-source-chip" data-testid="marketplace-source-chip">
+          ${s.owner}/${s.repo}
+          <button type="button" class="marketplace-source-remove"
+            aria-label="Remove marketplace source ${s.owner}/${s.repo}"
+            data-testid="marketplace-source-remove-btn"
+            ?disabled=${busy}
+            @click=${() => vm.onRemoveMarketplaceSource(s.owner, s.repo)}
+          >&times;</button>
+        </span>
+      `)}
+    </div>
+    <form class="marketplace-source-form" @submit=${(e) => { e.preventDefault(); vm.onAddMarketplaceSource(); }}>
+      <input type="text" class="marketplace-source-input"
+        placeholder="owner/repo or a github.com URL"
+        aria-label="Add a marketplace source"
+        data-testid="marketplace-source-input"
+        .value=${vm.marketplaceSourceInput || ''}
+        ?disabled=${busy}
+        @input=${(e) => vm.onMarketplaceSourceInput(e.target.value)}
+      />
+      <button type="submit" class="plugin-card-action"
+        data-testid="marketplace-source-add-btn"
+        ?disabled=${busy || !(vm.marketplaceSourceInput || '').trim()}
+      >Add Marketplace</button>
+    </form>
+  `;
+}
+
+/**
  * The Marketplace tab (issue #189): the caller's personally-installed
  * plugins (with their materialized skill/MCP counts - or "Not yet
  * available" when the bridge couldn't resolve the manifest's repository,
  * see aem-sites-claudebridge#163) above a browsable catalog fetched from the
- * fixed marketplace source(s) (skills-editor-api.js fetchMarketplaceCatalog).
- * Bridge-only - renderTopNav hides this tab entirely off the CMA harness.
+ * built-in plus any registered custom source(s) (skills-editor-api.js
+ * fetchMarketplaceCatalog). Bridge-only for install/enable/disable -
+ * renderTopNav hides this tab entirely off the CMA harness.
  */
 export function renderMarketplaceCatalog(vm) {
   const installed = vm.plugins || [];
   const catalog = vm.marketplaceCatalog || [];
 
   return html`
+    <h3 class="section-h">Marketplace sources</h3>
+    ${renderMarketplaceSources(vm)}
     ${vm.marketplaceCatalogError ? html`
       <div class="empty">
         Could not load the marketplace catalog.
