@@ -269,12 +269,15 @@ class NxSkillsEditor extends LitElement {
    * Promise-based replacement for window.confirm().
    * @param {string} itemType - e.g. "skill", "prompt", "MCP server"
    * @param {string} itemId   - the identifier shown to the user
+   * @param {object} [options]
+   * @param {'delete'|'install'|'enable'|'disable'} [options.action='delete']
    * @returns {Promise<boolean>}
    */
-  _confirm(itemType, itemId) {
+  _confirm(itemType, itemId, options = {}) {
+    const action = options.action || 'delete';
     return new Promise((resolve) => {
       this._resolveConfirm = resolve;
-      this._confirmDialog = { itemType, itemId };
+      this._confirmDialog = { itemType, itemId, action };
     });
   }
 
@@ -282,6 +285,47 @@ class NxSkillsEditor extends LitElement {
     this._resolveConfirm?.(accepted);
     this._resolveConfirm = null;
     this._confirmDialog = null;
+  }
+
+  /**
+   * Copy + button styling for the confirm dialog, keyed by `action`.
+   * `delete` keeps the original destructive ("cannot be undone", red confirm
+   * button) framing. `install`/`enable`/`disable` are reversible plugin
+   * mutations that still touch the user's live sessions (skills/MCP access),
+   * so they get a neutral (non-red) confirm button and accurate, non-scary
+   * copy instead of reusing the delete framing verbatim.
+   */
+  _confirmCopy({ itemType, action }) {
+    switch (action) {
+      case 'install':
+        return {
+          heading: `Install ${itemType}:`,
+          warning: 'This adds its skills and MCP server access to your sessions. You can uninstall it later.',
+          confirmLabel: 'Install',
+          tone: 'primary',
+        };
+      case 'enable':
+        return {
+          heading: `Enable ${itemType}:`,
+          warning: 'This makes its skills and MCP server access available in your sessions again.',
+          confirmLabel: 'Enable',
+          tone: 'primary',
+        };
+      case 'disable':
+        return {
+          heading: `Disable ${itemType}:`,
+          warning: 'This removes its skills and MCP server access from your sessions until re-enabled.',
+          confirmLabel: 'Disable',
+          tone: 'default',
+        };
+      default:
+        return {
+          heading: `You're about to delete ${itemType}:`,
+          warning: 'This action cannot be undone',
+          confirmLabel: 'Confirm',
+          tone: 'danger',
+        };
+    }
   }
 
   connectedCallback() {
@@ -1700,6 +1744,7 @@ class NxSkillsEditor extends LitElement {
   async _onInstallPlugin(entry) {
     const ref = String(entry?.name || '').trim();
     if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: 'install' })) return;
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
     const result = await installPlugin(entry);
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
@@ -1713,6 +1758,7 @@ class NxSkillsEditor extends LitElement {
 
   async _onTogglePlugin(ref, enabled) {
     if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: enabled ? 'enable' : 'disable' })) return;
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
     const result = await setPluginEnabled(ref, enabled);
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
@@ -2213,26 +2259,29 @@ class NxSkillsEditor extends LitElement {
           </div>
         </div>
       </div>
-      ${dlg ? html`
+      ${dlg ? (() => {
+        const copy = this._confirmCopy(dlg);
+        return html`
         <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
           <div class="confirm-dialog" role="alertdialog"
                aria-labelledby="confirm-title"
                aria-describedby="confirm-desc"
                @click=${(e) => e.stopPropagation()}>
             <p id="confirm-title" class="confirm-heading">
-              You're about to delete ${dlg.itemType}:
+              ${copy.heading}
             </p>
             <p id="confirm-desc" class="confirm-id"><code>${dlg.itemId}</code></p>
-            <p class="confirm-warning">This action cannot be undone</p>
+            <p class="confirm-warning">${copy.warning}</p>
             <div class="confirm-actions">
               <button class="confirm-btn confirm-btn-cancel"
                       @click=${() => this._closeConfirm(false)}>Cancel</button>
-              <button class="confirm-btn confirm-btn-confirm"
-                      @click=${() => this._closeConfirm(true)}>Confirm</button>
+              <button class="confirm-btn confirm-btn-confirm confirm-btn-confirm-${copy.tone}"
+                      @click=${() => this._closeConfirm(true)}>${copy.confirmLabel}</button>
             </div>
           </div>
         </div>
-      ` : nothing}
+      `;
+      })() : nothing}
     </div>`;
   }
 }
