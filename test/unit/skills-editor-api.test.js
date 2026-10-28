@@ -730,6 +730,34 @@ describe('AO / bridge backend switch', () => {
       expect(hadError).to.be.true;
       expect(entries).to.deep.equal([]);
     });
+
+    it('fetchMarketplaceCatalog falls back to the master branch when main 404s', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => {
+        urls.push(String(url));
+        if (String(url).includes('/main/')) return { ok: false, status: 404 };
+        if (String(url).includes('/master/')) {
+          return { ok: true, json: async () => ({ plugins: [{ name: 'legacy', description: 'on master' }] }) };
+        }
+        return { ok: false, status: 404 };
+      });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'old-repo' }]);
+      expect(hadError).to.be.false;
+      expect(entries.map((e) => e.name)).to.deep.equal(['legacy']);
+      expect(urls.some((u) => u.includes('/main/'))).to.be.true; // tried main first
+      expect(urls.some((u) => u.includes('/master/'))).to.be.true; // then master
+    });
+
+    it('fetchMarketplaceCatalog does not hammer past a non-404 error (e.g. 403)', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => { urls.push(String(url)); return { ok: false, status: 403 }; });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'rate-limited' }]);
+      expect(hadError).to.be.true;
+      expect(entries).to.deep.equal([]);
+      expect(urls.filter((u) => u.includes('raw.githubusercontent')).length).to.equal(1); // gave up after the first
+    });
   });
 
   describe('Plugins altHarness off (CMA-only, no AO equivalent)', () => {

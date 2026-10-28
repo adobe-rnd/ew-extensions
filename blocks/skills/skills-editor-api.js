@@ -1462,16 +1462,40 @@ export function __resetMarketplaceCatalogCacheForTests() {
   marketplaceCatalogCache.clear();
 }
 
+// Default branches to try, in order, when fetching a public repo file from
+// raw.githubusercontent.com (which requires an explicit branch - there's no
+// "default branch" alias). `main` then `master` covers essentially all repos
+// without an api.github.com call (which is rate-limited to 60/hr anonymous).
+// A 404 on one candidate falls through to the next; any other failure
+// (network/timeout/non-404) gives up so we don't hammer. Repos whose default
+// branch is neither (rare: trunk/develop/...) won't resolve - acceptable for
+// a browse-only catalog read; the bridge's own install path resolves the real
+// default branch via the Contents API independently.
+const GITHUB_DEFAULT_BRANCHES = ['main', 'master'];
+
 async function fetchPublicGithubJson(owner, repo, path) {
-  try {
-    const resp = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/${path}`, {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) return null;
-    return await resp.json();
-  } catch {
-    return null;
+  for (const branch of GITHUB_DEFAULT_BRANCHES) {
+    let resp;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      resp = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      return null; // network/timeout - don't try further candidates
+    }
+    if (resp.ok) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        return await resp.json();
+      } catch {
+        return null; // reachable but not valid JSON - a real error, not a wrong-branch miss
+      }
+    }
+    if (resp.status !== 404) return null; // non-404 (403/5xx) - give up, don't hammer
+    // 404: this branch doesn't have the file; try the next candidate branch
   }
+  return null;
 }
 
 /**

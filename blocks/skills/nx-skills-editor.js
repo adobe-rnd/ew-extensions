@@ -1822,14 +1822,19 @@ class NxSkillsEditor extends LitElement {
    * added/removed, or as the Retry action's full refresh.
    */
   async _reloadMarketplace() {
+    // Same org/site change-guard as _ensurePluginsLoaded: a slow reload from a
+    // since-abandoned org/site must not clobber the now-current view (e.g. the
+    // user adds a source then navigates away before the refetch lands).
+    const loadKey = this._loadedKey;
     try {
       const sources = await loadMarketplaceSources(this._org, this._site);
       const catalog = await fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]);
+      if (`${this._org}/${this._site}` !== loadKey) return;
       this._marketplaceSources = sources;
       this._marketplaceCatalog = catalog.entries;
       this._marketplaceCatalogError = catalog.hadError;
     } catch {
-      this._marketplaceCatalogError = true;
+      if (`${this._org}/${this._site}` === loadKey) this._marketplaceCatalogError = true;
     }
   }
 
