@@ -40,6 +40,7 @@ import {
   loadMarketplaceSources,
   addMarketplaceSource,
   removeMarketplaceSource,
+  canWriteConfig,
   BUILT_IN_MARKETPLACE_SOURCES,
   installPlugin,
   setPluginEnabled,
@@ -113,6 +114,7 @@ class NxSkillsEditor extends LitElement {
     _marketplaceSources: { state: true },
     _marketplaceSourceInput: { state: true },
     _marketplaceSourceBusy: { state: true },
+    _canManageSources: { state: true },
     _pluginBusyRef: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
@@ -240,6 +242,7 @@ class NxSkillsEditor extends LitElement {
     this._marketplaceSources = [];
     this._marketplaceSourceInput = '';
     this._marketplaceSourceBusy = false;
+    this._canManageSources = false;
     this._pluginBusyRef = {};
     this._agentRows = [];
     this._mcpRows = [];
@@ -327,6 +330,14 @@ class NxSkillsEditor extends LitElement {
           warning: 'This removes its skills and MCP server access from your sessions until re-enabled.',
           confirmLabel: 'Disable',
           tone: 'default',
+        };
+      case 'register':
+        return {
+          heading: `Add ${itemType}:`,
+          // eslint-disable-next-line max-len
+          warning: 'Anyone can publish a GitHub repo. Any skills or MCP servers this source lists can be installed into users\' sessions for this whole site. Only add sources you trust.',
+          confirmLabel: 'Add anyway',
+          tone: 'danger',
         };
       default:
         return {
@@ -736,13 +747,17 @@ class NxSkillsEditor extends LitElement {
     this._pluginsLoadInFlight = true;
     this._refreshingCount += 1;
     try {
-      const sources = await loadMarketplaceSources(this._org, this._site);
+      const [sources, canManage] = await Promise.all([
+        loadMarketplaceSources(this._org, this._site),
+        canWriteConfig(this._org, this._site),
+      ]);
       const [installed, catalog] = await Promise.all([
         loadInstalledPlugins(),
         fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]),
       ]);
       if (`${this._org}/${this._site}` === loadKey) {
         this._marketplaceSources = sources;
+        this._canManageSources = canManage;
         this._plugins = installed;
         this._marketplaceCatalog = catalog.entries;
         this._marketplaceCatalogError = catalog.hadError;
@@ -1824,7 +1839,8 @@ class NxSkillsEditor extends LitElement {
 
   async _onAddMarketplaceSource() {
     const input = this._marketplaceSourceInput.trim();
-    if (!input || this._marketplaceSourceBusy) return;
+    if (!input || this._marketplaceSourceBusy || !this._canManageSources) return;
+    if (!await this._confirm('marketplace source', input, { action: 'register' })) return;
     this._marketplaceSourceBusy = true;
     const result = await addMarketplaceSource(this._org, this._site, input);
     this._marketplaceSourceBusy = false;
@@ -1839,7 +1855,7 @@ class NxSkillsEditor extends LitElement {
 
   async _onRemoveMarketplaceSource(owner, repo) {
     const label = `${owner}/${repo}`;
-    if (this._marketplaceSourceBusy) return;
+    if (this._marketplaceSourceBusy || !this._canManageSources) return;
     if (!await this._confirm('marketplace source', label)) return;
     this._marketplaceSourceBusy = true;
     const result = await removeMarketplaceSource(this._org, this._site, owner, repo);
@@ -2116,6 +2132,7 @@ class NxSkillsEditor extends LitElement {
       marketplaceSources: this._marketplaceSources,
       marketplaceSourceInput: this._marketplaceSourceInput,
       marketplaceSourceBusy: this._marketplaceSourceBusy,
+      canManageSources: this._canManageSources,
       pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,

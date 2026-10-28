@@ -1535,6 +1535,47 @@ export async function fetchMarketplaceCatalog(sources = BUILT_IN_MARKETPLACE_SOU
   return { entries, hadError };
 }
 
+// Authorization for managing marketplace sources is DA's own CONFIG ACL, the
+// authoritative, SERVER-ENFORCED gate - not a re-derived client-side role.
+// The `marketplace-sources` sheet is written via `POST /config/{org}/{site}/`
+// (saveDaConfig above); da-admin's config route gates that write behind the
+// `CONFIG` ACL keyword and returns 403 to anyone without config-write
+// (da-admin src/routes/config.js + src/utils/auth.js - note: a content-write
+// grant does NOT implicitly unlock config-write; it must target the CONFIG
+// keyword explicitly). So the real enforcement already exists at the API; a
+// direct config POST by a non-authorized caller is refused regardless of the
+// UI. `canWriteConfig` below just reads the SAME permission DA already
+// computed - exposed on the `x-da-actions` response header (same mechanism as
+// fetchSkillsPermission) - so the client can hide controls that would 403.
+//
+// Hard-gate rule (workspace convention): whenever a DA-stored resource needs
+// a hard authorization gate, the gate is DA config-write permission, not an
+// IMS role, product entitlement, or bridge check. It's server-enforced by
+// da-admin's CONFIG ACL and surfaced to clients via `x-da-actions`.
+//
+// NOTE: this is a GET, not a HEAD. da-admin only serves HEAD for `/source`,
+// `/list`, etc. (src/handlers/head.js) - NOT for `/config`, which 404s on
+// HEAD. A GET `/config/{org}/{site}/` is handled (getConfig) and its response
+// carries the `X-da-actions` header reflecting CONFIG-ACL permissions
+// (daResp.js sets it whenever an aclCtx is present and status < 500). So we
+// read the caller's config-write grant off that header. (fetchSkillsPermission
+// above HEADs `/source` because /source DOES have a HEAD handler - the method
+// is per-API, don't copy it blindly.)
+//
+// Unlike fetchSkillsPermission (which fails OPEN/optimistic for a soft
+// write-affordance hint), this is a security gate, so it fails CLOSED: any
+// non-2xx, missing header, or error resolves to `false` (not authorized).
+export async function canWriteConfig(org, site) {
+  try {
+    const resp = await daFetch(`${DA_ORIGIN}/config/${org}/${site}/`);
+    if (!resp.ok) return false;
+    const actions = resp.headers?.get('x-da-actions') || '';
+    return parseActionsHasWrite(actions);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Registered marketplace sources for a site: the permanent built-in source
  * plus whatever the user has added, read from the `marketplace-sources` `.da`
@@ -1571,8 +1612,17 @@ export async function loadMarketplaceSources(org, site) {
  * as this source's `hadError`/empty-catalog state on the next fetch, same as
  * the built-in source's own failure mode, rather than blocking registration
  * on a synchronous network round trip.
+ *
+ * Config-write gated (`canWriteConfig`, DA's server-enforced CONFIG ACL) -
+ * checked here too, not just by the UI hiding the Add form, so any other
+ * caller of this exported function gets the same gate. (The write itself is
+ * also refused server-side by da-admin with a 403 if the caller lacks
+ * config-write, so this is the fail-fast, not the enforcement boundary.)
  */
 export async function addMarketplaceSource(org, site, input) {
+  if (!(await canWriteConfig(org, site))) {
+    return { ok: false, error: 'You need config-write access to register marketplace sources' };
+  }
   const parsed = parseMarketplaceSourceInput(input);
   if (!parsed) {
     return { ok: false, error: 'Enter a GitHub repo as owner/repo or a github.com URL' };
@@ -1606,9 +1656,13 @@ export async function addMarketplaceSource(org, site, input) {
  * removed through this path (no matching row exists for it in the sheet);
  * removing a source only stops it being browsed going forward - it does not
  * touch any plugin already installed from it (installPlugin's record is
- * keyed by the plugin's own `ref`/`repository`, not by source).
+ * keyed by the plugin's own `ref`/`repository`, not by source). Config-write
+ * gated, same as addMarketplaceSource.
  */
 export async function removeMarketplaceSource(org, site, owner, repo) {
+  if (!(await canWriteConfig(org, site))) {
+    return { ok: false, error: 'You need config-write access to manage marketplace sources' };
+  }
   const key = sourceKey({ owner, repo });
   return deleteSheetRow(
     org,

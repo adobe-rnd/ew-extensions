@@ -31,6 +31,7 @@ import {
   loadMarketplaceSources,
   addMarketplaceSource,
   removeMarketplaceSource,
+  canWriteConfig,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -760,7 +761,37 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('Marketplace sources (.da config sheet, backend-independent)', () => {
+  describe('Marketplace sources (.da config sheet, DA CONFIG-ACL gated)', () => {
+    beforeEach(() => mockAuth());
+
+    // canWriteConfig probes HEAD /config/{org}/{site}/ and reads x-da-actions;
+    // this wraps a mock response with (or without) a config-write grant.
+    const okCfg = (body = {}, write = true) => ({
+      ok: true,
+      headers: {
+        get: (n) => (n.toLowerCase() === 'x-da-actions'
+          ? (write ? '/site/CONFIG=read,write' : '/site/CONFIG=read')
+          : null),
+      },
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    });
+
+    it('canWriteConfig reads DA config-write from x-da-actions (GET /config) and fails CLOSED', async () => {
+      const calls1 = trackFetch(() => okCfg({}, true));
+      expect(await canWriteConfig('o', 's')).to.be.true;
+      expect(calls1.every((c) => c.opts.method === undefined || c.opts.method === 'GET')).to.be.true; // GET, not HEAD (/config has no HEAD handler)
+
+      trackFetch(() => okCfg({}, false));
+      expect(await canWriteConfig('o', 's')).to.be.false;
+
+      trackFetch(() => ({ ok: false, status: 404 }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // non-2xx => closed
+
+      trackFetch(() => ({ ok: true, headers: { get: () => null } }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // no header => closed
+    });
+
     it('parseMarketplaceSourceInput accepts owner/repo and github.com URLs, rejects garbage', () => {
       expect(parseMarketplaceSourceInput('adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
       expect(parseMarketplaceSourceInput('https://github.com/adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
@@ -791,53 +822,61 @@ describe('AO / bridge backend switch', () => {
       expect(await loadMarketplaceSources('org-mkt', 'site-load-fail')).to.deep.equal([]);
     });
 
-    it('addMarketplaceSource rejects the built-in source without any network call', async () => {
-      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+    it('addMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-no-perm', 'acme/plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects the built-in source (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
       const result = await addMarketplaceSource('org-mkt', 'site-add-builtin', 'adobe/skills');
       expect(result.ok).to.be.false;
       expect(result.error).to.match(/already built in/);
-      expect(calls).to.have.length(0);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
     });
 
-    it('addMarketplaceSource rejects malformed input without any network call', async () => {
-      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+    it('addMarketplaceSource rejects malformed input (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
       const result = await addMarketplaceSource('org-mkt', 'site-add-bad', 'not a repo');
       expect(result.ok).to.be.false;
-      expect(calls).to.have.length(0);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
     });
 
     it('addMarketplaceSource rejects a source already registered', async () => {
-      trackFetch(() => ({
-        ok: true,
-        json: async () => ({ 'marketplace-sources': { data: [{ source: 'acme/plugins' }] } }),
-      }));
+      trackFetch(() => okCfg({ 'marketplace-sources': { data: [{ source: 'acme/plugins' }] } }, true));
       const result = await addMarketplaceSource('org-mkt', 'site-add-dup', 'ACME/plugins');
       expect(result.ok).to.be.false;
       expect(result.error).to.match(/already registered/);
     });
 
-    it('addMarketplaceSource GETs config then POSTs the appended row', async () => {
-      const calls = trackFetch((url) => {
-        if (String(url).includes('/config/')) return { ok: true, json: async () => ({}) };
-        return { ok: true, json: async () => ({}) };
-      });
+    it('addMarketplaceSource probes config-write then GETs config and POSTs the appended row', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
       const result = await addMarketplaceSource('org-mkt', 'site-add-ok', 'https://github.com/acme/plugins');
       expect(result.ok).to.be.true;
+      expect(calls.every((c) => c.opts.method === undefined || c.opts.method === 'GET' || c.opts.method === 'POST')).to.be.true; // never HEAD on /config
       const postCall = calls.find((c) => c.opts.method === 'POST');
       expect(postCall).to.exist;
       const saved = JSON.parse(postCall.opts.body.get('config'));
       expect(saved['marketplace-sources'].data).to.deep.equal([{ source: 'acme/plugins' }]);
     });
 
+    it('removeMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await removeMarketplaceSource('org-mkt', 'site-remove-no-perm', 'acme', 'plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
     it('removeMarketplaceSource filters the row out and POSTs the rest', async () => {
       const calls = trackFetch((url, opts) => {
-        if (opts?.method === 'POST') return { ok: true, text: async () => '{}' };
-        return {
-          ok: true,
-          json: async () => ({
-            'marketplace-sources': { data: [{ source: 'acme/plugins' }, { source: 'other/thing' }] },
-          }),
-        };
+        if (opts?.method === 'POST') return okCfg({}, true);
+        return okCfg({
+          'marketplace-sources': { data: [{ source: 'acme/plugins' }, { source: 'other/thing' }] },
+        }, true);
       });
       const result = await removeMarketplaceSource('org-mkt', 'site-remove', 'ACME', 'Plugins');
       expect(result.ok).to.be.true;

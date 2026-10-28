@@ -1497,13 +1497,24 @@ function renderMarketplaceCatalogCard(vm, entry) {
 
 /**
  * The "Marketplace sources" strip: the permanent built-in source plus any
- * custom ones the caller has registered, each with a Remove action (except
- * the built-in one, which has none). Sits above the Install cards so it's
- * clear the catalog below is the union of these sources, not one fixed list.
+ * custom ones the caller has registered, each with a Remove action for users
+ * with config-write access (except the built-in one, which has none). Sits
+ * above the Install cards so it's clear the catalog below is the union of
+ * these sources, not one fixed list.
+ *
+ * Registering a source is gated on DA config-write permission
+ * (skills-editor-api.js's canWriteConfig) - DA's own CONFIG ACL, which
+ * da-admin enforces server-side (a config POST without config-write is 403'd
+ * regardless of the UI). Any repo listed here can have its skills/MCP servers
+ * installed into a user's session, so this is a real trust boundary. Users
+ * without config-write still see the registered sources (so they understand
+ * what the catalog below draws from) but get neither the Add form nor a
+ * Remove button.
  */
 function renderMarketplaceSources(vm) {
   const custom = vm.marketplaceSources || [];
   const busy = !!vm.marketplaceSourceBusy;
+  const canManage = !!vm.canManageSources;
   return html`
     <div class="marketplace-sources">
       <span class="marketplace-source-chip is-builtin" data-testid="marketplace-source-builtin">
@@ -1512,29 +1523,40 @@ function renderMarketplaceSources(vm) {
       ${custom.map((s) => html`
         <span class="marketplace-source-chip" data-testid="marketplace-source-chip">
           ${s.owner}/${s.repo}
-          <button type="button" class="marketplace-source-remove"
-            aria-label="Remove marketplace source ${s.owner}/${s.repo}"
-            data-testid="marketplace-source-remove-btn"
-            ?disabled=${busy}
-            @click=${() => vm.onRemoveMarketplaceSource(s.owner, s.repo)}
-          >&times;</button>
+          ${canManage ? html`
+            <button type="button" class="marketplace-source-remove"
+              aria-label="Remove marketplace source ${s.owner}/${s.repo}"
+              data-testid="marketplace-source-remove-btn"
+              ?disabled=${busy}
+              @click=${() => vm.onRemoveMarketplaceSource(s.owner, s.repo)}
+            >&times;</button>
+          ` : nothing}
         </span>
       `)}
     </div>
-    <form class="marketplace-source-form" @submit=${(e) => { e.preventDefault(); vm.onAddMarketplaceSource(); }}>
-      <input type="text" class="marketplace-source-input"
-        placeholder="owner/repo or a github.com URL"
-        aria-label="Add a marketplace source"
-        data-testid="marketplace-source-input"
-        .value=${vm.marketplaceSourceInput || ''}
-        ?disabled=${busy}
-        @input=${(e) => vm.onMarketplaceSourceInput(e.target.value)}
-      />
-      <button type="submit" class="plugin-card-action"
-        data-testid="marketplace-source-add-btn"
-        ?disabled=${busy || !(vm.marketplaceSourceInput || '').trim()}
-      >Add Marketplace</button>
-    </form>
+    ${canManage ? html`
+      <form class="marketplace-source-form" @submit=${(e) => { e.preventDefault(); vm.onAddMarketplaceSource(); }}>
+        <input type="text" class="marketplace-source-input"
+          placeholder="owner/repo or a github.com URL"
+          aria-label="Add a marketplace source"
+          data-testid="marketplace-source-input"
+          .value=${vm.marketplaceSourceInput || ''}
+          ?disabled=${busy}
+          @input=${(e) => vm.onMarketplaceSourceInput(e.target.value)}
+        />
+        <button type="submit" class="plugin-card-action"
+          data-testid="marketplace-source-add-btn"
+          ?disabled=${busy || !(vm.marketplaceSourceInput || '').trim()}
+        >Add Marketplace</button>
+      </form>
+      <p class="marketplace-source-warning" data-testid="marketplace-source-warning">
+        Only add sources you trust — skills and MCP servers a source lists can be installed into users’ sessions for this site.
+      </p>
+    ` : html`
+      <p class="marketplace-source-admin-note" data-testid="marketplace-source-admin-note">
+        You need config-write access to add or remove marketplace sources.
+      </p>
+    `}
   `;
 }
 

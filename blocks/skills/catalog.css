@@ -386,6 +386,18 @@
   font-size: var(--s2-body-size-s);
 }
 
+.marketplace-source-warning {
+  margin: 0 0 var(--s2-spacing-300);
+  font-size: var(--s2-body-size-xxs);
+  color: light-dark(var(--s2-red-900), var(--s2-red-700));
+}
+
+.marketplace-source-admin-note {
+  margin: 0 0 var(--s2-spacing-300);
+  font-size: var(--s2-body-size-xxs);
+  color: var(--s2-gray-500);
+}
+
 /* ─── plugin card grid (agents tab — matches AO's Plugins layout) ──────────── */
 
 .plugin-grid {
