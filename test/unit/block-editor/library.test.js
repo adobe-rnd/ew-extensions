@@ -6,6 +6,8 @@ import {
 import {
   getConfig, validateBase, isLocalHost, setAdminEnvironment, ADMIN_URLS,
 } from '../../../tools/block-editor/config.js';
+import { describeBlock } from '../../../tools/block-editor/document.js';
+import { buildBlockFieldDefinitions, resolveBlockFields } from '../../../tools/block-editor/fields.js';
 
 describe('block editor library parsing', () => {
   it('preserves original templates, metadata labels, and variant headers', () => {
@@ -40,6 +42,50 @@ describe('block editor library parsing', () => {
     expect(request.html).to.equal(item.dom.outerHTML);
     expect(matched.path).to.equal('/library/cards');
     expect(await getBlockVariantOptions(blocks, 'cards')).to.deep.equal(['compact']);
+  });
+  it('resolves fields for a grouped variant without losing its section metadata', async () => {
+    const items = parseVariants(`<main><div>
+      <div class="columns"><div><div>Default</div></div></div>
+      <div class="library-container-start"></div>
+      <div class="columns boostmobile"><div><div>
+        <h3>Headline</h3><p>Display</p><p>Price</p><p><a href="/shop">Shop</a></p><p>Disclaimer</p>
+      </div><div><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div></div></div>
+      <div class="library-metadata"><div><div>fields</div><div><table>
+        <tr><td colspan="2">Fields</td></tr>
+        <tr><td><p>headline</p><p>display feature</p><p>price</p><p>cta link</p><p>disclaimer</p></td>
+        <td>product image</td></tr>
+      </table></div></div></div>
+      <div class="section-metadata"><div><div>background</div><div>orange</div></div></div>
+      <div class="library-container-end"></div>
+      </div></main>`, 'https://example.com/library');
+    const group = items[1];
+    const original = group.dom.outerHTML;
+    const matched = await getBlockFieldTemplate([{
+      path: '/library/columns', loadVariants: Promise.resolve(items),
+    }], 'columns', 'boostmobile', { describeBlock: async (args) => describeBlock(args) });
+    expect(matched.path).to.equal('/library/columns');
+    expect(matched.item.fields).to.equal(group.fields);
+    expect(matched.item.dom.rows[0].textContent).to.equal('columns (boostmobile)');
+    const fields = resolveBlockFields(matched.template, buildBlockFieldDefinitions(matched));
+    expect(fields.map((field) => field.label)).to.deep.equal([
+      'headline', 'display feature', 'price', 'cta link', 'disclaimer', 'product image',
+    ]);
+    expect(fields.every((field) => !field.error && field.target)).to.equal(true);
+    expect(group.dom.outerHTML).to.equal(original);
+    expect(group.dom.lastElementChild.rows[0].textContent).to.equal('section-metadata');
+  });
+  it('does not match nested content tables as grouped block templates', async () => {
+    const items = parseVariants(`<main><div>
+      <div class="library-container-start"></div>
+      <div class="columns"><div><div><table>
+        <tr><td>cards (compact)</td></tr><tr><td>Nested content</td></tr>
+      </table></div></div></div>
+      <div class="library-container-end"></div>
+      </div></main>`, 'https://example.com/library');
+    const matched = await getBlockFieldTemplate([{
+      path: '/library/columns', loadVariants: Promise.resolve(items),
+    }], 'cards', 'compact', { describeBlock: async (args) => describeBlock(args) });
+    expect(matched).to.equal(null);
   });
   it('associates preceding and nested metadata', () => {
     const source = `<main><div><h2>Display</h2><div class="library-metadata">

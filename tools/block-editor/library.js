@@ -162,7 +162,11 @@ export async function getBlockFieldTemplate(blocks, name, variant, actions) {
   const variants = (await Promise.all(blocks.map(async (block) => (
     (await block.loadVariants).map((item) => ({ item, path: block.path }))
   )))).flat();
-  const candidates = await Promise.all(variants.filter((candidate) => candidate.item.dom.tagName === 'TABLE')
+  const candidates = await Promise.all(variants.flatMap(({ item, path }) => {
+    const tables = item.dom.tagName === 'TABLE' ? [item.dom]
+      : [...item.dom.children].filter((child) => child.tagName === 'TABLE');
+    return tables.map((dom) => ({ item: { ...item, dom }, path }));
+  })
     .map(async (candidate) => {
       const html = candidate.item.dom.outerHTML;
       if (!cache.has(html)) {
