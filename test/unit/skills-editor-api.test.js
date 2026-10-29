@@ -33,6 +33,7 @@ import {
   removeMarketplaceSource,
   canWriteConfig,
   mergeMarketplacePluginView,
+  authorLabel,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -962,6 +963,18 @@ describe('AO / bridge backend switch', () => {
 
       expect(mergeMarketplacePluginView('nope', installed, catalog)).to.be.null;
       expect(mergeMarketplacePluginView('', installed, catalog)).to.be.null;
+    });
+
+    it('authorLabel normalizes string/object/empty author shapes (regression: "by [object Object]")', () => {
+      expect(authorLabel('Adobe')).to.equal('Adobe');
+      expect(authorLabel('  Adobe  ')).to.equal('Adobe');
+      expect(authorLabel({ name: 'Adobe' })).to.equal('Adobe');
+      expect(authorLabel({ email: 'skills@adobe.com' })).to.equal('skills@adobe.com');
+      expect(authorLabel({ url: 'https://adobe.com' })).to.equal('https://adobe.com');
+      expect(authorLabel({})).to.equal('');
+      expect(authorLabel(null)).to.equal('');
+      expect(authorLabel(undefined)).to.equal('');
+      expect(authorLabel('')).to.equal('');
     });
   });
 });
