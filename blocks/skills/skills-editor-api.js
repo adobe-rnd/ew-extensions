@@ -1704,6 +1704,51 @@ function pluginRefMatches(ref) {
   return (r) => (r?.ref || r?.manifest?.name) === ref;
 }
 
+/**
+ * Merges what's known about a single plugin (by name) from the installed list
+ * and the browsable catalog into one view object for the detail panel. Pure
+ * (no I/O) so it's unit-testable. Prefers the installed entry's manifest for
+ * name/description/version/repository (it's the thing actually in the user's
+ * settings), falling back to the catalog entry. Source owner/repo come from
+ * the catalog entry when present, else are parsed from the manifest's
+ * `repository` URL. `isAdobe` is true for the `adobe` owner (used to badge an
+ * Adobe-published source). Returns `null` if the name is in neither list.
+ */
+export function mergeMarketplacePluginView(name, installed = [], catalog = []) {
+  const ref = String(name || '').trim();
+  if (!ref) return null;
+  const inst = (Array.isArray(installed) ? installed : []).find(pluginRefMatches(ref));
+  const cat = (Array.isArray(catalog) ? catalog : []).find((e) => e?.name === ref);
+  if (!inst && !cat) return null;
+  const manifest = inst?.manifest || {};
+  const repository = manifest.repository || cat?.repository || '';
+  let sourceOwner = cat?.sourceOwner;
+  let sourceRepo = cat?.sourceRepo;
+  if (!sourceOwner || !sourceRepo) {
+    const parsed = parseMarketplaceSourceInput(repository);
+    if (parsed) { sourceOwner = sourceOwner || parsed.owner; sourceRepo = sourceRepo || parsed.repo; }
+  }
+  const builtIn = cat?.builtIn
+    ?? (String(sourceOwner || '').toLowerCase() === 'adobe' && String(sourceRepo || '').toLowerCase() === 'skills');
+  const resolved = inst?.resolved || null;
+  return {
+    name: manifest.name || cat?.name || ref,
+    description: manifest.description || cat?.description || '',
+    version: cat?.version || manifest.version || '',
+    author: cat?.author || manifest.author || '',
+    repository,
+    sourceOwner: sourceOwner || '',
+    sourceRepo: sourceRepo || '',
+    isAdobe: String(sourceOwner || '').toLowerCase() === 'adobe',
+    builtIn: !!builtIn,
+    isInstalled: !!inst,
+    enabled: inst ? inst.enabled !== false : false,
+    skillCount: resolved?.skills?.length || 0,
+    mcpCount: resolved?.mcpServers?.length || 0,
+    resolved: !!resolved,
+  };
+}
+
 async function bridgeGetPlugins(ctx) {
   const resp = await fetch(`${ctx.base}/api/v1/overrides/user`, { headers: bridgeHeaders(ctx) });
   if (!resp.ok) throw new Error(`Could not load overrides (${resp.status})`);

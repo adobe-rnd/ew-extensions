@@ -29,6 +29,7 @@ import {
   AO_SCOPE_PERSONAL,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
+  mergeMarketplacePluginView,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -476,6 +477,7 @@ function renderDetailView(vm) {
   const isPrompt = tab === TAB_PROMPTS;
   const isMcp = tab === TAB_MCPS;
   const isAgent = tab === TAB_AGENTS;
+  const isMarketplace = tab === TAB_MARKETPLACE;
   const isMemory = tab === TAB_MEMORY;
   const isContext = tab === TAB_CONTEXT;
 
@@ -487,6 +489,18 @@ function renderDetailView(vm) {
           @click=${() => vm.onCloseEditor()}
         >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Skills'}</span></button>
         ${renderSkillDetail(vm)}
+      </div>
+    `;
+  }
+
+  const marketplaceDrillDown = isMarketplace && vm.viewingPluginName;
+  if (marketplaceDrillDown) {
+    return html`
+      <div class="detail-view">
+        <button type="button" class="detail-back-btn"
+          @click=${() => vm.onCloseEditor()}
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Marketplace'}</span></button>
+        ${renderMarketplacePluginDetail(vm)}
       </div>
     `;
   }
@@ -1197,9 +1211,13 @@ export function renderAgentsCatalog(vm) {
       ${renderViewToggle(vm)}
     </div>
 
-    ${isGrid
+    ${!filtered.length ? html`<div class="empty">No agents yet. Agent presets live in <code>.da/agents/</code>.</div>` : nothing}
+    ${filtered.length && isGrid
       ? html`<div class="plugin-grid">${filtered.map(({ agent, builtin }) => renderAgentCard(vm, agent, builtin))}</div>`
-      : html`<div class="catalog-list">${filtered.map(({ agent, builtin }) => renderAgentRow(vm, agent, builtin))}</div>`}
+      : nothing}
+    ${filtered.length && !isGrid
+      ? html`<div class="catalog-list">${filtered.map(({ agent, builtin }) => renderAgentRow(vm, agent, builtin))}</div>`
+      : nothing}
   `;
 }
 
@@ -1418,8 +1436,24 @@ export function renderMcpsCatalog(vm) {
 
 // ─── Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) ─────────
 
+// Adobe corporate "A" mark, used to badge a plugin whose source is the adobe org.
+const ADOBE_LOGO = html`<svg class="plugin-adobe-logo" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="#EB1000" d="M13.7 1H23v22zM10.3 1H1v22zM12 8l5.2 15h-3.3l-1.5-4.6H9z"/></svg>`;
+
 function marketplaceInstalledEntry(vm, name) {
   return (vm.plugins || []).find((p) => (p?.ref || p?.manifest?.name) === name);
+}
+
+// Merged view of a plugin (installed + catalog) for consistent source display.
+function pluginView(vm, name) {
+  return mergeMarketplacePluginView(name, vm.plugins || [], vm.marketplaceCatalog || []);
+}
+
+// The source label ("adobe/skills" + optional Adobe logo + Built-in tag).
+function renderPluginSourceLine(view) {
+  if (!view || (!view.sourceOwner && !view.sourceRepo)) return nothing;
+  return html`<span class="plugin-card-src">
+    ${view.isAdobe ? ADOBE_LOGO : nothing}${view.sourceOwner}/${view.sourceRepo}${view.builtIn ? html` <span class="plugin-src-builtin">Built-in</span>` : nothing}
+  </span>`;
 }
 
 function renderMarketplaceInstalledCard(vm, installed) {
@@ -1431,17 +1465,24 @@ function renderMarketplaceInstalledCard(vm, installed) {
   const skillCount = resolved?.skills?.length || 0;
   const mcpCount = resolved?.mcpServers?.length || 0;
   const isBusy = !!vm.pluginBusyRef?.[ref];
+  const view = pluginView(vm, name);
   const statusLabel = mcpCount
     ? `${skillCount} Skill${skillCount === 1 ? '' : 's'} \u00b7 ${mcpCount} MCP${mcpCount === 1 ? '' : 's'}`
     : `${skillCount} Skill${skillCount === 1 ? '' : 's'}`;
 
   return html`
-    <article class="plugin-card" data-testid="plugin-installed-card" data-plugin-ref=${ref}>
+    <article class="plugin-card is-clickable" role="button" tabindex="0"
+      data-testid="plugin-installed-card" data-plugin-ref=${ref}
+      aria-label="View plugin ${name}"
+      @click=${() => vm.onViewPlugin(name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(name); } }}
+    >
       <header class="plugin-card-top">
         <span class="plugin-card-pill">${PLUGIN_ICON}</span>
         <div class="plugin-card-identity">
           <span class="plugin-card-name">${name}</span>
           <span class="plugin-card-source" title=${description || nothing}>${description}</span>
+          ${renderPluginSourceLine(view)}
         </div>
         <span class="plugin-card-badge">${enabled ? 'Enabled' : 'Disabled'}</span>
       </header>
@@ -1469,13 +1510,20 @@ function renderMarketplaceInstalledCard(vm, installed) {
 function renderMarketplaceCatalogCard(vm, entry) {
   const installed = marketplaceInstalledEntry(vm, entry.name);
   const isBusy = !!vm.pluginBusyRef?.[entry.name];
+  const view = pluginView(vm, entry.name);
   return html`
-    <article class="plugin-card" data-testid="plugin-catalog-card" data-plugin-name=${entry.name}>
+    <article class="plugin-card is-clickable" role="button" tabindex="0"
+      data-testid="plugin-catalog-card" data-plugin-name=${entry.name}
+      aria-label="View plugin ${entry.name}"
+      @click=${() => vm.onViewPlugin(entry.name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(entry.name); } }}
+    >
       <header class="plugin-card-top">
         <span class="plugin-card-pill">${PLUGIN_ICON}</span>
         <div class="plugin-card-identity">
           <span class="plugin-card-name">${entry.name}</span>
           <span class="plugin-card-source" title=${entry.description || nothing}>${entry.description}</span>
+          ${renderPluginSourceLine(view)}
         </div>
       </header>
       <footer class="plugin-card-meta">
@@ -1492,6 +1540,122 @@ function renderMarketplaceCatalogCard(vm, entry) {
         `}
       </footer>
     </article>
+  `;
+}
+
+// ── list-view rows (mirror the grid cards; share the detail drill-down) ──────
+function renderMarketplaceInstalledRow(vm, installed) {
+  const ref = installed?.ref || installed?.manifest?.name || '';
+  const name = installed?.manifest?.name || ref;
+  const description = installed?.manifest?.description || '';
+  const enabled = installed?.enabled !== false;
+  const resolved = installed?.resolved;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  const view = pluginView(vm, name);
+  const src = view && view.sourceOwner ? `${view.sourceOwner}/${view.sourceRepo}` : '';
+  return html`
+    <div class="catalog-row is-clickable" role="button" tabindex="0"
+      data-testid="plugin-installed-row" data-plugin-ref=${ref}
+      aria-label="View plugin ${name}"
+      @click=${() => vm.onViewPlugin(name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(name); } }}
+    >
+      <span class="catalog-row-pill">${view?.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${name}</span>
+          <span class="catalog-row-meta">${enabled ? 'Enabled' : 'Disabled'}${src ? ` \u00b7 ${src}` : ''}${resolved ? '' : ' \u00b7 not yet available'}</span>
+        </div>
+        ${description ? html`<span class="catalog-row-desc">${description}</span>` : nothing}
+      </div>
+      <button type="button" class="plugin-row-action"
+        aria-label="${enabled ? 'Disable' : 'Enable'} plugin ${name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onTogglePlugin(ref, !enabled); }}
+      >${enabled ? 'Disable' : 'Enable'}</button>
+      <button type="button" class="plugin-row-action is-uninstall"
+        aria-label="Uninstall plugin ${name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onUninstallPlugin(ref); }}
+      >${TRASH_ICON}</button>
+      ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+function renderMarketplaceCatalogRow(vm, entry) {
+  const installed = marketplaceInstalledEntry(vm, entry.name);
+  const isBusy = !!vm.pluginBusyRef?.[entry.name];
+  const view = pluginView(vm, entry.name);
+  const src = view && view.sourceOwner ? `${view.sourceOwner}/${view.sourceRepo}` : '';
+  return html`
+    <div class="catalog-row is-clickable" role="button" tabindex="0"
+      data-testid="plugin-catalog-row" data-plugin-name=${entry.name}
+      aria-label="View plugin ${entry.name}"
+      @click=${() => vm.onViewPlugin(entry.name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(entry.name); } }}
+    >
+      <span class="catalog-row-pill">${view?.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${entry.name}</span>
+          <span class="catalog-row-meta">${entry.version ? `v${entry.version}` : ''}${src ? `${entry.version ? ' \u00b7 ' : ''}${src}` : ''}</span>
+        </div>
+        ${entry.description ? html`<span class="catalog-row-desc">${entry.description}</span>` : nothing}
+      </div>
+      ${installed
+    ? html`<span class="plugin-row-badge">Installed</span>`
+    : html`<button type="button" class="plugin-row-action"
+        aria-label="Install plugin ${entry.name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onInstallPlugin(entry); }}
+      >Install</button>`}
+      ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+/**
+ * Plugin detail drill-down (click a card/row): full name, full description,
+ * marketplace source (+ Adobe logo when the source is the adobe org), version,
+ * and the same install/enable/disable/uninstall actions as the card.
+ */
+export function renderMarketplacePluginDetail(vm) {
+  const view = pluginView(vm, vm.viewingPluginName);
+  if (!view) return html`<div class="empty">Plugin not found.</div>`;
+  const ref = view.name;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  return html`
+    <div class="skill-detail">
+      <header class="skill-detail-header">
+        <div class="skill-detail-identity">
+          <span class="skill-detail-icon">${view.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+          <div>
+            <span class="skill-detail-name">${view.name}</span>
+            ${view.sourceOwner ? html`<span class="plugin-detail-source">
+              ${view.sourceOwner}/${view.sourceRepo}${view.builtIn ? html` <span class="plugin-src-builtin">Built-in</span>` : nothing}
+            </span>` : nothing}
+          </div>
+        </div>
+        <div class="skill-detail-actions">
+          ${view.isInstalled ? html`
+            <button type="button" class="plugin-card-action" ?disabled=${isBusy}
+              @click=${() => vm.onTogglePlugin(ref, !view.enabled)}>${view.enabled ? 'Disable' : 'Enable'}</button>
+            <button type="button" class="skill-detail-action-btn is-negative" ?disabled=${isBusy}
+              @click=${() => vm.onUninstallPlugin(ref)}>Uninstall</button>
+          ` : html`
+            <button type="button" class="plugin-card-action" ?disabled=${isBusy}
+              @click=${() => vm.onInstallPlugin({ name: view.name, description: view.description, version: view.version, author: view.author, repository: view.repository })}>Install</button>
+          `}
+        </div>
+      </header>
+      <div class="plugin-detail-meta">
+        ${view.version ? html`<span class="plugin-detail-tag">v${view.version}</span>` : nothing}
+        ${view.author ? html`<span class="plugin-detail-tag">by ${view.author}</span>` : nothing}
+        ${view.isInstalled ? html`<span class="plugin-detail-tag">${view.enabled ? 'Enabled' : 'Disabled'}</span>` : nothing}
+        ${view.isInstalled && !view.resolved ? html`<span class="plugin-detail-tag is-warn">Not yet available</span>` : nothing}
+        ${view.isInstalled && view.resolved ? html`<span class="plugin-detail-tag">${view.skillCount} Skill${view.skillCount === 1 ? '' : 's'}${view.mcpCount ? ` \u00b7 ${view.mcpCount} MCP${view.mcpCount === 1 ? '' : 's'}` : ''}</span>` : nothing}
+      </div>
+      ${view.description ? html`<div class="skill-detail-description">${view.description}</div>` : html`<div class="empty">No description provided.</div>`}
+      ${view.repository ? html`<p class="plugin-detail-repo"><a href=${view.repository} target="_blank" rel="noopener noreferrer">${view.repository}</a></p>` : nothing}
+    </div>
   `;
 }
 
@@ -1572,6 +1736,7 @@ function renderMarketplaceSources(vm) {
 export function renderMarketplaceCatalog(vm) {
   const installed = vm.plugins || [];
   const catalog = vm.marketplaceCatalog || [];
+  const isGrid = vm.catalogViewMode === 'grid';
 
   return html`
     <h3 class="section-h">Marketplace sources</h3>
@@ -1582,12 +1747,17 @@ export function renderMarketplaceCatalog(vm) {
         <button type="button" class="plugin-card-action" @click=${() => vm.onRetryMarketplace()}>Retry</button>
       </div>
     ` : nothing}
+    <div class="catalog-toolbar" role="toolbar" aria-label="Plugin view controls">
+      ${renderViewToggle(vm)}
+    </div>
     <h3 class="section-h">Installed (${installed.length})</h3>
     ${!installed.length ? html`<div class="empty">No plugins installed yet</div>` : nothing}
-    ${installed.length ? html`<div class="plugin-grid">${installed.map((p) => renderMarketplaceInstalledCard(vm, p))}</div>` : nothing}
+    ${installed.length && isGrid ? html`<div class="plugin-grid">${installed.map((p) => renderMarketplaceInstalledCard(vm, p))}</div>` : nothing}
+    ${installed.length && !isGrid ? html`<div class="catalog-list">${installed.map((p) => renderMarketplaceInstalledRow(vm, p))}</div>` : nothing}
     <h3 class="section-h">Browse marketplace (${catalog.length})</h3>
     ${!catalog.length && !vm.marketplaceCatalogError ? html`<div class="empty">Loading\u2026</div>` : nothing}
-    ${catalog.length ? html`<div class="plugin-grid">${catalog.map((entry) => renderMarketplaceCatalogCard(vm, entry))}</div>` : nothing}
+    ${catalog.length && isGrid ? html`<div class="plugin-grid">${catalog.map((entry) => renderMarketplaceCatalogCard(vm, entry))}</div>` : nothing}
+    ${catalog.length && !isGrid ? html`<div class="catalog-list">${catalog.map((entry) => renderMarketplaceCatalogRow(vm, entry))}</div>` : nothing}
   `;
 }
 
