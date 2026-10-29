@@ -1,9 +1,9 @@
-import DA_SDK from 'https://devlive--da-nx--adobe.aem.live/nx/utils/sdk.js';
+import DA_SDK from 'https://extdnd--da-nx--adobe.aem.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 import { parseAssetPage } from './assets.js';
 import {
   BASIC_GROUPS, PARAGRAPH_ELEMENT, libraryFetch, loadBlocks, matches,
-  resolveEditorOrigin, setHtmlDragData,
+  resolveEditorOrigin,
 } from './library.js';
 
 class QuickBlocks extends LitElement {
@@ -41,10 +41,11 @@ class QuickBlocks extends LitElement {
     this._assetRetry = false;
     this._assetDragError = false;
     this._assetObjectUrls = new Set();
+    this._dragBindings = new Map();
     this._publishDragHandles = () => {
       if (!this._editorOrigin) return;
       const handles = [...this.querySelectorAll(
-        '.quick-blocks-content:not([hidden]) .quick-add, .quick-assets-content:not([hidden]) .quick-asset-card',
+        '.quick-assets-content:not([hidden]) .quick-asset-card',
       )].map((button) => {
         const rect = button.getBoundingClientRect();
         return {
@@ -52,9 +53,8 @@ class QuickBlocks extends LitElement {
           y: rect.top,
           width: rect.width,
           height: rect.height,
-          ...(button.classList.contains('quick-asset-card')
-            ? { assetId: button.assetId, clickable: false }
-            : { html: button.dropHtml }),
+          assetId: button.assetId,
+          clickable: false,
         };
       });
       window.parent.postMessage({
@@ -73,7 +73,7 @@ class QuickBlocks extends LitElement {
       const { type, index } = event.data || {};
       if (type === 'ew-table-drag-handle-click' && Number.isSafeInteger(index)) {
         const button = this.querySelectorAll(
-          '.quick-blocks-content:not([hidden]) .quick-add, .quick-assets-content:not([hidden]) .quick-asset-card',
+          '.quick-assets-content:not([hidden]) .quick-asset-card',
         )[index];
         button?.click();
       } else if (type === 'ew-table-drag-handle-wheel'
@@ -116,6 +116,8 @@ class QuickBlocks extends LitElement {
   }
 
   disconnectedCallback() {
+    this._dragBindings.forEach((binding) => binding.dispose?.());
+    this._dragBindings.clear();
     this._unsubPanelOptions?.();
     window.removeEventListener('message', this._onHandleMessage);
     window.removeEventListener('resize', this._publishDragHandles);
@@ -130,6 +132,36 @@ class QuickBlocks extends LitElement {
   updated(changed) {
     super.updated(changed);
     this._publishDragHandles();
+    this._bindDraggables();
+  }
+
+  _bindDraggables() {
+    this._dragBindings.forEach((binding, button) => {
+      if (this.contains(button)) return;
+      binding.dispose?.();
+      this._dragBindings.delete(button);
+    });
+    if (!this._actions?.makeDraggable) return;
+    this.querySelectorAll('.quick-add').forEach((button) => {
+      if (this._dragBindings.has(button)) return;
+      const binding = {};
+      this._dragBindings.set(button, binding);
+      this._actions.makeDraggable({
+        element: button,
+        getData: () => ({ data: { 'text/html': button.dropHtml } }),
+        onResult: (result) => {
+          if (!result.ok && result.error !== 'cancelled') {
+            this._error = `Could not drop this item (${result.error}).`;
+          }
+        },
+      }).then((dispose) => {
+        if (this._dragBindings.get(button) !== binding || !button.isConnected) dispose();
+        else binding.dispose = dispose;
+      }).catch(() => {
+        this._dragBindings.delete(button);
+        this._error = 'Could not enable dragging.';
+      });
+    });
   }
 
   async _init() {
@@ -145,7 +177,7 @@ class QuickBlocks extends LitElement {
       this._project = project;
       this._editorOrigin = resolveEditorOrigin(project);
       this._daFetch = libraryFetch(token, project.daAdmin);
-      this._unsubPanelOptions = actions.onPanelOptions((options) => this._applyPanelOptions(options));
+      this._unsubPanelOptions = actions.onPanelOptions?.((options) => this._applyPanelOptions(options));
       this._applyPanelOptions(panelOptions);
       if (this._tab === 'assets') this._selectTab('assets');
       await this._load();
@@ -249,25 +281,6 @@ class QuickBlocks extends LitElement {
     this._actions.sendHTML(markup);
   }
 
-  _dragStart(event, markup) {
-    setHtmlDragData(event.dataTransfer, markup);
-    if (!this._editorOrigin) {
-      this._error = 'The editor origin is unavailable; drag into the page is disabled.';
-      event.preventDefault();
-      return;
-    }
-    window.parent.postMessage({
-      type: 'ew-table-drag-start',
-      html: markup,
-    }, this._editorOrigin);
-  }
-
-  _dragEnd() {
-    if (this._editorOrigin) {
-      window.parent.postMessage({ type: 'ew-table-drag-end' }, this._editorOrigin);
-    }
-  }
-
   _visibleBlocks() {
     if (!this._search.trim()) return this._blocks;
     return this._blocks.filter((block) => matches(this._search, block)
@@ -279,9 +292,7 @@ class QuickBlocks extends LitElement {
       .dropHtml=${markup}
       aria-label="Add ${item.name} to page"
       title=${item.description || `Drag or click to add ${item.name}`}
-      @click=${() => this._add(markup)}
-      @dragstart=${(event) => this._dragStart(event, markup)}
-      @dragend=${() => this._dragEnd()}>
+      @click=${() => this._add(markup)}>
       <span><strong>${item.name}</strong>
         ${item.variants ? html`<small>${item.variants}</small>` : nothing}
       </span><span class="quick-add-icon" aria-hidden="true">

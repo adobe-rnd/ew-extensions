@@ -60,6 +60,55 @@ describe('Quick Blocks Properties shortcut', () => {
     element._actions = { showPanel: (name) => opened.push(name) };
   });
 
+  describe('Quick Blocks SDK dragging', () => {
+    it('registers current HTML through the SDK and disposes removed buttons', async () => {
+      const element = document.createElement('ew-quick-blocks');
+      element._init = () => {};
+      document.body.append(element);
+      const button = document.createElement('button');
+      button.className = 'quick-add';
+      button.dropHtml = '<h2>Heading</h2>';
+      element.append(button);
+      const bindings = [];
+      let disposed = 0;
+      element._actions = {
+        makeDraggable: async (options) => {
+          bindings.push(options);
+          return () => { disposed += 1; };
+        },
+      };
+      element._bindDraggables();
+      element._bindDraggables();
+      await Promise.resolve();
+      expect(bindings).to.have.length(1);
+      expect(bindings[0].getData()).to.deep.equal({ data: { 'text/html': '<h2>Heading</h2>' } });
+      button.dropHtml = '<p>Updated</p>';
+      expect(bindings[0].getData()).to.deep.equal({ data: { 'text/html': '<p>Updated</p>' } });
+      button.remove();
+      element._bindDraggables();
+      expect(disposed).to.equal(1);
+      element.remove();
+    });
+    it('disposes a registration that finishes after the component disconnects', async () => {
+      const element = document.createElement('ew-quick-blocks');
+      element._init = () => {};
+      const button = document.createElement('button');
+      button.className = 'quick-add';
+      element.append(button);
+      document.body.append(element);
+      let complete;
+      let disposed = 0;
+      element._actions = {
+        makeDraggable: () => new Promise((resolve) => { complete = resolve; }),
+      };
+      element._bindDraggables();
+      element.remove();
+      complete(() => { disposed += 1; });
+      await Promise.resolve();
+      expect(disposed).to.equal(1);
+    });
+  });
+
   ['blocks', 'assets'].forEach((tab) => {
     it(`keeps the tab row above the heading and instructions on the ${tab} tab`, () => {
       element._tab = tab;
