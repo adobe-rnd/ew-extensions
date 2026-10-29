@@ -11,7 +11,7 @@
  */
 import { expect } from '@esm-bundle/chai';
 import '../../blocks/skills/nx-skills-editor.js';
-import { renderChatDrawer } from '../../blocks/skills/renderers.js';
+import { renderChatDrawer, renderMarketplacePluginDetail } from '../../blocks/skills/renderers.js';
 import { setSkillsBackend } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -210,5 +210,152 @@ describe('renderChatDrawer — harness branching', () => {
     const cmaClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatAltHarness: true }));
     expect(legacyClosed).to.not.include('<nx-chat');
     expect(cmaClosed).to.not.include('<nx-chat');
+  });
+});
+
+// ─── Marketplace tab: catalog/installed load, config-write gate, plugin detail ──
+describe('NxSkillsEditor — Marketplace tab (list + detail)', () => {
+  const realFetch = window.fetch;
+  const realAdobeIMS = window.adobeIMS;
+
+  function stubMarketplaceFetch({ write = true, installed = [], catalog } = {}) {
+    const plugins = catalog || [{ name: 'web', description: 'Browser automation', version: '1.0.0' }];
+    window.fetch = async (url) => {
+      const u = String(url);
+      if (u.includes('raw.githubusercontent.com')) {
+        return { ok: true, status: 200, headers: new Headers(), json: async () => ({ plugins }) };
+      }
+      if (u.includes('/api/v1/overrides/user')) {
+        return { ok: true, status: 200, headers: new Headers(), json: async () => ({ settings: { plugins: { installed } } }) };
+      }
+      if (u.includes('/config/')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers(write ? { 'x-da-actions': '/s=read,write' } : {}),
+          json: async () => ({ flags: { data: [] }, 'marketplace-sources': { data: [] }, 'mcp-servers': { data: [] }, agents: { data: [] } }),
+          text: async () => '',
+        };
+      }
+      return { ok: true, status: 200, headers: new Headers(), json: async () => ({}), text: async () => '' };
+    };
+  }
+
+  function makeEditor(org, site) {
+    const el = document.createElement('nx-skills-editor');
+    el._hash = { value: { org, site } };
+    el._loadedKey = `${org}/${site}`;
+    return el;
+  }
+
+  beforeEach(() => {
+    initAuth('test-ims-token');
+    window.adobeIMS = {
+      getAccessToken: () => ({ token: 'test-ims-token' }),
+      getProfile: async () => ({ userId: 'user-123', projectedProductContext: [{ prodCtx: { owningEntity: 'ORGID123@AdobeOrg' } }] }),
+    };
+  });
+
+  afterEach(() => {
+    window.fetch = realFetch;
+    window.adobeIMS = realAdobeIMS;
+    setSkillsBackend({ altHarness: false });
+    initAuth(null);
+  });
+
+  it('loads the catalog + installed plugins, gates manage on config-write, opens the detail', async () => {
+    setSkillsBackend({ altHarness: true });
+    stubMarketplaceFetch({
+      write: true,
+      installed: [{
+        ref: 'web', enabled: true, manifest: { name: 'web', description: 'Browser automation' }, resolved: { skills: [1], mcpServers: [] },
+      }],
+      catalog: [
+        { name: 'web', description: 'Browser automation', version: '1.0.0' },
+        { name: 'commerce', description: 'Commerce ops', version: '2.0.0' },
+      ],
+    });
+    const el = makeEditor('ew-mkt', 'site-mkt');
+
+    await el._ensurePluginsLoaded();
+
+    // catalog loaded from the (built-in) source
+    expect(el._marketplaceCatalog.map((e) => e.name)).to.include.members(['web', 'commerce']);
+    // installed plugins loaded from the bridge
+    expect(el._plugins.map((p) => p.ref)).to.deep.equal(['web']);
+    // Add/Remove gated on config-write (x-da-actions granted write)
+    expect(el._canManageSources).to.be.true;
+
+    // clicking a plugin opens the detail drill-down
+    el._onViewPlugin('web');
+    expect(el._viewingPluginName).to.equal('web');
+    expect(el._isEditorOpen).to.be.true;
+    expect(el._catalogTab).to.equal('marketplace');
+
+    // closing the detail clears it
+    el._closeEditor();
+    expect(el._viewingPluginName).to.equal(null);
+    expect(el._isEditorOpen).to.be.false;
+  });
+
+  it('fails the manage gate closed when config-write is not granted', async () => {
+    setSkillsBackend({ altHarness: true });
+    stubMarketplaceFetch({ write: false });
+    const el = makeEditor('ew-mkt2', 'site-mkt2');
+    await el._ensurePluginsLoaded();
+    expect(el._canManageSources).to.be.false;
+  });
+});
+
+// ─── Marketplace plugin detail render (name/description/source + Adobe logo) ────
+describe('renderMarketplacePluginDetail', () => {
+  // String-flatten a lit-stub template (same approach as the chat-drawer tests).
+  function flatten(node) {
+    if (node == null || typeof node === 'boolean' || typeof node === 'function') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flatten).join('');
+    if (node.strings) return node.strings.reduce((acc, s, i) => acc + s + flatten(node.values[i]), '');
+    return '';
+  }
+
+  function detailVm(over = {}) {
+    return {
+      viewingPluginName: 'web',
+      plugins: [],
+      marketplaceCatalog: [{
+        name: 'web', description: 'Browser automation and web testing', version: '1.0.0',
+        sourceOwner: 'adobe', sourceRepo: 'skills', builtIn: true, repository: 'https://github.com/adobe/skills',
+      }],
+      pluginBusyRef: {},
+      onInstallPlugin() {}, onTogglePlugin() {}, onUninstallPlugin() {},
+      ...over,
+    };
+  }
+
+  it('renders full name, description, source, repo link + the Adobe logo for an adobe source', () => {
+    const out = flatten(renderMarketplacePluginDetail(detailVm()));
+    expect(out).to.include('web');
+    expect(out).to.include('Browser automation and web testing');
+    expect(out).to.include('adobe/skills');
+    expect(out, 'Adobe logo').to.include('plugin-adobe-logo');
+    expect(out, 'repo link').to.include('https://github.com/adobe/skills');
+  });
+
+  it('shows an Install action when not installed, Uninstall + Disable when installed', () => {
+    expect(flatten(renderMarketplacePluginDetail(detailVm()))).to.include('Install');
+
+    const installed = flatten(renderMarketplacePluginDetail(detailVm({
+      plugins: [{ ref: 'web', enabled: true, manifest: { name: 'web', description: 'Browser automation and web testing', repository: 'https://github.com/adobe/skills' }, resolved: { skills: [1, 2], mcpServers: [] } }],
+    })));
+    expect(installed).to.include('Uninstall');
+    expect(installed).to.include('Disable');
+  });
+
+  it('does NOT show the Adobe logo for a non-adobe source', () => {
+    const out = flatten(renderMarketplacePluginDetail(detailVm({
+      marketplaceCatalog: [{ name: 'web', description: 'x', sourceOwner: 'acme', sourceRepo: 'plugins', builtIn: false, repository: 'https://github.com/acme/plugins' }],
+    })));
+    expect(out).to.not.include('plugin-adobe-logo');
+    expect(out).to.include('acme/plugins');
   });
 });
