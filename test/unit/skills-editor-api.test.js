@@ -32,6 +32,7 @@ import {
   addMarketplaceSource,
   removeMarketplaceSource,
   canWriteConfig,
+  mergeMarketplacePluginView,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -937,6 +938,30 @@ describe('AO / bridge backend switch', () => {
       expect(entries.map((e) => e.name)).to.deep.equal(['web', 'acme-tools']);
       expect(entries.find((e) => e.name === 'web')).to.deep.include({ description: 'Built-in web', builtIn: true });
       expect(entries.find((e) => e.name === 'acme-tools')).to.deep.include({ builtIn: false, sourceOwner: 'acme', sourceRepo: 'plugins' });
+    });
+
+    it('mergeMarketplacePluginView merges installed + catalog, derives source, flags Adobe', () => {
+      const catalog = [
+        { name: 'web', description: 'Catalog desc', version: '1.0.0', sourceOwner: 'adobe', sourceRepo: 'skills', builtIn: true, repository: 'https://github.com/adobe/skills' },
+        { name: 'acme-tools', description: 'Acme', sourceOwner: 'acme', sourceRepo: 'plugins', builtIn: false, repository: 'https://github.com/acme/plugins' },
+      ];
+      const installed = [
+        { ref: 'web', enabled: true, manifest: { name: 'web', description: 'Installed desc', repository: 'https://github.com/adobe/skills' }, resolved: { skills: [1, 2], mcpServers: [1] } },
+      ];
+      const web = mergeMarketplacePluginView('web', installed, catalog);
+      expect(web).to.include({ name: 'web', description: 'Installed desc', isInstalled: true, enabled: true, isAdobe: true, builtIn: true, sourceOwner: 'adobe', sourceRepo: 'skills', skillCount: 2, mcpCount: 1, resolved: true });
+
+      const acme = mergeMarketplacePluginView('acme-tools', installed, catalog);
+      expect(acme).to.include({ name: 'acme-tools', isInstalled: false, isAdobe: false, builtIn: false, sourceOwner: 'acme', sourceRepo: 'plugins' });
+
+      // installed-only (not in catalog): source derived from the manifest repository
+      const instOnly = mergeMarketplacePluginView('solo', [
+        { ref: 'solo', enabled: false, manifest: { name: 'solo', repository: 'https://github.com/vendor/solo-plugin' } },
+      ], []);
+      expect(instOnly).to.include({ isInstalled: true, enabled: false, sourceOwner: 'vendor', sourceRepo: 'solo-plugin', isAdobe: false });
+
+      expect(mergeMarketplacePluginView('nope', installed, catalog)).to.be.null;
+      expect(mergeMarketplacePluginView('', installed, catalog)).to.be.null;
     });
   });
 });

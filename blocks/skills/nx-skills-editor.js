@@ -114,6 +114,7 @@ class NxSkillsEditor extends LitElement {
     _marketplaceSources: { state: true },
     _marketplaceSourceInput: { state: true },
     _marketplaceSourceBusy: { state: true },
+    _viewingPluginName: { state: true },
     _canManageSources: { state: true },
     _pluginBusyRef: { state: true },
     _agentRows: { state: true },
@@ -242,6 +243,7 @@ class NxSkillsEditor extends LitElement {
     this._marketplaceSources = [];
     this._marketplaceSourceInput = '';
     this._marketplaceSourceBusy = false;
+    this._viewingPluginName = null;
     this._canManageSources = false;
     this._pluginBusyRef = {};
     this._agentRows = [];
@@ -380,6 +382,14 @@ class NxSkillsEditor extends LitElement {
     if (pending) this._onSuggestionFromChannel(pending);
 
     window.addEventListener('popstate', this._onPopstateHandler);
+    // Restore the active tab synchronously BEFORE the first paint so a reload
+    // lands directly on the previous tab instead of flashing Skills first
+    // (history.state survives a reload and carries the last tab - see
+    // _onTabChange/_onPopstate). The fuller sessionStorage restore
+    // (_restoreNavState, which also reopens a detail/item) still runs later in
+    // updated(); this just prevents the visible Skills→tab jump.
+    const savedTab = history.state?.skillsEditorTab;
+    if (savedTab && savedTab !== this._catalogTab) this._catalogTab = savedTab;
     history.replaceState({ ...history.state, skillsEditorTab: this._catalogTab }, '');
   }
 
@@ -825,6 +835,7 @@ class NxSkillsEditor extends LitElement {
     this._viewingSkillId = null;
     this._skillMdModalOpen = false;
     this._selectedAgentId = null;
+    this._viewingPluginName = null;
   }
 
   _dismissForm() {
@@ -840,6 +851,7 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = false;
       return;
     }
+    this._viewingPluginName = null;
     this._isEditorOpen = false;
     if (!this._isFormDirty) this._clearForm();
   }
@@ -1873,6 +1885,14 @@ class NxSkillsEditor extends LitElement {
     await this._reloadMarketplace();
   }
 
+  _onViewPlugin(name) {
+    const ref = String(name || '').trim();
+    if (!ref) return;
+    this._viewingPluginName = ref;
+    this._catalogTab = 'marketplace';
+    this._isEditorOpen = true;
+  }
+
   _openMarketplaceTab() {
     this._onTabChange('marketplace');
   }
@@ -2138,6 +2158,7 @@ class NxSkillsEditor extends LitElement {
       marketplaceSourceInput: this._marketplaceSourceInput,
       marketplaceSourceBusy: this._marketplaceSourceBusy,
       canManageSources: this._canManageSources,
+      viewingPluginName: this._viewingPluginName,
       pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -2248,6 +2269,7 @@ class NxSkillsEditor extends LitElement {
       onMarketplaceSourceInput: (v) => this._onMarketplaceSourceInput(v),
       onAddMarketplaceSource: () => this._onAddMarketplaceSource(),
       onRemoveMarketplaceSource: (owner, repo) => this._onRemoveMarketplaceSource(owner, repo),
+      onViewPlugin: (name) => this._onViewPlugin(name),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (
