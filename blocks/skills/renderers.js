@@ -30,6 +30,7 @@ import {
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
   mergeMarketplacePluginView,
+  authorLabel,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -1622,6 +1623,7 @@ export function renderMarketplacePluginDetail(vm) {
   if (!view) return html`<div class="empty">Plugin not found.</div>`;
   const ref = view.name;
   const isBusy = !!vm.pluginBusyRef?.[ref];
+  const authorText = authorLabel(view.author);
   return html`
     <div class="skill-detail">
       <header class="skill-detail-header">
@@ -1648,7 +1650,7 @@ export function renderMarketplacePluginDetail(vm) {
       </header>
       <div class="plugin-detail-meta">
         ${view.version ? html`<span class="plugin-detail-tag">v${view.version}</span>` : nothing}
-        ${view.author ? html`<span class="plugin-detail-tag">by ${view.author}</span>` : nothing}
+        ${authorText ? html`<span class="plugin-detail-tag">by ${authorText}</span>` : nothing}
         ${view.isInstalled ? html`<span class="plugin-detail-tag">${view.enabled ? 'Enabled' : 'Disabled'}</span>` : nothing}
         ${view.isInstalled && !view.resolved ? html`<span class="plugin-detail-tag is-warn">Not yet available</span>` : nothing}
         ${view.isInstalled && view.resolved ? html`<span class="plugin-detail-tag">${view.skillCount} Skill${view.skillCount === 1 ? '' : 's'}${view.mcpCount ? ` \u00b7 ${view.mcpCount} MCP${view.mcpCount === 1 ? '' : 's'}` : ''}</span>` : nothing}

@@ -1705,6 +1705,23 @@ function pluginRefMatches(ref) {
 }
 
 /**
+ * Normalizes a plugin manifest's `author` field to a displayable string.
+ * The Claude plugin manifest spec (and npm's package.json convention it
+ * mirrors) allows `author` to be either a plain string or an object shape
+ * like `{ name, email, url }` (e.g. adobe/skills' stardust plugin ships
+ * `{ "name": "Adobe" }`) - rendering the raw value directly produced a
+ * literal "by [object Object]" tag in the plugin detail view. Display-only;
+ * callers that need to round-trip the original manifest value (e.g. the
+ * install payload) should keep using the raw `author` field, not this.
+ */
+export function authorLabel(author) {
+  if (!author) return '';
+  if (typeof author === 'string') return author.trim();
+  if (typeof author === 'object') return String(author.name || author.email || author.url || '').trim();
+  return '';
+}
+
+/**
  * Merges what's known about a single plugin (by name) from the installed list
  * and the browsable catalog into one view object for the detail panel. Pure
  * (no I/O) so it's unit-testable. Prefers the installed entry's manifest for
