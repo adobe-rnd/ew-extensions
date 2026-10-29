@@ -459,15 +459,39 @@
   background: var(--s2-gray-100);
 }
 
-.confirm-btn-confirm {
+.confirm-btn-confirm,
+.confirm-btn-confirm-danger {
   background: var(--s2-negative-content-default, #d1342f);
   border-color: var(--s2-negative-content-default, #d1342f);
   color: white;
 }
 
-.confirm-btn-confirm:hover {
+.confirm-btn-confirm:hover,
+.confirm-btn-confirm-danger:hover {
   background: color-mix(in srgb, var(--s2-negative-content-default, #d1342f) 85%, black);
   border-color: color-mix(in srgb, var(--s2-negative-content-default, #d1342f) 85%, black);
+}
+
+.confirm-btn-confirm-primary {
+  background: var(--s2-accent-content-default, #0265dc);
+  border-color: var(--s2-accent-content-default, #0265dc);
+  color: white;
+}
+
+.confirm-btn-confirm-primary:hover {
+  background: color-mix(in srgb, var(--s2-accent-content-default, #0265dc) 85%, black);
+  border-color: color-mix(in srgb, var(--s2-accent-content-default, #0265dc) 85%, black);
+}
+
+.confirm-btn-confirm-default {
+  background: var(--s2-gray-700);
+  border-color: var(--s2-gray-700);
+  color: white;
+}
+
+.confirm-btn-confirm-default:hover {
+  background: var(--s2-gray-900);
+  border-color: var(--s2-gray-900);
 }
 
 .confirm-btn:focus-visible {

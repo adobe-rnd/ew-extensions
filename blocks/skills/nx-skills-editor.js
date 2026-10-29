@@ -37,6 +37,11 @@ import {
   deleteMcpServer,
   fetchMarketplaceCatalog,
   loadInstalledPlugins,
+  loadMarketplaceSources,
+  addMarketplaceSource,
+  removeMarketplaceSource,
+  canWriteConfig,
+  BUILT_IN_MARKETPLACE_SOURCES,
   installPlugin,
   setPluginEnabled,
   uninstallPlugin,
@@ -106,6 +111,10 @@ class NxSkillsEditor extends LitElement {
     _plugins: { state: true },
     _marketplaceCatalog: { state: true },
     _marketplaceCatalogError: { state: true },
+    _marketplaceSources: { state: true },
+    _marketplaceSourceInput: { state: true },
+    _marketplaceSourceBusy: { state: true },
+    _canManageSources: { state: true },
     _pluginBusyRef: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
@@ -230,6 +239,10 @@ class NxSkillsEditor extends LitElement {
     this._plugins = [];
     this._marketplaceCatalog = [];
     this._marketplaceCatalogError = false;
+    this._marketplaceSources = [];
+    this._marketplaceSourceInput = '';
+    this._marketplaceSourceBusy = false;
+    this._canManageSources = false;
     this._pluginBusyRef = {};
     this._agentRows = [];
     this._mcpRows = [];
@@ -269,12 +282,15 @@ class NxSkillsEditor extends LitElement {
    * Promise-based replacement for window.confirm().
    * @param {string} itemType - e.g. "skill", "prompt", "MCP server"
    * @param {string} itemId   - the identifier shown to the user
+   * @param {object} [options]
+   * @param {'delete'|'install'|'enable'|'disable'} [options.action='delete']
    * @returns {Promise<boolean>}
    */
-  _confirm(itemType, itemId) {
+  _confirm(itemType, itemId, options = {}) {
+    const action = options.action || 'delete';
     return new Promise((resolve) => {
       this._resolveConfirm = resolve;
-      this._confirmDialog = { itemType, itemId };
+      this._confirmDialog = { itemType, itemId, action };
     });
   }
 
@@ -282,6 +298,55 @@ class NxSkillsEditor extends LitElement {
     this._resolveConfirm?.(accepted);
     this._resolveConfirm = null;
     this._confirmDialog = null;
+  }
+
+  /**
+   * Copy + button styling for the confirm dialog, keyed by `action`.
+   * `delete` keeps the original destructive ("cannot be undone", red confirm
+   * button) framing. `install`/`enable`/`disable` are reversible plugin
+   * mutations that still touch the user's live sessions (skills/MCP access),
+   * so they get a neutral (non-red) confirm button and accurate, non-scary
+   * copy instead of reusing the delete framing verbatim.
+   */
+  _confirmCopy({ itemType, action }) {
+    switch (action) {
+      case 'install':
+        return {
+          heading: `Install ${itemType}:`,
+          warning: 'This adds its skills and MCP server access to your sessions. You can uninstall it later.',
+          confirmLabel: 'Install',
+          tone: 'primary',
+        };
+      case 'enable':
+        return {
+          heading: `Enable ${itemType}:`,
+          warning: 'This makes its skills and MCP server access available in your sessions again.',
+          confirmLabel: 'Enable',
+          tone: 'primary',
+        };
+      case 'disable':
+        return {
+          heading: `Disable ${itemType}:`,
+          warning: 'This removes its skills and MCP server access from your sessions until re-enabled.',
+          confirmLabel: 'Disable',
+          tone: 'default',
+        };
+      case 'register':
+        return {
+          heading: `Add ${itemType}:`,
+          // eslint-disable-next-line max-len
+          warning: 'Anyone can publish a GitHub repo. Any skills or MCP servers this source lists can be installed into users\' sessions for this whole site. Only add sources you trust.',
+          confirmLabel: 'Add anyway',
+          tone: 'danger',
+        };
+      default:
+        return {
+          heading: `You're about to delete ${itemType}:`,
+          warning: 'This action cannot be undone',
+          confirmLabel: 'Confirm',
+          tone: 'danger',
+        };
+    }
   }
 
   connectedCallback() {
@@ -460,6 +525,7 @@ class NxSkillsEditor extends LitElement {
       agents: this._agents,
       plugins: this._plugins,
       marketplaceCatalog: this._marketplaceCatalog,
+      marketplaceSources: this._marketplaceSources,
     };
     try {
       sessionStorage.setItem(this._dataSnapshotStorageKey(), JSON.stringify(snapshot));
@@ -489,6 +555,7 @@ class NxSkillsEditor extends LitElement {
       this._agents = Array.isArray(snap.agents) ? snap.agents : [];
       this._plugins = Array.isArray(snap.plugins) ? snap.plugins : [];
       this._marketplaceCatalog = Array.isArray(snap.marketplaceCatalog) ? snap.marketplaceCatalog : [];
+      this._marketplaceSources = Array.isArray(snap.marketplaceSources) ? snap.marketplaceSources : [];
       return true;
     } catch {
       return false;
@@ -666,13 +733,13 @@ class NxSkillsEditor extends LitElement {
   }
 
   /**
-   * Loads the Marketplace tab's two lists in parallel: the caller's
-   * personally-installed plugins (bridge-backed, per-site like everything
-   * else here even though the data itself is personal/global to the user -
-   * same org/site change-guard as _ensureAgentsLoaded so a slow load from a
-   * since-abandoned org/site never clobbers a newer one) and the fixed
-   * marketplace catalog (not org/site-scoped at all, but loaded here too so
-   * the tab has one loading lifecycle).
+   * Loads the Marketplace tab's three lists in parallel-ish: the site's
+   * registered marketplace sources (built-in + custom, from the `.da`
+   * config), the caller's personally-installed plugins (bridge-backed, per-
+   * site like everything else here even though the data itself is personal/
+   * global to the user - same org/site change-guard as _ensureAgentsLoaded
+   * so a slow load from a since-abandoned org/site never clobbers a newer
+   * one), and the catalog fetched from those sources.
    */
   async _ensurePluginsLoaded() {
     if (this._pluginsLoadInFlight || this._plugins.length || this._marketplaceCatalog.length) return;
@@ -680,11 +747,17 @@ class NxSkillsEditor extends LitElement {
     this._pluginsLoadInFlight = true;
     this._refreshingCount += 1;
     try {
+      const [sources, canManage] = await Promise.all([
+        loadMarketplaceSources(this._org, this._site),
+        canWriteConfig(this._org, this._site),
+      ]);
       const [installed, catalog] = await Promise.all([
         loadInstalledPlugins(),
-        fetchMarketplaceCatalog(),
+        fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]),
       ]);
       if (`${this._org}/${this._site}` === loadKey) {
+        this._marketplaceSources = sources;
+        this._canManageSources = canManage;
         this._plugins = installed;
         this._marketplaceCatalog = catalog.entries;
         this._marketplaceCatalogError = catalog.hadError;
@@ -1700,6 +1773,7 @@ class NxSkillsEditor extends LitElement {
   async _onInstallPlugin(entry) {
     const ref = String(entry?.name || '').trim();
     if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: 'install' })) return;
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
     const result = await installPlugin(entry);
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
@@ -1713,6 +1787,7 @@ class NxSkillsEditor extends LitElement {
 
   async _onTogglePlugin(ref, enabled) {
     if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: enabled ? 'enable' : 'disable' })) return;
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
     const result = await setPluginEnabled(ref, enabled);
     this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
@@ -1738,13 +1813,64 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onRetryMarketplace() {
+    await this._reloadMarketplace();
+  }
+
+  /**
+   * Re-loads registered sources + catalog (not the installed-plugins list,
+   * which _reloadPlugins already handles separately) after a source is
+   * added/removed, or as the Retry action's full refresh.
+   */
+  async _reloadMarketplace() {
+    // Same org/site change-guard as _ensurePluginsLoaded: a slow reload from a
+    // since-abandoned org/site must not clobber the now-current view (e.g. the
+    // user adds a source then navigates away before the refetch lands).
+    const loadKey = this._loadedKey;
     try {
-      const catalog = await fetchMarketplaceCatalog();
+      const sources = await loadMarketplaceSources(this._org, this._site);
+      const catalog = await fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]);
+      if (`${this._org}/${this._site}` !== loadKey) return;
+      this._marketplaceSources = sources;
       this._marketplaceCatalog = catalog.entries;
       this._marketplaceCatalogError = catalog.hadError;
     } catch {
-      this._marketplaceCatalogError = true;
+      if (`${this._org}/${this._site}` === loadKey) this._marketplaceCatalogError = true;
     }
+  }
+
+  _onMarketplaceSourceInput(value) {
+    this._marketplaceSourceInput = value;
+  }
+
+  async _onAddMarketplaceSource() {
+    const input = this._marketplaceSourceInput.trim();
+    if (!input || this._marketplaceSourceBusy || !this._canManageSources) return;
+    if (!await this._confirm('marketplace source', input, { action: 'register' })) return;
+    this._marketplaceSourceBusy = true;
+    const result = await addMarketplaceSource(this._org, this._site, input);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not add marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._marketplaceSourceInput = '';
+    this._setStatus(`${input} added to Marketplace`);
+    await this._reloadMarketplace();
+  }
+
+  async _onRemoveMarketplaceSource(owner, repo) {
+    const label = `${owner}/${repo}`;
+    if (this._marketplaceSourceBusy || !this._canManageSources) return;
+    if (!await this._confirm('marketplace source', label)) return;
+    this._marketplaceSourceBusy = true;
+    const result = await removeMarketplaceSource(this._org, this._site, owner, repo);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not remove marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${label} removed`);
+    await this._reloadMarketplace();
   }
 
   _openMarketplaceTab() {
@@ -2008,6 +2134,10 @@ class NxSkillsEditor extends LitElement {
       plugins: this._plugins,
       marketplaceCatalog: this._marketplaceCatalog,
       marketplaceCatalogError: this._marketplaceCatalogError,
+      marketplaceSources: this._marketplaceSources,
+      marketplaceSourceInput: this._marketplaceSourceInput,
+      marketplaceSourceBusy: this._marketplaceSourceBusy,
+      canManageSources: this._canManageSources,
       pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -2115,6 +2245,9 @@ class NxSkillsEditor extends LitElement {
       onTogglePlugin: (ref, enabled) => this._onTogglePlugin(ref, enabled),
       onUninstallPlugin: (ref) => this._onUninstallPlugin(ref),
       onRetryMarketplace: () => this._onRetryMarketplace(),
+      onMarketplaceSourceInput: (v) => this._onMarketplaceSourceInput(v),
+      onAddMarketplaceSource: () => this._onAddMarketplaceSource(),
+      onRemoveMarketplaceSource: (owner, repo) => this._onRemoveMarketplaceSource(owner, repo),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (
@@ -2213,26 +2346,29 @@ class NxSkillsEditor extends LitElement {
           </div>
         </div>
       </div>
-      ${dlg ? html`
+      ${dlg ? (() => {
+        const copy = this._confirmCopy(dlg);
+        return html`
         <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
           <div class="confirm-dialog" role="alertdialog"
                aria-labelledby="confirm-title"
                aria-describedby="confirm-desc"
                @click=${(e) => e.stopPropagation()}>
             <p id="confirm-title" class="confirm-heading">
-              You're about to delete ${dlg.itemType}:
+              ${copy.heading}
             </p>
             <p id="confirm-desc" class="confirm-id"><code>${dlg.itemId}</code></p>
-            <p class="confirm-warning">This action cannot be undone</p>
+            <p class="confirm-warning">${copy.warning}</p>
             <div class="confirm-actions">
               <button class="confirm-btn confirm-btn-cancel"
                       @click=${() => this._closeConfirm(false)}>Cancel</button>
-              <button class="confirm-btn confirm-btn-confirm"
-                      @click=${() => this._closeConfirm(true)}>Confirm</button>
+              <button class="confirm-btn confirm-btn-confirm confirm-btn-confirm-${copy.tone}"
+                      @click=${() => this._closeConfirm(true)}>${copy.confirmLabel}</button>
             </div>
           </div>
         </div>
-      ` : nothing}
+      `;
+      })() : nothing}
     </div>`;
   }
 }

@@ -27,6 +27,11 @@ import {
   uninstallPlugin,
   fetchMarketplaceCatalog,
   __resetMarketplaceCatalogCacheForTests,
+  parseMarketplaceSourceInput,
+  loadMarketplaceSources,
+  addMarketplaceSource,
+  removeMarketplaceSource,
+  canWriteConfig,
 } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -725,6 +730,34 @@ describe('AO / bridge backend switch', () => {
       expect(hadError).to.be.true;
       expect(entries).to.deep.equal([]);
     });
+
+    it('fetchMarketplaceCatalog falls back to the master branch when main 404s', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => {
+        urls.push(String(url));
+        if (String(url).includes('/main/')) return { ok: false, status: 404 };
+        if (String(url).includes('/master/')) {
+          return { ok: true, json: async () => ({ plugins: [{ name: 'legacy', description: 'on master' }] }) };
+        }
+        return { ok: false, status: 404 };
+      });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'old-repo' }]);
+      expect(hadError).to.be.false;
+      expect(entries.map((e) => e.name)).to.deep.equal(['legacy']);
+      expect(urls.some((u) => u.includes('/main/'))).to.be.true; // tried main first
+      expect(urls.some((u) => u.includes('/master/'))).to.be.true; // then master
+    });
+
+    it('fetchMarketplaceCatalog does not hammer past a non-404 error (e.g. 403)', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => { urls.push(String(url)); return { ok: false, status: 403 }; });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'rate-limited' }]);
+      expect(hadError).to.be.true;
+      expect(entries).to.deep.equal([]);
+      expect(urls.filter((u) => u.includes('raw.githubusercontent')).length).to.equal(1); // gave up after the first
+    });
   });
 
   describe('Plugins altHarness off (CMA-only, no AO equivalent)', () => {
@@ -753,6 +786,157 @@ describe('AO / bridge backend switch', () => {
       const calls = trackFetch(() => ({ ok: true, text: async () => '{}', json: async () => ({}) }));
       await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
       expect(calls.every((c) => !String(c.url).includes('claudebridge'))).to.be.true;
+    });
+  });
+
+  describe('Marketplace sources (.da config sheet, DA CONFIG-ACL gated)', () => {
+    beforeEach(() => mockAuth());
+
+    // canWriteConfig probes HEAD /config/{org}/{site}/ and reads x-da-actions;
+    // this wraps a mock response with (or without) a config-write grant.
+    const okCfg = (body = {}, write = true) => ({
+      ok: true,
+      headers: {
+        get: (n) => (n.toLowerCase() === 'x-da-actions'
+          ? (write ? '/site/CONFIG=read,write' : '/site/CONFIG=read')
+          : null),
+      },
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    });
+
+    it('canWriteConfig reads DA config-write from x-da-actions (GET /config) and fails CLOSED', async () => {
+      const calls1 = trackFetch(() => okCfg({}, true));
+      expect(await canWriteConfig('o', 's')).to.be.true;
+      expect(calls1.every((c) => c.opts.method === undefined || c.opts.method === 'GET')).to.be.true; // GET, not HEAD (/config has no HEAD handler)
+
+      trackFetch(() => okCfg({}, false));
+      expect(await canWriteConfig('o', 's')).to.be.false;
+
+      trackFetch(() => ({ ok: false, status: 404 }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // non-2xx => closed
+
+      trackFetch(() => ({ ok: true, headers: { get: () => null } }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // no header => closed
+    });
+
+    it('parseMarketplaceSourceInput accepts owner/repo and github.com URLs, rejects garbage', () => {
+      expect(parseMarketplaceSourceInput('adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills.git')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills/tree/main')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('')).to.be.null;
+      expect(parseMarketplaceSourceInput('not-a-repo')).to.be.null;
+      expect(parseMarketplaceSourceInput('../../etc/passwd')).to.be.null;
+      expect(parseMarketplaceSourceInput('owner/repo/extra')).to.be.null;
+      expect(parseMarketplaceSourceInput('owner/../evil')).to.be.null;
+    });
+
+    it('loadMarketplaceSources reads + de-dupes the marketplace-sources sheet', async () => {
+      trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          'marketplace-sources': {
+            data: [{ source: 'acme/plugins' }, { source: 'ACME/Plugins' }, { source: 'not valid' }],
+          },
+        }),
+      }));
+      const sources = await loadMarketplaceSources('org-mkt', 'site-load');
+      expect(sources).to.deep.equal([{ owner: 'acme', repo: 'plugins' }]);
+    });
+
+    it('loadMarketplaceSources degrades to [] when config is unreachable', async () => {
+      trackFetch(() => ({ ok: false, status: 502 }));
+      expect(await loadMarketplaceSources('org-mkt', 'site-load-fail')).to.deep.equal([]);
+    });
+
+    it('addMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-no-perm', 'acme/plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects the built-in source (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-builtin', 'adobe/skills');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/already built in/);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects malformed input (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-bad', 'not a repo');
+      expect(result.ok).to.be.false;
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects a source already registered', async () => {
+      trackFetch(() => okCfg({ 'marketplace-sources': { data: [{ source: 'acme/plugins' }] } }, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-dup', 'ACME/plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/already registered/);
+    });
+
+    it('addMarketplaceSource probes config-write then GETs config and POSTs the appended row', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-ok', 'https://github.com/acme/plugins');
+      expect(result.ok).to.be.true;
+      expect(calls.every((c) => c.opts.method === undefined || c.opts.method === 'GET' || c.opts.method === 'POST')).to.be.true; // never HEAD on /config
+      const postCall = calls.find((c) => c.opts.method === 'POST');
+      expect(postCall).to.exist;
+      const saved = JSON.parse(postCall.opts.body.get('config'));
+      expect(saved['marketplace-sources'].data).to.deep.equal([{ source: 'acme/plugins' }]);
+    });
+
+    it('removeMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await removeMarketplaceSource('org-mkt', 'site-remove-no-perm', 'acme', 'plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('removeMarketplaceSource filters the row out and POSTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts?.method === 'POST') return okCfg({}, true);
+        return okCfg({
+          'marketplace-sources': { data: [{ source: 'acme/plugins' }, { source: 'other/thing' }] },
+        }, true);
+      });
+      const result = await removeMarketplaceSource('org-mkt', 'site-remove', 'ACME', 'Plugins');
+      expect(result.ok).to.be.true;
+      const postCall = calls.find((c) => c.opts.method === 'POST');
+      const saved = JSON.parse(postCall.opts.body.get('config'));
+      expect(saved['marketplace-sources'].data).to.deep.equal([{ source: 'other/thing' }]);
+    });
+
+    it('fetchMarketplaceCatalog merges the built-in source with extra sources and de-dupes by name', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch((url) => {
+        if (String(url).includes('/adobe/skills/')) {
+          return { ok: true, json: async () => ({ plugins: [{ name: 'web', description: 'Built-in web' }] }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            plugins: [
+              { name: 'web', description: 'Should not shadow the built-in one' },
+              { name: 'acme-tools', description: 'Custom plugin' },
+            ],
+          }),
+        };
+      });
+      const { entries, hadError } = await fetchMarketplaceCatalog([
+        { owner: 'adobe', repo: 'skills' },
+        { owner: 'acme', repo: 'plugins' },
+      ]);
+      expect(hadError).to.be.false;
+      expect(entries.map((e) => e.name)).to.deep.equal(['web', 'acme-tools']);
+      expect(entries.find((e) => e.name === 'web')).to.deep.include({ description: 'Built-in web', builtIn: true });
+      expect(entries.find((e) => e.name === 'acme-tools')).to.deep.include({ builtIn: false, sourceOwner: 'acme', sourceRepo: 'plugins' });
     });
   });
 });
