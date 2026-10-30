@@ -77,7 +77,9 @@ import {
   createReadOnlyViewer, createEditor, replaceDoc, destroyEditor,
 } from './utils/codemirror-loader.js';
 import { setupEgovBridge } from './utils/egov-bridge.js';
-import { resolveEgovMfeEnv, resolveEgovPath, setEgovPath } from './utils/egov-embed.js';
+import {
+  resolveEgovApiUrl, resolveEgovMfeEnv, resolveEgovPath, setEgovPath,
+} from './utils/egov-embed.js';
 import { getToken } from './utils/da-fetch.js';
 import {
   onMessage,
@@ -1458,6 +1460,7 @@ class NxSkillsEditor extends LitElement {
       getProps: () => ({
         path: resolveEgovPath(),
         env: resolveEgovMfeEnv(),
+        apiUrl: resolveEgovApiUrl(),
         imsToken: getToken(),
         imsOrg,
       }),
