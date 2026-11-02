@@ -15,7 +15,8 @@ import {
   removePersonalSkillSource,
   markSkillDeleted,
   setSkillsBackend,
-  isSkillsBackendAltHarness,
+  isSkillsBackendCma,
+  resolveCmaHarness,
   fetchMcpServersFromBridge,
   AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
@@ -60,7 +61,6 @@ import {
 import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
-  EW_ALT_HARNESS_FLAG,
   EW_COWORKER_FLAG,
   FRESH_FORM_STATE,
   STATUS,
@@ -186,17 +186,18 @@ class NxSkillsEditor extends LitElement {
   _chatLoaded = false;
 
   // The chat module currently imported ('' until one loads). Tracked so the
-  // altHarness flip (da-agent nx-chat ↔ CMA nx-chat-ao) re-imports the right
-  // component. The activation key (ew.altHarness value) rides nx-chat-ao's
-  // harnessConfig so its socket authorizes/routes to the bridge.
+  // CMA flip (da-agent nx-chat ↔ CMA nx-chat-ao) re-imports the right
+  // component.
   _loadedChatUrl = '';
 
-  _chatActivationKey = null;
+  // TRANSITIONAL: the legacy `ew.altHarness` value, forwarded in harnessConfig
+  // only for old nx-chat-ao builds (da-nx `ewoncma`) that still read it.
+  _chatLegacyActivationKey = null;
 
   // Marketplace/plugins (bridge-only, Claude marketplace concept) require
   // BOTH the site to be on Coworker (`ew.coworker === 'true'`) and routed
-  // through the bridge (`ew.altHarness` set) - altHarness alone isn't enough,
-  // since a site can be altHarness-routed without Coworker being the active
+  // through the bridge (resolveCmaHarness) - CMA routing alone isn't enough,
+  // since a site can be CMA-routed without Coworker being the active
   // experience there. Computed in _reload() alongside the other ew.* flags.
   _marketplaceAvailable = false;
 
@@ -357,8 +358,8 @@ class NxSkillsEditor extends LitElement {
     this._isChatOpen = this.chatImportUrl
       ? sessionStorage.getItem('nx-skills-editor-chat-open') === '1'
       : false;
-    // Defer the chat import until _reload resolves altHarness, so an
-    // altHarness site loads nx-chat-ao (CMA) directly instead of flashing the
+    // Defer the chat import until _reload resolves the harness, so a CMA
+    // site loads nx-chat-ao directly instead of flashing the
     // da-agent nx-chat first.
 
     // BroadcastChannel listeners (future da-nx + cross-tab)
@@ -650,22 +651,19 @@ class NxSkillsEditor extends LitElement {
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
-      // Flags live in the `flags` sheet, keyed `ew.*`. The `ew.altHarness`
-      // VALUE is the activation key (a non-empty string), not the literal
-      // 'true' — so enablement is a non-empty check, matching da-nx chat
-      // (`!!flags['ew.altHarness']` in chat-ao.js). The old `=== 'true'` check
-      // never matched a real key, so the editor always fell back to AO.
-      //
-      // Read flags merged across ORG + SITE config (site overrides org), same
-      // as da-nx's getEWFlags — an `ew.altHarness` set only at the org level is
-      // otherwise missed here while the chat still sees it, so the editor would
-      // show no CMA skills and no bridge MCP servers on an org-flagged site.
+      // Flags live in the `flags` sheet, keyed `ew.*`, read merged across
+      // ORG + SITE config (site overrides org), same as da-nx's getEWFlags -
+      // a flag set only at the org level would otherwise be missed here
+      // while the chat still sees it. The harness rule matches da-nx's
+      // loadChat(): `ew.cma === 'true'` AND the IMS entitlement pre-check
+      // (plus the transitional legacy `ew.altHarness`, see resolveCmaHarness).
+      // It drives everything bridge-side: skills, MCPs, plugins/marketplace
+      // and the drawer chat component.
       const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
-      const activationKey = String(ewFlags[EW_ALT_HARNESS_FLAG] ?? '').trim();
-      const altHarness = !!activationKey;
-      setSkillsBackend({ altHarness });
-      this._chatActivationKey = altHarness ? activationKey : null;
-      this._marketplaceAvailable = altHarness && ewFlags[EW_COWORKER_FLAG] === 'true';
+      const { cma, legacyKey } = await resolveCmaHarness(ewFlags);
+      setSkillsBackend({ cma });
+      this._chatLegacyActivationKey = cma ? legacyKey : null;
+      this._marketplaceAvailable = cma && ewFlags[EW_COWORKER_FLAG] === 'true';
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -705,7 +703,7 @@ class NxSkillsEditor extends LitElement {
         // On the bridge path, the "Connected" MCPs come from the CMA agent
         // (fetchMcpServersFromBridge), not the hardcoded client presets. Empty
         // off-bridge or on failure → renderer falls back to its built-in list.
-        this._builtinMcpServers = altHarness
+        this._builtinMcpServers = cma
           ? (await fetchMcpServersFromBridge()) || []
           : [];
         this._saveDataSnapshot();
@@ -716,8 +714,8 @@ class NxSkillsEditor extends LitElement {
       if (!silent) this._isLoading = false;
       if (showRefreshIndicator) this._refreshingCount = Math.max(0, this._refreshingCount - 1);
       // Load the chat in `finally` so a restored-open chat always mounts even if
-      // the config/altHarness load above threw. _ensureChatLoaded falls back to
-      // the da-agent nx-chat when altHarness is unresolved (legacy path must
+      // the config/harness load above threw. _ensureChatLoaded falls back to
+      // the da-agent nx-chat when the harness is unresolved (legacy path must
       // keep working); on success it picks nx-chat-ao for CMA sites. Idempotent.
       if (this._isChatOpen) this._ensureChatLoaded();
     }
@@ -860,7 +858,7 @@ class NxSkillsEditor extends LitElement {
   // da-agent nx-chat. Falls back to the da-agent URL if the AO one wasn't
   // provided.
   _activeChatImportUrl() {
-    return isSkillsBackendAltHarness() && this.chatAoImportUrl
+    return isSkillsBackendCma() && this.chatAoImportUrl
       ? this.chatAoImportUrl
       : this.chatImportUrl;
   }
@@ -1130,8 +1128,8 @@ class NxSkillsEditor extends LitElement {
     this._statusMsg = '';
 
     // CMA/bridge edit: persist as a new Managed Agents skill version, not the
-    // .da config sheet. Create-new on altHarness goes through the upload flow.
-    if (this._isFormEdit && isSkillsBackendAltHarness()) {
+    // .da config sheet. Create-new on CMA goes through the upload flow.
+    if (this._isFormEdit && isSkillsBackendCma()) {
       const result = await updateSkillOnAo(
         this._skillIds[id],
         body,
@@ -1223,10 +1221,10 @@ class NxSkillsEditor extends LitElement {
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    // On the CMA/bridge (altHarness) path skills live in Managed Agents, not the
+    // On the CMA/bridge path skills live in Managed Agents, not the
     // .da config sheet — route to the same bridge delete the catalog card uses.
     // AO-direct/da-agent config-sheet path below is unchanged.
-    if (isSkillsBackendAltHarness()) {
+    if (isSkillsBackendCma()) {
       const result = await removePersonalSkillSource(id, this._skillIds[id]);
       this._isSaveBusy = false;
       if (!result.ok) {
@@ -1549,7 +1547,7 @@ class NxSkillsEditor extends LitElement {
     // On the CMA/bridge path SKILL.md comes from Managed Agents
     // (fetchSkillFileResultFromAo has a bridge branch); the config-sheet read
     // has no content there.
-    const { text } = isSkillsBackendAltHarness()
+    const { text } = isSkillsBackendCma()
       ? { text: (await fetchSkillFileResultFromAo(skillId, 'SKILL.md', this._skillIds[skillId])).content || '' }
       : await readSkillMdFile(this._org, this._site, skillId);
     // Discard the response if the user navigated away before it resolved.
@@ -2126,12 +2124,16 @@ class NxSkillsEditor extends LitElement {
       catalogFilter: this._catalogFilter,
       isChatOpen: this._isChatOpen,
       chatAgentId: this.chatAgentId,
-      chatAltHarness: isSkillsBackendAltHarness(),
+      chatCma: isSkillsBackendCma(),
       marketplaceAvailable: this._marketplaceAvailable,
+      // `{ key, cma }` is the da-nx main nx-chat-ao contract. `altHarness` /
+      // `activationKey` are TRANSITIONAL, for old nx-chat-ao builds (da-nx
+      // `ewoncma`) that still read them; drop once ewoncma syncs with main.
       chatHarnessConfig: {
         key: this._org && this._site ? `${this._org}/${this._site}` : null,
-        altHarness: isSkillsBackendAltHarness(),
-        activationKey: this._chatActivationKey ?? null,
+        cma: isSkillsBackendCma(),
+        altHarness: isSkillsBackendCma(),
+        activationKey: this._chatLegacyActivationKey ?? null,
       },
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,

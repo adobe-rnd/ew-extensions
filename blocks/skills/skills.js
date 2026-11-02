@@ -21,7 +21,7 @@ export default function decorate(block) {
   const el = document.createElement('nx-skills-editor');
   // The da-agent chat (nx-chat) and the CMA/alt-harness chat (nx-chat-ao) are
   // separate components; the editor picks nx-chat-ao once it resolves the
-  // site's `ew.altHarness` flag, so the embedded chat follows the same CMA
+  // site's `ew.cma` flag + entitlement, so the embedded chat follows the same CMA
   // routing as canvas/browse instead of always talking to da-agent.
   el.setAttribute('chat-import-url', resolveChatUrl(CHAT_PATH));
   el.setAttribute('chat-ao-import-url', resolveChatUrl(CHAT_AO_PATH));

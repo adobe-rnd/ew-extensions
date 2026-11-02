@@ -423,7 +423,7 @@ const CHAT_TOGGLE_ICON = html`<svg class="chat-toggle-icon" viewBox="0 0 20 20" 
 
 export function renderTopNav(vm) {
   // Marketplace (bridge-only, Claude-plugin concept) needs both Coworker
-  // enabled AND the bridge activation key in place - altHarness alone isn't
+  // enabled AND the site routed to the CMA bridge - CMA routing alone isn't
   // enough (see EW_COWORKER_FLAG's doc comment in constants.js). Everything
   // else keeps the static tab list.
   const items = vm.marketplaceAvailable
@@ -448,10 +448,10 @@ export function renderTopNav(vm) {
 }
 
 export function renderChatDrawer(vm) {
-  // CMA/alt-harness sites get nx-chat-ao (which routes to the bridge via its
+  // CMA sites get nx-chat-ao (which routes to the bridge via its
   // harnessConfig); everything else gets the da-agent nx-chat. The editor
   // imports the matching component before this renders (_ensureChatLoaded).
-  const chatEl = vm.chatAltHarness
+  const chatEl = vm.chatCma
     ? html`<nx-chat-ao
         agent-id=${vm.chatAgentId || nothing}
         .harnessConfig=${vm.chatHarnessConfig}
@@ -1382,7 +1382,7 @@ export function renderMcpsCatalog(vm) {
   const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
 
-  // On the bridge/altHarness path the connected list is the CMA agent's real
+  // On the CMA/bridge path the connected list is the CMA agent's real
   // MCP servers (vm.builtinMcpServers), each tagged with a scope. Agent-scope
   // servers are the true built-ins (e.g. the AEM MCPs) — view-only. user/org
   // scope servers are user/admin-registered overrides the bridge returns here

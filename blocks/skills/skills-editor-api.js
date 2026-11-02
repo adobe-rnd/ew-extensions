@@ -9,6 +9,7 @@
 import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 import { parseFrontmatter } from './utils/skill-frontmatter.js';
+import { EW_CMA_FLAG, EW_LEGACY_ALT_HARNESS_FLAG } from './constants.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -303,8 +304,8 @@ export async function fetchDaConfigSheets(org, site, options = {}) {
 /**
  * Reads `ew.*` flags merged across the ORG-level and SITE-level DA config, with
  * site overriding org — mirroring da-nx's getEWFlags (nx2/utils/ewFlags.js) so
- * the editor's altHarness detection agrees with the chat. Without the org-level
- * read, an `ew.altHarness` set only at the org level is missed and the editor
+ * the editor's CMA detection agrees with the chat. Without the org-level
+ * read, an `ew.cma` set only at the org level is missed and the editor
  * silently falls back to the empty da-agent path (no CMA skills, no bridge MCP
  * servers). `siteConfig` lets a caller pass an already-fetched site config to
  * avoid a duplicate request; the org read skips 404-materialization so it never
@@ -513,26 +514,63 @@ const AO_HTTP_BASE = {
   stage: 'https://agent-orchestrator-stage-va7.adobe.io',
 };
 
-// CMA "claudebridge" REST plane — used instead of AO when the site config flag
-// `ew.altHarness` is true (see setSkillsBackend below). Bridge skills endpoints
+// CMA "claudebridge" REST plane — used instead of AO when the site resolves to
+// the CMA harness (see resolveCmaHarness / setSkillsBackend below). Bridge skills endpoints
 // are keyed by Managed Agents skill_id and always require x-user-id.
 const BRIDGE_HTTP_BASE = 'https://aem-sites-claudebridge-va6.adobe.io';
 
 const AO_MANIFEST_ID = 'experience-workspace';
 
-// Module-level backend switch, set once by nx-skills-editor.js after it reads
-// the `ew.altHarness` site-config flag (mirrors da-nx's ewFlags.js pattern:
-// flags['ew.*'] === 'true'). Defaults to AO so every existing caller that
-// never calls this keeps behaving exactly as before.
-let altHarnessEnabled = false;
+// Module-level backend switch, set once by nx-skills-editor.js after it
+// resolves the site's harness (resolveCmaHarness). Defaults to AO so every
+// existing caller that never calls this keeps behaving exactly as before.
+let cmaEnabled = false;
 
-export function setSkillsBackend({ altHarness } = {}) {
-  altHarnessEnabled = altHarness === true;
+export function setSkillsBackend({ cma } = {}) {
+  cmaEnabled = cma === true;
 }
 
-// True on the CMA/claudebridge (altHarness) path; false on AO-direct/da-agent.
-export function isSkillsBackendAltHarness() {
-  return altHarnessEnabled;
+// True on the CMA/claudebridge path; false on AO-direct/da-agent.
+export function isSkillsBackendCma() {
+  return cmaEnabled;
+}
+
+// Mirrors da-nx nx2/utils/entitlement.js (and the bridge's
+// `auth.requiredServiceCodes`, config/production.json): the IMS service codes
+// that entitle an org to the CMA harness.
+export const CMA_REQUIRED_SERVICE_CODES = ['acp', 'dma_tartan'];
+
+/**
+ * Whether the signed-in user's IMS profile carries a product context for one
+ * of CMA_REQUIRED_SERVICE_CODES - the same UI pre-check da-nx's
+ * isCmaEntitled() does before mounting the CMA chat. Not a security boundary
+ * (the bridge re-verifies on every request); fails closed on any IMS error.
+ */
+export async function isCmaEntitled() {
+  try {
+    const profile = await window.adobeIMS?.getProfile();
+    const contexts = profile?.projectedProductContext;
+    if (!Array.isArray(contexts)) return false;
+    return contexts.some((entry) => typeof entry?.prodCtx?.serviceCode === 'string'
+      && CMA_REQUIRED_SERVICE_CODES.includes(entry.prodCtx.serviceCode));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves whether this site uses the CMA bridge harness, from merged `ew.*`
+ * flags (fetchEwFlags). Same rule as da-nx's loadChat(): `ew.cma === 'true'`
+ * AND the IMS entitlement pre-check. TRANSITIONAL: a non-empty legacy
+ * `ew.altHarness` also selects CMA (its old semantics, no entitlement
+ * pre-check) so da-nx `ewoncma` testers keep working - see
+ * EW_LEGACY_ALT_HARNESS_FLAG. Returns `{ cma, legacyKey }`; legacyKey is the
+ * old activation-key value, forwarded only for old nx-chat-ao builds.
+ */
+export async function resolveCmaHarness(flags = {}) {
+  const legacyKey = String(flags[EW_LEGACY_ALT_HARNESS_FLAG] ?? '').trim() || null;
+  if (flags[EW_CMA_FLAG] === 'true' && await isCmaEntitled()) return { cma: true, legacyKey };
+  return { cma: !!legacyKey, legacyKey };
 }
 
 function aoEnv() {
@@ -572,8 +610,8 @@ async function aoAuthContext() {
     token,
     orgId: getImsOrgId(profile?.projectedProductContext),
     userId: profile?.userId,
-    bridge: altHarnessEnabled,
-    base: altHarnessEnabled
+    bridge: cmaEnabled,
+    base: cmaEnabled
       ? BRIDGE_HTTP_BASE
       : (AO_HTTP_BASE[aoEnv()] || AO_HTTP_BASE.stage),
   };
@@ -598,7 +636,7 @@ export async function fetchSkillsFromAo() {
 
 /**
  * The CMA agent's real MCP servers (+ org/user overrides), for the MCPs tab's
- * "Connected" list on the altHarness/bridge path. Without this the tab renders
+ * "Connected" list on the CMA/bridge path. Without this the tab renders
  * a hardcoded preset list (da-tools/eds-preview) that doesn't reflect what the
  * agent actually runs. Returns null off-bridge or on any failure, so the caller
  * keeps its built-in default and the AO path is unchanged.
@@ -1310,7 +1348,7 @@ export async function registerMcpServer(
     }))
     .filter((h) => h.name && h.value);
 
-  if (altHarnessEnabled) {
+  if (cmaEnabled) {
     return bridgeMutateMcpServers((servers) => {
       const entry = { key: serverKey, url: serverUrl };
       if (description) entry.description = String(description).trim();
@@ -1344,7 +1382,7 @@ export async function setMcpServerEnabled(org, site, key, enabled) {
   const serverKey = String(key || '').trim();
   if (!serverKey) return { ok: false, error: 'Server id required' };
 
-  if (altHarnessEnabled) {
+  if (cmaEnabled) {
     return bridgeMutateMcpServers((servers) => {
       const idx = servers.findIndex((s) => s?.key === serverKey);
       if (idx < 0) return { error: 'Server not found' };
@@ -1373,7 +1411,7 @@ export async function deleteMcpServer(org, site, key) {
   const serverKey = String(key || '').trim();
   if (!serverKey) return { ok: false, error: 'Key required' };
 
-  if (altHarnessEnabled) {
+  if (cmaEnabled) {
     return bridgeMutateMcpServers((servers) => servers.filter((s) => s?.key !== serverKey));
   }
 

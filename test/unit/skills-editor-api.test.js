@@ -10,6 +10,9 @@ import {
   parseActionsHasWrite,
   fetchSkillsPermission,
   setSkillsBackend,
+  isCmaEntitled,
+  resolveCmaHarness,
+  CMA_REQUIRED_SERVICE_CODES,
   fetchEwFlags,
   fetchSkillsFromAo,
   fetchSkillFileFromAo,
@@ -357,11 +360,11 @@ describe('AO / bridge backend switch', () => {
   afterEach(() => {
     window.fetch = realFetch;
     window.adobeIMS = realAdobeIMS;
-    setSkillsBackend({ altHarness: false });
+    setSkillsBackend({ cma: false });
     initAuth(null);
   });
 
-  describe('altHarness off (AO, byte-for-byte unchanged)', () => {
+  describe('CMA off (AO, byte-for-byte unchanged)', () => {
     it('fetchSkillsFromAo hits the AO base with no x-user-id header', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
       const result = await fetchSkillsFromAo();
@@ -414,8 +417,8 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('altHarness on (bridge)', () => {
-    beforeEach(() => setSkillsBackend({ altHarness: true }));
+  describe('CMA on (bridge)', () => {
+    beforeEach(() => setSkillsBackend({ cma: true }));
 
     it('fetchMcpServersFromBridge tags scope, carries key/url/tools, and dedupes by url (agent wins)', async () => {
       const BRIDGE_MCP = {
@@ -762,8 +765,8 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('Plugins altHarness off (CMA-only, no AO equivalent)', () => {
-    beforeEach(() => setSkillsBackend({ altHarness: false }));
+  describe('Plugins CMA off (CMA-only, no AO equivalent)', () => {
+    beforeEach(() => setSkillsBackend({ cma: false }));
 
     it('loadInstalledPlugins returns [] without calling any endpoint', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
@@ -783,7 +786,7 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('MCP altHarness off (DA config, unchanged)', () => {
+  describe('MCP CMA off (DA config, unchanged)', () => {
     it('deleteMcpServer does not call the bridge overrides endpoint', async () => {
       const calls = trackFetch(() => ({ ok: true, text: async () => '{}', json: async () => ({}) }));
       await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
@@ -1001,28 +1004,28 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
     };
   }
 
-  it('reads ew.altHarness set only at the ORG level (the reported bug)', async () => {
-    mockConfigs({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
+  it('reads ew.cma set only at the ORG level (the reported bug)', async () => {
+    mockConfigs({ orgFlags: [{ key: 'ew.cma', value: 'true' }], siteFlags: [] });
     const flags = await fetchEwFlags('ew-orgonly', 'site-a');
-    expect(flags['ew.altHarness']).to.equal('cma-key');
+    expect(flags['ew.cma']).to.equal('true');
   });
 
   it('lets the site-level value override the org-level value', async () => {
     mockConfigs({
-      orgFlags: [{ key: 'ew.altHarness', value: 'org-key' }],
-      siteFlags: [{ key: 'ew.altHarness', value: 'site-key' }],
+      orgFlags: [{ key: 'ew.cma', value: 'true' }],
+      siteFlags: [{ key: 'ew.cma', value: 'false' }],
     });
     const flags = await fetchEwFlags('ew-override', 'site-b');
-    expect(flags['ew.altHarness']).to.equal('site-key');
+    expect(flags['ew.cma']).to.equal('false');
   });
 
   it('keeps only ew.* keys and tolerates a 404 org config', async () => {
     mockConfigs({
       orgStatus: 404,
-      siteFlags: [{ key: 'ew.altHarness', value: 'k' }, { key: 'other', value: 'x' }],
+      siteFlags: [{ key: 'ew.cma', value: 'true' }, { key: 'other', value: 'x' }],
     });
     const flags = await fetchEwFlags('ew-404', 'site-c');
-    expect(flags['ew.altHarness']).to.equal('k');
+    expect(flags['ew.cma']).to.equal('true');
     expect(flags).to.not.have.property('other');
   });
 
@@ -1035,5 +1038,56 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
     };
     await fetchEwFlags('ew-nomat', 'site-d');
     expect(methods).to.not.include('POST');
+  });
+});
+
+describe('CMA harness resolution (ew.cma + entitlement)', () => {
+  const realAdobeIMS = window.adobeIMS;
+  const profile = (serviceCode) => ({
+    projectedProductContext: [{ prodCtx: { owningEntity: 'ORG@AdobeOrg', ...(serviceCode ? { serviceCode } : {}) } }],
+  });
+  const withIms = (getProfile) => { window.adobeIMS = { getProfile }; };
+
+  afterEach(() => { window.adobeIMS = realAdobeIMS; });
+
+  it('mirrors the bridge/da-nx required service codes', () => {
+    expect(CMA_REQUIRED_SERVICE_CODES).to.deep.equal(['acp', 'dma_tartan']);
+  });
+
+  it('isCmaEntitled: true for each required service code', async () => {
+    withIms(async () => profile('acp'));
+    expect(await isCmaEntitled()).to.equal(true);
+    withIms(async () => profile('dma_tartan'));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('isCmaEntitled: false for other codes, no contexts, or an IMS error (fails closed)', async () => {
+    withIms(async () => profile('dma_aem_cloud'));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => ({}));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => { throw new Error('ims down'); });
+    expect(await isCmaEntitled()).to.equal(false);
+    window.adobeIMS = undefined;
+    expect(await isCmaEntitled()).to.equal(false);
+  });
+
+  it('resolveCmaHarness: ew.cma "true" + entitled => cma', async () => {
+    withIms(async () => profile('acp'));
+    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.deep.equal({ cma: true, legacyKey: null });
+  });
+
+  it('resolveCmaHarness: ew.cma without entitlement, or not exactly "true" => no cma', async () => {
+    withIms(async () => profile());
+    expect((await resolveCmaHarness({ 'ew.cma': 'true' })).cma).to.equal(false);
+    withIms(async () => profile('acp'));
+    expect((await resolveCmaHarness({ 'ew.cma': 'TRUE' })).cma).to.equal(false);
+    expect((await resolveCmaHarness({})).cma).to.equal(false);
+  });
+
+  it('resolveCmaHarness: transitional legacy ew.altHarness still selects cma and returns its key', async () => {
+    withIms(async () => profile());
+    expect(await resolveCmaHarness({ 'ew.altHarness': ' k ' })).to.deep.equal({ cma: true, legacyKey: 'k' });
+    expect(await resolveCmaHarness({ 'ew.altHarness': '   ' })).to.deep.equal({ cma: false, legacyKey: null });
   });
 });
