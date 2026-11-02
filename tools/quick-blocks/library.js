@@ -44,6 +44,16 @@ export function resolveEditorOrigin(project, referrer = document.referrer) {
   return referrer ? new URL(referrer).origin : null;
 }
 
+const DA_LIVE_BRANCH = /^https:\/\/[a-z0-9-]+--da-live--adobe\.aem\.(live|page)$/;
+
+export function resolveDaAdmin({ daAdmin, editorOrigin } = {}) {
+  if (daAdmin) return daAdmin;
+  if (editorOrigin === 'https://da.page') return 'https://admin.da.page';
+  const branch = editorOrigin?.match(DA_LIVE_BRANCH);
+  if (branch?.[1] === 'page') return 'https://stage-admin.da.live';
+  return 'https://admin.da.live';
+}
+
 export function libraryFetch(token, adminOrigin, fetcher = fetch) {
   if (!token) throw new Error('Sign in to Experience Workspace before loading blocks.');
   if (!ADMIN_ORIGINS.has(adminOrigin)) throw new Error('Unsupported DA Admin origin.');

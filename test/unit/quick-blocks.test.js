@@ -1,7 +1,8 @@
 import { expect } from '@esm-bundle/chai';
 import {
   BASIC_GROUPS, PARAGRAPH_ELEMENT, blockSources, firstSheet, libraryFetch,
-  loadBlocks, loadVariants, matches, parseVariants, resolveEditorOrigin, setHtmlDragData,
+  loadBlocks, loadVariants, matches, parseVariants, resolveDaAdmin, resolveEditorOrigin,
+  setHtmlDragData,
 } from '../../tools/quick-blocks/library.js';
 import { parseAssetPage } from '../../tools/quick-blocks/assets.js';
 
@@ -13,6 +14,18 @@ describe('Quick Blocks library', () => {
     expect(resolveEditorOrigin({}, '')).to.equal(null);
     expect(() => resolveEditorOrigin({ editorOrigin: 'https://da.live/canvas' }, ''))
       .to.throw('Invalid Experience Workspace editor origin');
+  });
+
+  it('derives the DA Admin origin from the editor origin', () => {
+    const admin = (editorOrigin) => resolveDaAdmin({ editorOrigin });
+    expect(admin('https://da.live')).to.equal('https://admin.da.live');
+    expect(admin('https://da.page')).to.equal('https://admin.da.page');
+    expect(admin('https://ext-dnd--da-live--adobe.aem.live')).to.equal('https://admin.da.live');
+    expect(admin('https://ext-dnd--da-live--adobe.aem.page')).to.equal('https://stage-admin.da.live');
+    expect(admin('https://main--da-live--evil.aem.page')).to.equal('https://admin.da.live');
+    expect(admin(null)).to.equal('https://admin.da.live');
+    expect(resolveDaAdmin({ daAdmin: 'http://localhost:8787', editorOrigin: 'https://da.live' }))
+      .to.equal('http://localhost:8787');
   });
 
   it('resolves the same site-first Blocks config and comma-separated sources as EW', () => {

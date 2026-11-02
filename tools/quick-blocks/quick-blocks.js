@@ -3,7 +3,7 @@ import { LitElement, html, nothing } from 'da-lit';
 import { parseAssetPage } from './assets.js';
 import {
   BASIC_GROUPS, PARAGRAPH_ELEMENT, libraryFetch, loadBlocks, matches,
-  resolveEditorOrigin, setHtmlDragData,
+  resolveDaAdmin, resolveEditorOrigin, setHtmlDragData,
 } from './library.js';
 
 class QuickBlocks extends LitElement {
@@ -170,9 +170,12 @@ class QuickBlocks extends LitElement {
       if (!project?.org || !project?.repo) {
         throw new Error('Open a site in Experience Workspace to use Quick Blocks.');
       }
-      this._project = project;
       this._editorOrigin = resolveEditorOrigin(project);
-      this._daFetch = libraryFetch(token, project.daAdmin);
+      this._project = {
+        ...project,
+        daAdmin: resolveDaAdmin({ daAdmin: project.daAdmin, editorOrigin: this._editorOrigin }),
+      };
+      this._daFetch = libraryFetch(token, this._project.daAdmin);
       this._unsubPanelOptions = actions.onPanelOptions((options) => this._applyPanelOptions(options));
       this._applyPanelOptions(panelOptions);
       if (this._tab === 'assets') this._selectTab('assets');
