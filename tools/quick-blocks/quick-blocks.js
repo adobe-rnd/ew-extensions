@@ -1,4 +1,4 @@
-import DA_SDK from 'https://devlive--da-nx--adobe.aem.live/nx/utils/sdk.js';
+import DA_SDK from 'https://extdnd--da-nx--adobe.aem.live/nx/utils/sdk.js';
 import { LitElement, html, nothing } from 'da-lit';
 import { parseAssetPage } from './assets.js';
 import {
@@ -41,6 +41,7 @@ class QuickBlocks extends LitElement {
     this._assetRetry = false;
     this._assetDragError = false;
     this._assetObjectUrls = new Set();
+    this._sdkDrags = new Map();
     this._publishDragHandles = () => {
       if (!this._editorOrigin) return;
       const handles = [...this.querySelectorAll(
@@ -122,6 +123,8 @@ class QuickBlocks extends LitElement {
     window.removeEventListener('scroll', this._publishDragHandles, true);
     this._assetObjectUrls.forEach((url) => URL.revokeObjectURL(url));
     this._assetObjectUrls.clear();
+    this._sdkDrags.forEach((destroy) => destroy.then((fn) => fn?.(), () => {}));
+    this._sdkDrags.clear();
     this._assets = [];
     this._assetsRequested = false;
     super.disconnectedCallback();
@@ -129,7 +132,32 @@ class QuickBlocks extends LitElement {
 
   updated(changed) {
     super.updated(changed);
+    this._wireSdkDrags();
     this._publishDragHandles();
+  }
+
+  // Hosts with the SDK drag capability take the drag over from the iframe; on older
+  // hosts the helper falls back to native drag data alongside the legacy handles.
+  _wireSdkDrags() {
+    if (!this._actions?.makeDraggable) return;
+    this._sdkDrags.forEach((destroy, element) => {
+      if (element.isConnected) return;
+      destroy.then((fn) => fn?.(), () => {});
+      this._sdkDrags.delete(element);
+    });
+    this.querySelectorAll('.quick-add').forEach((element) => {
+      if (this._sdkDrags.has(element)) return;
+      this._sdkDrags.set(element, this._actions.makeDraggable({
+        element,
+        getData: () => ({ data: { 'text/html': element.dropHtml } }),
+        onResult: (result) => this._dragResult(result),
+      }).catch(() => undefined));
+    });
+  }
+
+  _dragResult({ ok, error } = {}) {
+    if (ok || ['cancelled', 'invalid-target'].includes(error)) return;
+    this._error = `The block could not be added (${error || 'unknown error'}).`;
   }
 
   async _init() {
