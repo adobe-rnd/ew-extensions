@@ -1072,6 +1072,40 @@ describe('CMA harness resolution (ew.cma + entitlement)', () => {
     expect(await isCmaEntitled()).to.equal(false);
   });
 
+  it('isCmaEntitled: checks entitlement on the SELECTED tenant (first entry with an owningEntity), '
+    + 'matching getImsOrgId — not any entry in the array', async () => {
+    // Selected (first owningEntity) entry qualifies -> true, even with a
+    // later irrelevant entry.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'irrelevant' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+
+    // A LATER entry qualifies but the selected (first owningEntity) one
+    // doesn't -> false. getImsOrgId would send org-1 as x-tenant-id, which
+    // the bridge would reject since only org-2 is actually entitled.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'irrelevant' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'acp' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(false);
+
+    // Entries with no owningEntity are skipped when selecting, same as
+    // getImsOrgId.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'dma_tartan' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
   it('resolveCmaHarness: ew.cma "true" + entitled => cma', async () => {
     withIms(async () => profile('acp'));
     expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.deep.equal({ cma: true, legacyKey: null });

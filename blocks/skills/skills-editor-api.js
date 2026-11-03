@@ -551,8 +551,20 @@ export async function isCmaEntitled() {
     const profile = await window.adobeIMS?.getProfile();
     const contexts = profile?.projectedProductContext;
     if (!Array.isArray(contexts)) return false;
-    return contexts.some((entry) => typeof entry?.prodCtx?.serviceCode === 'string'
-      && CMA_REQUIRED_SERVICE_CODES.includes(entry.prodCtx.serviceCode));
+    // Must check entitlement on the SAME entry getImsOrgId() selects (first
+    // with an owningEntity) — that's the org actually sent as x-tenant-id.
+    // Checking *any* entry in the array (the prior behavior) could return
+    // true off a different, unselected org's service code while the
+    // selected/sent tenant has none; the bridge requires
+    // prodCtx.owningEntity === tenantId on the org it actually receives, so a
+    // mismatched selection here passes this pre-check but still gets
+    // rejected server-side. Mirrors da-nx's nx2/utils/entitlement.js fix.
+    const selected = contexts.find((entry) => entry?.prodCtx?.owningEntity);
+    return !!(
+      selected?.prodCtx
+      && typeof selected.prodCtx.serviceCode === 'string'
+      && CMA_REQUIRED_SERVICE_CODES.includes(selected.prodCtx.serviceCode)
+    );
   } catch {
     return false;
   }
