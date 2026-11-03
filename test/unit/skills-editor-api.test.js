@@ -1106,6 +1106,20 @@ describe('CMA harness resolution (ew.cma + entitlement)', () => {
     expect(await isCmaEntitled()).to.equal(true);
   });
 
+  it('isCmaEntitled: checks ALL entries for the selected org, not just the first — IMS emits one '
+    + 'entry per product, not per org, so a profile with many entries for one org (most not '
+    + 'CMA-related) must still find the one that is', async () => {
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_aem_cloud' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'workfront' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_tartan' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_audiencemanager_int' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
   it('resolveCmaHarness: ew.cma "true" + entitled => cma', async () => {
     withIms(async () => profile('acp'));
     expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.deep.equal({ cma: true, legacyKey: null });

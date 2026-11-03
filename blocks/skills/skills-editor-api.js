@@ -551,20 +551,24 @@ export async function isCmaEntitled() {
     const profile = await window.adobeIMS?.getProfile();
     const contexts = profile?.projectedProductContext;
     if (!Array.isArray(contexts)) return false;
-    // Must check entitlement on the SAME entry getImsOrgId() selects (first
-    // with an owningEntity) — that's the org actually sent as x-tenant-id.
-    // Checking *any* entry in the array (the prior behavior) could return
-    // true off a different, unselected org's service code while the
-    // selected/sent tenant has none; the bridge requires
-    // prodCtx.owningEntity === tenantId on the org it actually receives, so a
-    // mismatched selection here passes this pre-check but still gets
-    // rejected server-side. Mirrors da-nx's nx2/utils/entitlement.js fix.
-    const selected = contexts.find((entry) => entry?.prodCtx?.owningEntity);
-    return !!(
-      selected?.prodCtx
-      && typeof selected.prodCtx.serviceCode === 'string'
-      && CMA_REQUIRED_SERVICE_CODES.includes(selected.prodCtx.serviceCode)
-    );
+    // IMS returns one projectedProductContext entry PER PRODUCT the profile
+    // carries, not one per org — the same org/owningEntity can appear many
+    // times with different serviceCodes. Must mirror the bridge's own check
+    // (aem-sites-claudebridge src/websocket/auth.ts#isEntitledTenant) exactly:
+    // select the tenant the same way getImsOrgId() does (first entry with an
+    // owningEntity), then check whether ANY entry for that SAME owningEntity
+    // has an allowed serviceCode — not just the first matching entry overall
+    // (too loose — could pass off a different, unselected org's entitlement)
+    // and not just the first entry's own serviceCode (too strict — misses a
+    // later entry for the same org, the common case: a profile with many
+    // product entitlements for one org, CMA's just one of them).
+    const tenantId = contexts.find((entry) => entry?.prodCtx?.owningEntity)?.prodCtx?.owningEntity;
+    if (!tenantId) return false;
+    return contexts.some((entry) => (
+      entry?.prodCtx?.owningEntity === tenantId
+      && typeof entry.prodCtx.serviceCode === 'string'
+      && CMA_REQUIRED_SERVICE_CODES.includes(entry.prodCtx.serviceCode)
+    ));
   } catch {
     return false;
   }
