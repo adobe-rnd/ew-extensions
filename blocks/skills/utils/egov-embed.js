@@ -12,10 +12,18 @@
 
 import { EGOV_MFE } from '../constants.js';
 
-/** Host URL params this module owns: the env override and the deep-link path. */
+/** Host URL params this module owns: the env, API, and deep-link overrides. */
 const EGOV_ENV_PARAM = 'egov';
+const EGOV_API_PARAM = 'ec';
 const EGOV_PATH_PARAM = 'egovPath';
 
+const EGOV_API_ENVS = {
+  prod: 'https://experience-context.adobe.io/api',
+  stage: 'https://experience-context-stage.adobe.io/api',
+};
+// Kept as one expression so the exact host allow-list stays easy to audit.
+// eslint-disable-next-line max-len
+const EGOV_EPHEMERAL_API_HOST = /^adobe-aem-foundation-brand-governance-agent-deploy-[0-9a-f]{6}\.stage\.cloud\.adobe\.io$/;
 const SAFE_EGOV_PARAM = /^(local|qa|stage|prod)$/;
 
 /** Governance-relative deep-link path (see the MFE's useGovernancePath), e.g. `/brands/123/knowledge/connectors`. */
@@ -60,6 +68,31 @@ const EGOV_MFE_ENVS = {
  */
 export function resolveEgovMfeEnv(location = window.location) {
   return EGOV_MFE_ENVS[resolveEgovEnv(location)] || 'PROD';
+}
+
+function resolveEgovApiOverride(value) {
+  if (Object.hasOwn(EGOV_API_ENVS, value)) return EGOV_API_ENVS[value];
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+  return EGOV_EPHEMERAL_API_HOST.test(url.hostname) ? `${url.origin}/api` : null;
+}
+
+/**
+ * Resolves an explicit experience-context API override from
+ * `?ec=prod|stage|<ephemeral URL>`. Without a valid `ec` parameter, no URL is
+ * returned and the MFE chooses its API from the `env` prop instead.
+ *
+ * @param {Location} [location]
+ * @returns {string|undefined} API base URL ending in `/api`
+ */
+export function resolveEgovApiUrl(location = window.location) {
+  const query = new URLSearchParams(location.search).get(EGOV_API_PARAM);
+  return resolveEgovApiOverride(query) ?? undefined;
 }
 
 /**

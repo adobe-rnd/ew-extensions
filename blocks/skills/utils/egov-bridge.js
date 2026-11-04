@@ -27,7 +27,8 @@ const HANDSHAKE_WINDOW_MS = 15000;
  *
  * @param {object} opts
  * @param {HTMLIFrameElement} opts.iframe
- * @param {() => { path?: string, env?: string, imsToken?: string, imsOrg?: string }} opts.getProps
+ * @param {() => { path?: string, env?: string, apiUrl?: string, imsToken?: string,
+ *   imsOrg?: string }} opts.getProps
  * @param {(path: string) => void} [opts.onNavigate]
  * @returns {{ destroy: () => void }}
  */
@@ -135,7 +136,9 @@ export function setupEgovBridge({ iframe, getProps, onNavigate }) {
   }
 
   function sendProps() {
-    const { path = '/', env = 'PROD', imsToken, imsOrg } = getProps() || {};
+    const {
+      path = '/', env = 'PROD', apiUrl, imsToken, imsOrg,
+    } = getProps() || {};
     // `metrics` is deliberately absent: it isn't an MFE app prop but a
     // bridge-level field rpcBridge derives from window.adobeMetrics on the
     // sender side. Omitting it makes the guest skip MetricsWrapper.init;
@@ -150,8 +153,15 @@ export function setupEgovBridge({ iframe, getProps, onNavigate }) {
     //
     // `en-US` likewise matches what the editor ships today (no i18n).
     const simple = {
-      path, env, optIn: false, colorScheme: 'light', locale: 'en-US', featureFlags: [],
+      path,
+      env,
+      embedSource: 'da',
+      optIn: false,
+      colorScheme: 'light',
+      locale: 'en-US',
+      featureFlags: [],
     };
+    if (apiUrl) simple.apiUrl = apiUrl;
     if (imsToken) simple.imsToken = imsToken;
     if (imsOrg) simple.imsOrg = imsOrg;
     // Only callbacks `reactCallback` actually handles are advertised. Listing

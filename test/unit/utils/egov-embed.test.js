@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import {
+  resolveEgovApiUrl,
   resolveEgovEmbedUrl,
   resolveEgovEnv,
   resolveEgovMfeEnv,
@@ -132,6 +133,31 @@ describe('resolveEgovMfeEnv', () => {
 
   it('sends PROD for an unrecognized host', () => {
     expect(resolveEgovMfeEnv(urlAt('https://example.com/skills'))).to.equal('PROD');
+  });
+});
+
+describe('resolveEgovApiUrl', () => {
+  it('returns no override when the ec parameter is absent', () => {
+    expect(resolveEgovApiUrl(urlAt('https://da.live/skills'))).to.equal(undefined);
+    expect(resolveEgovApiUrl(urlAt('https://main--da-live--adobe.aem.page/skills')))
+      .to.equal(undefined);
+  });
+
+  it('maps named environment parameters', () => {
+    expect(resolveEgovApiUrl(urlAt('https://da.live/skills?ec=prod')))
+      .to.equal('https://experience-context.adobe.io/api');
+    expect(resolveEgovApiUrl(urlAt('https://da.live/skills?ec=stage')))
+      .to.equal('https://experience-context-stage.adobe.io/api');
+  });
+
+  it('accepts only the expected ephemeral deployment hosts', () => {
+    const ephemeral = 'https://adobe-aem-foundation-brand-governance-agent-deploy-a1b2c3.stage.cloud.adobe.io/some/path';
+    expect(resolveEgovApiUrl(urlAt(`https://da.live/skills?ec=${encodeURIComponent(ephemeral)}`)))
+      .to.equal('https://adobe-aem-foundation-brand-governance-agent-deploy-a1b2c3.stage.cloud.adobe.io/api');
+
+    const attacker = 'https://adobe-aem-foundation-brand-governance-agent-deploy-a1b2c3.stage.cloud.adobe.io.evil.example';
+    expect(resolveEgovApiUrl(urlAt(`https://da.live/skills?ec=${encodeURIComponent(attacker)}`)))
+      .to.equal(undefined);
   });
 });
 
