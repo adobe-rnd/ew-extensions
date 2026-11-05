@@ -190,10 +190,6 @@ class NxSkillsEditor extends LitElement {
   // component.
   _loadedChatUrl = '';
 
-  // TRANSITIONAL: the legacy `ew.altHarness` value, forwarded in harnessConfig
-  // only for old nx-chat-ao builds (da-nx `ewoncma`) that still read it.
-  _chatLegacyActivationKey = null;
-
   // Marketplace/plugins (bridge-only, Claude marketplace concept) require
   // BOTH the site to be on Coworker (`ew.coworker === 'true'`) and routed
   // through the bridge (resolveCmaHarness) - CMA routing alone isn't enough,
@@ -655,14 +651,12 @@ class NxSkillsEditor extends LitElement {
       // ORG + SITE config (site overrides org), same as da-nx's getEWFlags -
       // a flag set only at the org level would otherwise be missed here
       // while the chat still sees it. The harness rule matches da-nx's
-      // loadChat(): `ew.cma === 'true'` AND the IMS entitlement pre-check
-      // (plus the transitional legacy `ew.altHarness`, see resolveCmaHarness).
+      // loadChat(): `ew.cma === 'true'` AND the IMS entitlement pre-check.
       // It drives everything bridge-side: skills, MCPs, plugins/marketplace
       // and the drawer chat component.
       const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
-      const { cma, legacyKey } = await resolveCmaHarness(ewFlags);
+      const cma = await resolveCmaHarness(ewFlags);
       setSkillsBackend({ cma });
-      this._chatLegacyActivationKey = cma ? legacyKey : null;
       this._marketplaceAvailable = cma && ewFlags[EW_COWORKER_FLAG] === 'true';
 
       const permKey = `${this._org}/${this._site}`;
@@ -2126,14 +2120,10 @@ class NxSkillsEditor extends LitElement {
       chatAgentId: this.chatAgentId,
       chatCma: isSkillsBackendCma(),
       marketplaceAvailable: this._marketplaceAvailable,
-      // `{ key, cma }` is the da-nx main nx-chat-ao contract. `altHarness` /
-      // `activationKey` are TRANSITIONAL, for old nx-chat-ao builds (da-nx
-      // `ewoncma`) that still read them; drop once ewoncma syncs with main.
+      // `{ key, cma }` is the da-nx main nx-chat-ao contract.
       chatHarnessConfig: {
         key: this._org && this._site ? `${this._org}/${this._site}` : null,
         cma: isSkillsBackendCma(),
-        altHarness: isSkillsBackendCma(),
-        activationKey: this._chatLegacyActivationKey ?? null,
       },
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,

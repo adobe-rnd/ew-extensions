@@ -15,12 +15,6 @@ const TAB_CONTEXT = 'context'; // UI label: "Experience Context"; embeds the Exp
 // not a security boundary: the bridge re-verifies entitlement server-side.
 const EW_CMA_FLAG = 'ew.cma';
 
-// TRANSITIONAL: the flag `ew.cma` replaced (its value was the bridge
-// activation key, now removed bridge-side). Still honored so sites/testers on
-// da-nx `ewoncma`, which only knows this flag, keep the CMA path. Remove once
-// `ewoncma` is synced with da-nx main and no site config carries it.
-const EW_LEGACY_ALT_HARNESS_FLAG = 'ew.altHarness';
-
 // Site-config `flags` key gating the Coworker experience itself (da-nx's
 // getCoworkerConfig: `flags['ew.coworker'] === 'true'`), independent of
 // EW_CMA_FLAG (which only says *where* Coworker talks to - bridge vs AO).
@@ -186,7 +180,6 @@ export {
   EGOV_MFE,
   EW_CMA_FLAG,
   EW_COWORKER_FLAG,
-  EW_LEGACY_ALT_HARNESS_FLAG,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,

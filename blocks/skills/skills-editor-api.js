@@ -9,7 +9,7 @@
 import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 import { parseFrontmatter } from './utils/skill-frontmatter.js';
-import { EW_CMA_FLAG, EW_LEGACY_ALT_HARNESS_FLAG } from './constants.js';
+import { EW_CMA_FLAG } from './constants.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -577,16 +577,11 @@ export async function isCmaEntitled() {
 /**
  * Resolves whether this site uses the CMA bridge harness, from merged `ew.*`
  * flags (fetchEwFlags). Same rule as da-nx's loadChat(): `ew.cma === 'true'`
- * AND the IMS entitlement pre-check. TRANSITIONAL: a non-empty legacy
- * `ew.altHarness` also selects CMA (its old semantics, no entitlement
- * pre-check) so da-nx `ewoncma` testers keep working - see
- * EW_LEGACY_ALT_HARNESS_FLAG. Returns `{ cma, legacyKey }`; legacyKey is the
- * old activation-key value, forwarded only for old nx-chat-ao builds.
+ * AND the IMS entitlement pre-check.
  */
 export async function resolveCmaHarness(flags = {}) {
-  const legacyKey = String(flags[EW_LEGACY_ALT_HARNESS_FLAG] ?? '').trim() || null;
-  if (flags[EW_CMA_FLAG] === 'true' && await isCmaEntitled()) return { cma: true, legacyKey };
-  return { cma: !!legacyKey, legacyKey };
+  if (flags[EW_CMA_FLAG] !== 'true') return false;
+  return isCmaEntitled();
 }
 
 function aoEnv() {

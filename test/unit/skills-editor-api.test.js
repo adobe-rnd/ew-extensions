@@ -1122,20 +1122,14 @@ describe('CMA harness resolution (ew.cma + entitlement)', () => {
 
   it('resolveCmaHarness: ew.cma "true" + entitled => cma', async () => {
     withIms(async () => profile('acp'));
-    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.deep.equal({ cma: true, legacyKey: null });
+    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.equal(true);
   });
 
   it('resolveCmaHarness: ew.cma without entitlement, or not exactly "true" => no cma', async () => {
     withIms(async () => profile());
-    expect((await resolveCmaHarness({ 'ew.cma': 'true' })).cma).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.equal(false);
     withIms(async () => profile('acp'));
-    expect((await resolveCmaHarness({ 'ew.cma': 'TRUE' })).cma).to.equal(false);
-    expect((await resolveCmaHarness({})).cma).to.equal(false);
-  });
-
-  it('resolveCmaHarness: transitional legacy ew.altHarness still selects cma and returns its key', async () => {
-    withIms(async () => profile());
-    expect(await resolveCmaHarness({ 'ew.altHarness': ' k ' })).to.deep.equal({ cma: true, legacyKey: 'k' });
-    expect(await resolveCmaHarness({ 'ew.altHarness': '   ' })).to.deep.equal({ cma: false, legacyKey: null });
+    expect(await resolveCmaHarness({ 'ew.cma': 'TRUE' })).to.equal(false);
+    expect(await resolveCmaHarness({})).to.equal(false);
   });
 });

@@ -19,8 +19,8 @@ import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
  * Component-level guard for CMA harness detection: `ew.cma === 'true'` (org or
  * site level) + IMS entitlement must flip the editor to the bridge - skills,
  * the AEM MCP server and the drawer chat - matching da-nx's loadChat(). The
- * legacy `ew.altHarness` flag is still honored (transitional, for da-nx
- * `ewoncma`).
+ * old `ew.altHarness` activation-key flag is gone (#192); it must NOT select
+ * the bridge anymore.
  *
  * Drives the real `_reload()` with fetch + IMS stubbed, asserting that the
  * editor flips to the bridge and populates BOTH skills and the AEM MCP server.
@@ -139,14 +139,14 @@ describe('NxSkillsEditor._reload — CMA harness detection', () => {
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
   });
 
-  it('transitional: a legacy ew.altHarness value still selects the bridge', async () => {
+  it('a legacy ew.altHarness value does NOT select the bridge (#192 - the flag is gone)', async () => {
     const calls = stubFetch({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
     const el = makeEditor('ew-legacy-flagged', 'site-1d');
 
     await el._reload();
 
-    expect(Object.keys(el._skills)).to.include('my-skill');
-    expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.true;
+    expect(el._builtinMcpServers).to.deep.equal([]);
+    expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
   });
 
   it('stays on the AO/da-agent path (no bridge calls) when no CMA flag anywhere', async () => {
@@ -196,20 +196,19 @@ describe('NxSkillsEditor._reload — CMA harness detection', () => {
     const cfg = el._buildViewModel().chatHarnessConfig;
     expect(cfg.key).to.equal('ew-site-flagged/site-chat-2');
     expect(cfg.cma).to.equal(true);
-    // Transitional fields for old nx-chat-ao builds: routing on, no legacy key.
-    expect(cfg.altHarness).to.equal(true);
-    expect(cfg.activationKey).to.equal(null);
   });
 
-  it('transitional: a legacy ew.altHarness value is forwarded for old nx-chat-ao builds', async () => {
+  it('a legacy ew.altHarness value does NOT select the chat-ao harness (#192 - the flag is gone)', async () => {
     stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
     const el = makeChatEditor('ew-legacy-site', 'site-chat-2b');
 
     await el._reload();
 
+    expect(el._activeChatImportUrl()).to.equal(CHAT_URL);
     const cfg = el._buildViewModel().chatHarnessConfig;
-    expect(cfg.cma).to.equal(true);
-    expect(cfg.activationKey).to.equal('cma-key');
+    expect(cfg.cma).to.equal(false);
+    expect(cfg.altHarness).to.equal(undefined);
+    expect(cfg.activationKey).to.equal(undefined);
   });
 
   it('falls back to the da-agent chat URL when no chat-ao URL is provided', async () => {
