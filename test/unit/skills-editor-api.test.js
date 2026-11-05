@@ -1004,28 +1004,28 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
     };
   }
 
-  it('reads ew.cma set only at the ORG level (the reported bug)', async () => {
-    mockConfigs({ orgFlags: [{ key: 'ew.cma', value: 'true' }], siteFlags: [] });
+  it('reads ew.coworker set only at the ORG level (the reported bug)', async () => {
+    mockConfigs({ orgFlags: [{ key: 'ew.coworker', value: 'cma' }], siteFlags: [] });
     const flags = await fetchEwFlags('ew-orgonly', 'site-a');
-    expect(flags['ew.cma']).to.equal('true');
+    expect(flags['ew.coworker']).to.equal('cma');
   });
 
   it('lets the site-level value override the org-level value', async () => {
     mockConfigs({
-      orgFlags: [{ key: 'ew.cma', value: 'true' }],
-      siteFlags: [{ key: 'ew.cma', value: 'false' }],
+      orgFlags: [{ key: 'ew.coworker', value: 'cma' }],
+      siteFlags: [{ key: 'ew.coworker', value: 'true' }],
     });
     const flags = await fetchEwFlags('ew-override', 'site-b');
-    expect(flags['ew.cma']).to.equal('false');
+    expect(flags['ew.coworker']).to.equal('true');
   });
 
   it('keeps only ew.* keys and tolerates a 404 org config', async () => {
     mockConfigs({
       orgStatus: 404,
-      siteFlags: [{ key: 'ew.cma', value: 'true' }, { key: 'other', value: 'x' }],
+      siteFlags: [{ key: 'ew.coworker', value: 'cma' }, { key: 'other', value: 'x' }],
     });
     const flags = await fetchEwFlags('ew-404', 'site-c');
-    expect(flags['ew.cma']).to.equal('true');
+    expect(flags['ew.coworker']).to.equal('cma');
     expect(flags).to.not.have.property('other');
   });
 
@@ -1041,7 +1041,7 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
   });
 });
 
-describe('CMA harness resolution (ew.cma + entitlement)', () => {
+describe('CMA harness resolution (ew.coworker=cma + entitlement)', () => {
   const realAdobeIMS = window.adobeIMS;
   const profile = (serviceCode) => ({
     projectedProductContext: [{ prodCtx: { owningEntity: 'ORG@AdobeOrg', ...(serviceCode ? { serviceCode } : {}) } }],
@@ -1120,16 +1120,17 @@ describe('CMA harness resolution (ew.cma + entitlement)', () => {
     expect(await isCmaEntitled()).to.equal(true);
   });
 
-  it('resolveCmaHarness: ew.cma "true" + entitled => cma', async () => {
+  it('resolveCmaHarness: ew.coworker "cma" + entitled => cma', async () => {
     withIms(async () => profile('acp'));
-    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.equal(true);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(true);
   });
 
-  it('resolveCmaHarness: ew.cma without entitlement, or not exactly "true" => no cma', async () => {
+  it('resolveCmaHarness: ew.coworker=cma without entitlement, or any value other than "cma" => no cma', async () => {
     withIms(async () => profile());
-    expect(await resolveCmaHarness({ 'ew.cma': 'true' })).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(false);
     withIms(async () => profile('acp'));
-    expect(await resolveCmaHarness({ 'ew.cma': 'TRUE' })).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'true' })).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'CMA' })).to.equal(false);
     expect(await resolveCmaHarness({})).to.equal(false);
   });
 });

@@ -61,7 +61,6 @@ import {
 import {
   BUILTIN_AGENTS,
   BUILTIN_TOOL_IDS,
-  EW_COWORKER_FLAG,
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
@@ -190,11 +189,10 @@ class NxSkillsEditor extends LitElement {
   // component.
   _loadedChatUrl = '';
 
-  // Marketplace/plugins (bridge-only, Claude marketplace concept) require
-  // BOTH the site to be on Coworker (`ew.coworker === 'true'`) and routed
-  // through the bridge (resolveCmaHarness) - CMA routing alone isn't enough,
-  // since a site can be CMA-routed without Coworker being the active
-  // experience there. Computed in _reload() alongside the other ew.* flags.
+  // Marketplace/plugins (bridge-only, Claude marketplace concept) require the
+  // site to resolve to the CMA bridge harness (resolveCmaHarness: ew.coworker
+  // === 'cma' + entitlement). Computed in _reload() alongside the other ew.*
+  // flags.
   _marketplaceAvailable = false;
 
   _agentsLoadInFlight = false;
@@ -651,13 +649,15 @@ class NxSkillsEditor extends LitElement {
       // ORG + SITE config (site overrides org), same as da-nx's getEWFlags -
       // a flag set only at the org level would otherwise be missed here
       // while the chat still sees it. The harness rule matches da-nx's
-      // loadChat(): `ew.cma === 'true'` AND the IMS entitlement pre-check.
+      // loadChat(): `ew.coworker === 'cma'` AND the IMS entitlement pre-check.
       // It drives everything bridge-side: skills, MCPs, plugins/marketplace
       // and the drawer chat component.
       const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
       const cma = await resolveCmaHarness(ewFlags);
       setSkillsBackend({ cma });
-      this._marketplaceAvailable = cma && ewFlags[EW_COWORKER_FLAG] === 'true';
+      // ew.coworker=cma already means Coworker-on-bridge, so CMA resolution is
+      // the marketplace gate on its own.
+      this._marketplaceAvailable = cma;
 
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
@@ -2120,10 +2120,10 @@ class NxSkillsEditor extends LitElement {
       chatAgentId: this.chatAgentId,
       chatCma: isSkillsBackendCma(),
       marketplaceAvailable: this._marketplaceAvailable,
-      // `{ key, cma }` is the da-nx main nx-chat-ao contract.
+      // `{ key, harness }` is the da-nx nx-chat-ao contract.
       chatHarnessConfig: {
         key: this._org && this._site ? `${this._org}/${this._site}` : null,
-        cma: isSkillsBackendCma(),
+        harness: isSkillsBackendCma() ? 'cma' : 'coworker',
       },
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,

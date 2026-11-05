@@ -9,7 +9,7 @@
 import { DA_ORIGIN, daFetch, getToken, waitForImsToken } from './utils/da-fetch.js';
 import { parseSheetBoolean, normaliseRowKey, isSafeId, isSafeSubPath } from './utils/sheet-utils.js';
 import { parseFrontmatter } from './utils/skill-frontmatter.js';
-import { EW_CMA_FLAG } from './constants.js';
+import { EW_COWORKER_FLAG } from './constants.js';
 
 // ─── agent origin ───────────────────────────────────────────────────────────
 
@@ -305,7 +305,7 @@ export async function fetchDaConfigSheets(org, site, options = {}) {
  * Reads `ew.*` flags merged across the ORG-level and SITE-level DA config, with
  * site overriding org — mirroring da-nx's getEWFlags (nx2/utils/ewFlags.js) so
  * the editor's CMA detection agrees with the chat. Without the org-level
- * read, an `ew.cma` set only at the org level is missed and the editor
+ * read, an `ew.coworker` set only at the org level is missed and the editor
  * silently falls back to the empty da-agent path (no CMA skills, no bridge MCP
  * servers). `siteConfig` lets a caller pass an already-fetched site config to
  * avoid a duplicate request; the org read skips 404-materialization so it never
@@ -576,11 +576,11 @@ export async function isCmaEntitled() {
 
 /**
  * Resolves whether this site uses the CMA bridge harness, from merged `ew.*`
- * flags (fetchEwFlags). Same rule as da-nx's loadChat(): `ew.cma === 'true'`
+ * flags (fetchEwFlags). Same rule as da-nx's loadChat(): `ew.coworker === 'cma'`
  * AND the IMS entitlement pre-check.
  */
 export async function resolveCmaHarness(flags = {}) {
-  if (flags[EW_CMA_FLAG] !== 'true') return false;
+  if (flags[EW_COWORKER_FLAG] !== 'cma') return false;
   return isCmaEntitled();
 }
 
