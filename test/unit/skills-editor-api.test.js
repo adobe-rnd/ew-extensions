@@ -10,6 +10,9 @@ import {
   parseActionsHasWrite,
   fetchSkillsPermission,
   setSkillsBackend,
+  isCmaEntitled,
+  resolveCmaHarness,
+  CMA_REQUIRED_SERVICE_CODES,
   fetchEwFlags,
   fetchSkillsFromAo,
   fetchSkillFileFromAo,
@@ -357,11 +360,11 @@ describe('AO / bridge backend switch', () => {
   afterEach(() => {
     window.fetch = realFetch;
     window.adobeIMS = realAdobeIMS;
-    setSkillsBackend({ altHarness: false });
+    setSkillsBackend({ cma: false });
     initAuth(null);
   });
 
-  describe('altHarness off (AO, byte-for-byte unchanged)', () => {
+  describe('CMA off (AO, byte-for-byte unchanged)', () => {
     it('fetchSkillsFromAo hits the AO base with no x-user-id header', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
       const result = await fetchSkillsFromAo();
@@ -414,8 +417,8 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('altHarness on (bridge)', () => {
-    beforeEach(() => setSkillsBackend({ altHarness: true }));
+  describe('CMA on (bridge)', () => {
+    beforeEach(() => setSkillsBackend({ cma: true }));
 
     it('fetchMcpServersFromBridge tags scope, carries key/url/tools, and dedupes by url (agent wins)', async () => {
       const BRIDGE_MCP = {
@@ -762,8 +765,8 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('Plugins altHarness off (CMA-only, no AO equivalent)', () => {
-    beforeEach(() => setSkillsBackend({ altHarness: false }));
+  describe('Plugins CMA off (CMA-only, no AO equivalent)', () => {
+    beforeEach(() => setSkillsBackend({ cma: false }));
 
     it('loadInstalledPlugins returns [] without calling any endpoint', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
@@ -783,7 +786,7 @@ describe('AO / bridge backend switch', () => {
     });
   });
 
-  describe('MCP altHarness off (DA config, unchanged)', () => {
+  describe('MCP CMA off (DA config, unchanged)', () => {
     it('deleteMcpServer does not call the bridge overrides endpoint', async () => {
       const calls = trackFetch(() => ({ ok: true, text: async () => '{}', json: async () => ({}) }));
       await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
@@ -1001,28 +1004,28 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
     };
   }
 
-  it('reads ew.altHarness set only at the ORG level (the reported bug)', async () => {
-    mockConfigs({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
+  it('reads ew.coworker set only at the ORG level (the reported bug)', async () => {
+    mockConfigs({ orgFlags: [{ key: 'ew.coworker', value: 'cma' }], siteFlags: [] });
     const flags = await fetchEwFlags('ew-orgonly', 'site-a');
-    expect(flags['ew.altHarness']).to.equal('cma-key');
+    expect(flags['ew.coworker']).to.equal('cma');
   });
 
   it('lets the site-level value override the org-level value', async () => {
     mockConfigs({
-      orgFlags: [{ key: 'ew.altHarness', value: 'org-key' }],
-      siteFlags: [{ key: 'ew.altHarness', value: 'site-key' }],
+      orgFlags: [{ key: 'ew.coworker', value: 'cma' }],
+      siteFlags: [{ key: 'ew.coworker', value: 'true' }],
     });
     const flags = await fetchEwFlags('ew-override', 'site-b');
-    expect(flags['ew.altHarness']).to.equal('site-key');
+    expect(flags['ew.coworker']).to.equal('true');
   });
 
   it('keeps only ew.* keys and tolerates a 404 org config', async () => {
     mockConfigs({
       orgStatus: 404,
-      siteFlags: [{ key: 'ew.altHarness', value: 'k' }, { key: 'other', value: 'x' }],
+      siteFlags: [{ key: 'ew.coworker', value: 'cma' }, { key: 'other', value: 'x' }],
     });
     const flags = await fetchEwFlags('ew-404', 'site-c');
-    expect(flags['ew.altHarness']).to.equal('k');
+    expect(flags['ew.coworker']).to.equal('cma');
     expect(flags).to.not.have.property('other');
   });
 
@@ -1035,5 +1038,99 @@ describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
     };
     await fetchEwFlags('ew-nomat', 'site-d');
     expect(methods).to.not.include('POST');
+  });
+});
+
+describe('CMA harness resolution (ew.coworker=cma + entitlement)', () => {
+  const realAdobeIMS = window.adobeIMS;
+  const profile = (serviceCode) => ({
+    projectedProductContext: [{ prodCtx: { owningEntity: 'ORG@AdobeOrg', ...(serviceCode ? { serviceCode } : {}) } }],
+  });
+  const withIms = (getProfile) => { window.adobeIMS = { getProfile }; };
+
+  afterEach(() => { window.adobeIMS = realAdobeIMS; });
+
+  it('mirrors the bridge/da-nx required service codes', () => {
+    expect(CMA_REQUIRED_SERVICE_CODES).to.deep.equal(['acp', 'dma_tartan']);
+  });
+
+  it('isCmaEntitled: true for each required service code', async () => {
+    withIms(async () => profile('acp'));
+    expect(await isCmaEntitled()).to.equal(true);
+    withIms(async () => profile('dma_tartan'));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('isCmaEntitled: false for other codes, no contexts, or an IMS error (fails closed)', async () => {
+    withIms(async () => profile('dma_aem_cloud'));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => ({}));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => { throw new Error('ims down'); });
+    expect(await isCmaEntitled()).to.equal(false);
+    window.adobeIMS = undefined;
+    expect(await isCmaEntitled()).to.equal(false);
+  });
+
+  it('isCmaEntitled: checks entitlement on the SELECTED tenant (first entry with an owningEntity), '
+    + 'matching getImsOrgId — not any entry in the array', async () => {
+    // Selected (first owningEntity) entry qualifies -> true, even with a
+    // later irrelevant entry.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'irrelevant' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+
+    // A LATER entry qualifies but the selected (first owningEntity) one
+    // doesn't -> false. getImsOrgId would send org-1 as x-tenant-id, which
+    // the bridge would reject since only org-2 is actually entitled.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'irrelevant' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'acp' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(false);
+
+    // Entries with no owningEntity are skipped when selecting, same as
+    // getImsOrgId.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'dma_tartan' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('isCmaEntitled: checks ALL entries for the selected org, not just the first — IMS emits one '
+    + 'entry per product, not per org, so a profile with many entries for one org (most not '
+    + 'CMA-related) must still find the one that is', async () => {
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_aem_cloud' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'workfront' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_tartan' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_audiencemanager_int' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('resolveCmaHarness: ew.coworker "cma" + entitled => cma', async () => {
+    withIms(async () => profile('acp'));
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(true);
+  });
+
+  it('resolveCmaHarness: ew.coworker=cma without entitlement, or any value other than "cma" => no cma', async () => {
+    withIms(async () => profile());
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(false);
+    withIms(async () => profile('acp'));
+    expect(await resolveCmaHarness({ 'ew.coworker': 'true' })).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'CMA' })).to.equal(false);
+    expect(await resolveCmaHarness({})).to.equal(false);
   });
 });

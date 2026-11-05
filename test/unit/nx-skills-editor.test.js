@@ -16,15 +16,16 @@ import { setSkillsBackend } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
 /**
- * Component-level regression guard for the reported bug: when `ew.altHarness`
- * is set only at the ORG level, the chat switched to the CMA bridge but the
- * Skills Editor did not — so no CMA skills were listed and the MCP tab showed
- * presets instead of the agent's real AEM bridge servers.
+ * Component-level guard for CMA harness detection: `ew.coworker === 'cma'` (org
+ * or site level) + IMS entitlement must flip the editor to the bridge - skills,
+ * the AEM MCP server and the drawer chat - matching da-nx's loadChat(). The
+ * old `ew.altHarness` activation-key flag is gone (#192); it must NOT select
+ * the bridge anymore.
  *
  * Drives the real `_reload()` with fetch + IMS stubbed, asserting that the
  * editor flips to the bridge and populates BOTH skills and the AEM MCP server.
  */
-describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () => {
+describe('NxSkillsEditor._reload — CMA harness detection', () => {
   const realFetch = window.fetch;
   const realAdobeIMS = window.adobeIMS;
 
@@ -74,31 +75,38 @@ describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () 
     return el;
   }
 
-  beforeEach(() => {
-    initAuth('test-ims-token');
+  // `entitled` controls whether the IMS profile carries a CMA service code.
+  function stubIms({ entitled = true } = {}) {
     window.adobeIMS = {
       getAccessToken: () => ({ token: 'test-ims-token' }),
       getProfile: async () => ({
         userId: 'user-123',
-        projectedProductContext: [{ prodCtx: { owningEntity: 'ORGID123@AdobeOrg' } }],
+        projectedProductContext: [{
+          prodCtx: { owningEntity: 'ORGID123@AdobeOrg', ...(entitled ? { serviceCode: 'dma_tartan' } : {}) },
+        }],
       }),
     };
+  }
+
+  beforeEach(() => {
+    initAuth('test-ims-token');
+    stubIms();
   });
 
   afterEach(() => {
     window.fetch = realFetch;
     window.adobeIMS = realAdobeIMS;
-    setSkillsBackend({ altHarness: false });
+    setSkillsBackend({ cma: false });
     initAuth(null);
   });
 
-  it('flips to the bridge when ew.altHarness is set ONLY at the org level', async () => {
-    const calls = stubFetch({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
+  it('flips to the bridge when ew.coworker=cma is set ONLY at the org level', async () => {
+    const calls = stubFetch({ orgFlags: [{ key: 'ew.coworker', value: 'cma' }], siteFlags: [] });
     const el = makeEditor('ew-org-flagged', 'site-1');
 
     await el._reload();
 
-    // altHarness is proven by its observable effects: the editor talked to the
+    // CMA is proven by its observable effects: the editor talked to the
     // bridge and populated skills + the AEM MCP server from it.
     // Skills came from the CMA bridge catalog, not the empty config sheet.
     expect(Object.keys(el._skills)).to.include('my-skill');
@@ -111,7 +119,37 @@ describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () 
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.true;
   });
 
-  it('stays on the AO/da-agent path (no bridge calls) when no ew.altHarness anywhere', async () => {
+  it('stays on the AO path when ew.coworker=cma is set but the org is not entitled', async () => {
+    stubIms({ entitled: false });
+    const calls = stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.coworker', value: 'cma' }] });
+    const el = makeEditor('ew-not-entitled', 'site-1b');
+
+    await el._reload();
+
+    expect(el._builtinMcpServers).to.deep.equal([]);
+    expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
+  });
+
+  it('ew.coworker=true (Coworker, not CMA) does NOT select the bridge', async () => {
+    const calls = stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.coworker', value: 'true' }] });
+    const el = makeEditor('ew-coworker-true', 'site-1c');
+
+    await el._reload();
+
+    expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
+  });
+
+  it('a legacy ew.altHarness value does NOT select the bridge (#192 - the flag is gone)', async () => {
+    const calls = stubFetch({ orgFlags: [{ key: 'ew.altHarness', value: 'cma-key' }], siteFlags: [] });
+    const el = makeEditor('ew-legacy-flagged', 'site-1d');
+
+    await el._reload();
+
+    expect(el._builtinMcpServers).to.deep.equal([]);
+    expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
+  });
+
+  it('stays on the AO/da-agent path (no bridge calls) when no CMA flag anywhere', async () => {
     const calls = stubFetch({ orgFlags: [], siteFlags: [] });
     const el = makeEditor('ew-unflagged', 'site-2');
 
@@ -138,28 +176,43 @@ describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () 
     return el;
   }
 
-  it('legacy: with no ew.altHarness, the drawer selects the da-agent chat URL', async () => {
+  it('legacy: with no CMA flag, the drawer selects the da-agent chat URL', async () => {
     stubFetch({ orgFlags: [], siteFlags: [] });
     const el = makeChatEditor('ew-unflagged', 'site-chat-1');
 
     await el._reload();
 
     expect(el._activeChatImportUrl()).to.equal(CHAT_URL);
-    expect(el._chatActivationKey).to.equal(null);
+    expect(el._buildViewModel().chatHarnessConfig.harness).to.equal('coworker');
   });
 
-  it('alt harness: the drawer selects the nx-chat-ao URL and carries the activation key', async () => {
-    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
+  it('CMA: the drawer selects nx-chat-ao and passes { key, harness: "cma" } in harnessConfig', async () => {
+    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.coworker', value: 'cma' }] });
     const el = makeChatEditor('ew-site-flagged', 'site-chat-2');
 
     await el._reload();
 
     expect(el._activeChatImportUrl()).to.equal(CHAT_AO_URL);
-    expect(el._chatActivationKey).to.equal('cma-key');
+    const cfg = el._buildViewModel().chatHarnessConfig;
+    expect(cfg.key).to.equal('ew-site-flagged/site-chat-2');
+    expect(cfg.harness).to.equal('cma');
+  });
+
+  it('a legacy ew.altHarness value does NOT select the chat-ao harness (#192 - the flag is gone)', async () => {
+    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
+    const el = makeChatEditor('ew-legacy-site', 'site-chat-2b');
+
+    await el._reload();
+
+    expect(el._activeChatImportUrl()).to.equal(CHAT_URL);
+    const cfg = el._buildViewModel().chatHarnessConfig;
+    expect(cfg.harness).to.equal('coworker');
+    expect(cfg.altHarness).to.equal(undefined);
+    expect(cfg.activationKey).to.equal(undefined);
   });
 
   it('falls back to the da-agent chat URL when no chat-ao URL is provided', async () => {
-    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.altHarness', value: 'cma-key' }] });
+    stubFetch({ orgFlags: [], siteFlags: [{ key: 'ew.coworker', value: 'cma' }] });
     const el = makeEditor('ew-site-flagged', 'site-chat-3');
     el._isChatOpen = false;
     el.chatImportUrl = CHAT_URL; // chatAoImportUrl intentionally unset
@@ -172,7 +225,7 @@ describe('NxSkillsEditor._reload — altHarness detection (org-level flag)', () 
 
 /**
  * Pure regression guard for the drawer branching: the legacy da-agent path
- * must keep mounting <nx-chat>, and only the alt harness mounts <nx-chat-ao>.
+ * must keep mounting <nx-chat>, and only the CMA harness mounts <nx-chat-ao>.
  * da-lit is stubbed (html -> { strings, values }), so flatten the template to
  * text and assert on the tag it renders.
  */
@@ -190,24 +243,24 @@ describe('renderChatDrawer — harness branching', () => {
   const baseVm = {
     isChatOpen: true,
     chatAgentId: 'skills-engineer',
-    chatHarnessConfig: { key: 'org/site', altHarness: true, activationKey: 'k' },
+    chatHarnessConfig: { key: 'org/site', harness: 'cma' },
     onToggleChat() {},
   };
 
-  it('mounts the legacy da-agent nx-chat when altHarness is off', () => {
-    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatAltHarness: false }));
+  it('mounts the legacy da-agent nx-chat when CMA is off', () => {
+    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatCma: false }));
     expect(out).to.include('<nx-chat ');
     expect(out).to.not.include('nx-chat-ao');
   });
 
-  it('mounts nx-chat-ao when altHarness is on', () => {
-    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatAltHarness: true }));
+  it('mounts nx-chat-ao when CMA is on', () => {
+    const out = flattenTemplate(renderChatDrawer({ ...baseVm, chatCma: true }));
     expect(out).to.include('nx-chat-ao');
   });
 
   it('mounts no chat element while the drawer is closed (either harness)', () => {
-    const legacyClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatAltHarness: false }));
-    const cmaClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatAltHarness: true }));
+    const legacyClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatCma: false }));
+    const cmaClosed = flattenTemplate(renderChatDrawer({ ...baseVm, isChatOpen: false, chatCma: true }));
     expect(legacyClosed).to.not.include('<nx-chat');
     expect(cmaClosed).to.not.include('<nx-chat');
   });
@@ -259,12 +312,12 @@ describe('NxSkillsEditor — Marketplace tab (list + detail)', () => {
   afterEach(() => {
     window.fetch = realFetch;
     window.adobeIMS = realAdobeIMS;
-    setSkillsBackend({ altHarness: false });
+    setSkillsBackend({ cma: false });
     initAuth(null);
   });
 
   it('loads the catalog + installed plugins, gates manage on config-write, opens the detail', async () => {
-    setSkillsBackend({ altHarness: true });
+    setSkillsBackend({ cma: true });
     stubMarketplaceFetch({
       write: true,
       installed: [{
@@ -299,7 +352,7 @@ describe('NxSkillsEditor — Marketplace tab (list + detail)', () => {
   });
 
   it('fails the manage gate closed when config-write is not granted', async () => {
-    setSkillsBackend({ altHarness: true });
+    setSkillsBackend({ cma: true });
     stubMarketplaceFetch({ write: false });
     const el = makeEditor('ew-mkt2', 'site-mkt2');
     await el._ensurePluginsLoaded();

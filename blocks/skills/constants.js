@@ -7,17 +7,14 @@ const TAB_MARKETPLACE = 'marketplace';
 const TAB_MEMORY = 'memory';
 const TAB_CONTEXT = 'context'; // UI label: "Experience Context"; embeds the Experience Governance MFE
 
-// Site-config `flags` key whose (non-empty) value is the CMA bridge activation
-// key. Present + non-empty => route skills/MCP to the bridge instead of AO.
-const EW_ALT_HARNESS_FLAG = 'ew.altHarness';
-
-// Site-config `flags` key gating the Coworker experience itself (da-nx's
-// getCoworkerConfig: `flags['ew.coworker'] === 'true'`), independent of
-// EW_ALT_HARNESS_FLAG (which only says *where* Coworker talks to - bridge vs
-// AO). Plugins/Marketplace are a Coworker-specific (Claude marketplace
-// plugin) concept, so showing that tab requires both flags, not altHarness
-// alone - a site can be altHarness-routed without Coworker being the active
-// experience there.
+// Site-config `flags` key selecting the chat harness (org+site merged, site
+// wins) - the single flag da-nx reads (ewFlags.js#resolveHarness):
+//   'cma'  -> CMA bridge harness, if IMS-entitled (skills-editor-api.js#isCmaEntitled)
+//   'true' -> Coworker on Agent Orchestrator
+//   unset  -> legacy da-agent
+// `ew.coworker === 'cma'` + entitlement routes skills/MCPs/plugins and the
+// drawer chat to the bridge instead of AO/da-agent. A routing signal only,
+// not a security boundary: the bridge re-verifies entitlement server-side.
 const EW_COWORKER_FLAG = 'ew.coworker';
 
 /** Per-tab metadata rendered by the catalog tab strip. */
@@ -48,8 +45,8 @@ const TAB_ACTIONS = {
   // Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) live on
   // their own tab now; this button just jumps there instead of being a dead
   // end (used to be permanently disabled). requiresKey mirrors canWriteKey's
-  // pattern: disabled unless vm[requiresKey] is truthy (see EW_COWORKER_FLAG's
-  // doc comment - altHarness alone isn't enough).
+  // pattern: disabled unless vm[requiresKey] is truthy (marketplaceAvailable,
+  // set when the site resolves to the CMA bridge harness).
   [TAB_AGENTS]: {
     btnLabel: 'Browse Marketplace', opener: 'openMarketplaceTab', icon: 'storefront', requiresKey: 'marketplaceAvailable',
   },
@@ -175,7 +172,6 @@ export {
   CHAT_DRAWER_WIDTH,
   DEP_TREE_MAX_TOOLS,
   EGOV_MFE,
-  EW_ALT_HARNESS_FLAG,
   EW_COWORKER_FLAG,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
