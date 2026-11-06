@@ -119,15 +119,85 @@ export function parseFrontmatter(markdown) {
   const body = after.slice(closeIdx + FM_OPEN.length + 1).trimStart();
 
   const fields = {};
-  block.split('\n').forEach((line) => {
+  const lines = block.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
     const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) return;
+    if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim().toLowerCase();
-    const value = unescapeYamlScalar(line.slice(colonIdx + 1).trim());
-    if (key) fields[key] = value;
-  });
+    if (!key) continue;
+    const rawValue = line.slice(colonIdx + 1).trim();
+    const block$ = parseBlockScalarHeader(rawValue);
+    if (block$) {
+      // YAML block scalar (`>` folded / `|` literal, with optional chomping).
+      // Consume the following more-indented lines as the scalar content.
+      const keyIndent = line.length - line.trimStart().length;
+      const collected = [];
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1];
+        const nextIndent = next.length - next.trimStart().length;
+        const isBlank = next.trim() === '';
+        if (!isBlank && nextIndent <= keyIndent) break;
+        collected.push(next);
+        i += 1;
+      }
+      fields[key] = foldBlockScalar(collected, block$.style, block$.chomp);
+    } else {
+      fields[key] = unescapeYamlScalar(rawValue);
+    }
+  }
 
   return { fields, body };
+}
+
+/**
+ * Detects a YAML block scalar header (`>`, `|`, with optional chomping
+ * indicators `-`/`+` and an explicit indentation digit, e.g. `>-`, `|2`).
+ * Returns null when the value isn't a block scalar opener.
+ */
+function parseBlockScalarHeader(rawValue) {
+  const m = /^([|>])([+-]?)(\d*)\s*$/.exec(rawValue);
+  if (!m) return null;
+  return { style: m[1], chomp: m[2] || '' };
+}
+
+/**
+ * Reassembles a YAML block scalar's content lines into a single string.
+ * - `|` (literal): newlines preserved between content lines.
+ * - `>` (folded): single newlines between non-empty lines become spaces;
+ *   blank lines become hard newlines.
+ * Leading common indentation is stripped. Trailing newline handling follows
+ * the chomping indicator (`-` strip, `+` keep, default clip to one).
+ */
+function foldBlockScalar(rawLines, style, chomp) {
+  if (rawLines.length === 0) return '';
+  // Determine indentation from the first non-blank line.
+  const firstContent = rawLines.find((l) => l.trim() !== '');
+  const indent = firstContent ? firstContent.length - firstContent.trimStart().length : 0;
+  const content = rawLines.map((l) => (l.trim() === '' ? '' : l.slice(indent)));
+
+  // Drop trailing blank lines (reinstated by chomping below).
+  let end = content.length;
+  while (end > 0 && content[end - 1] === '') end -= 1;
+  const kept = content.slice(0, end);
+
+  let out;
+  if (style === '|') {
+    out = kept.join('\n');
+  } else {
+    out = '';
+    for (let i = 0; i < kept.length; i += 1) {
+      const cur = kept[i];
+      if (i === 0) out = cur;
+      else if (cur === '') out += '\n';
+      else if (kept[i - 1] === '') out += cur;
+      else out += ` ${cur}`;
+    }
+  }
+
+  if (chomp === '-') return out;
+  if (chomp === '+') return `${out}${'\n'.repeat(content.length - end)}`;
+  return kept.length ? `${out}\n` : out;
 }
 
 function unescapeYamlScalar(raw) {

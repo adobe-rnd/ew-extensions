@@ -1,19 +1,31 @@
 /** Canonical tab ID strings — use these instead of bare string literals. */
 const TAB_SKILLS = 'skills';
-const TAB_AGENTS = 'agents'; // UI label: "Plugins"
+const TAB_AGENTS = 'agents'; // UI label: "Agents" (agent presets - bundled skills + MCP access; distinct from the Marketplace tab's installable plugins, see TAB_MARKETPLACE)
 const TAB_PROMPTS = 'prompts';
 const TAB_MCPS = 'mcps';
 const TAB_MARKETPLACE = 'marketplace';
 const TAB_MEMORY = 'memory';
+const TAB_CONTEXT = 'context'; // UI label: "Experience Context"; embeds the Experience Governance MFE
+
+// Site-config `flags` key selecting the chat harness (org+site merged, site
+// wins) - the single flag da-nx reads (ewFlags.js#resolveHarness):
+//   'cma'  -> CMA bridge harness, if IMS-entitled (skills-editor-api.js#isCmaEntitled)
+//   'true' -> Coworker on Agent Orchestrator
+//   unset  -> legacy da-agent
+// `ew.coworker === 'cma'` + entitlement routes skills/MCPs/plugins and the
+// drawer chat to the bridge instead of AO/da-agent. A routing signal only,
+// not a security boundary: the bridge re-verifies entitlement server-side.
+const EW_COWORKER_FLAG = 'ew.coworker';
 
 /** Per-tab metadata rendered by the catalog tab strip. */
 const CATALOG_TABS = [
   { id: TAB_PROMPTS, label: 'Prompts' },
-  { id: TAB_AGENTS, label: 'Plugins' },
+  { id: TAB_AGENTS, label: 'Agents' },
+  { id: TAB_MARKETPLACE, label: 'Marketplace' },
   { id: TAB_SKILLS, label: 'Skills' },
   { id: TAB_MCPS, label: 'MCPs' },
-  // { id: TAB_MARKETPLACE, label: 'Marketplace', disabled: true },
   { id: TAB_MEMORY, label: 'Memory' },
+  { id: TAB_CONTEXT, label: 'Experience Context' },
 ];
 
 const TAB_LABEL_MAP = Object.fromEntries(CATALOG_TABS.map((t) => [t.id, t.label]));
@@ -24,12 +36,20 @@ const TAB_DESCRIPTIONS = {
   [TAB_SKILLS]: 'Markdown instructions that guide the assistant\'s behavior.',
   [TAB_MCPS]: 'Model Context Protocol servers that give the assistant access to external tools.',
   [TAB_MARKETPLACE]: 'Discover and install 1st and 3rd party plugins.',
+  [TAB_CONTEXT]: 'Brand governance context and enterprise content checks.',
 };
 
 /** Per-tab metadata for the "new" button label and the opener method name. */
 const TAB_ACTIONS = {
-  [TAB_SKILLS]: { btnLabel: '+ New Skill', opener: 'openNewSkillEditor', canWriteKey: 'canWrite' },
-  [TAB_AGENTS]: { btnLabel: 'Browse Marketplace', disabled: true, icon: 'storefront' },
+  [TAB_SKILLS]: { btnLabel: 'Upload New Skill', opener: 'onPickSkillFile', canWriteKey: 'canWrite' },
+  // Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) live on
+  // their own tab now; this button just jumps there instead of being a dead
+  // end (used to be permanently disabled). requiresKey mirrors canWriteKey's
+  // pattern: disabled unless vm[requiresKey] is truthy (marketplaceAvailable,
+  // set when the site resolves to the CMA bridge harness).
+  [TAB_AGENTS]: {
+    btnLabel: 'Browse Marketplace', opener: 'openMarketplaceTab', icon: 'storefront', requiresKey: 'marketplaceAvailable',
+  },
   [TAB_PROMPTS]: { btnLabel: '+ New Prompt', opener: 'openNewEditor' },
   [TAB_MCPS]: { btnLabel: '+ Register MCP', opener: 'openNewMcpEditor' },
 };
@@ -81,14 +101,10 @@ const BUILTIN_MCP_SERVERS = [
   },
 ];
 
-const BUILTIN_AGENTS = [
-  {
-    id: 'da-assistant',
-    label: 'DA Assistant',
-    description: 'Default content authoring assistant with full DA tooling',
-    mcpServers: ['da-tools', 'eds-preview'],
-  },
-];
+// DA Assistant's tools now live in the AEM MCP server (surfaced via the bridge
+// /api/v1/mcp-servers endpoint), so the hardcoded preset is removed to stop it
+// listing stale tools. Left as an empty list so existing consumers are safe.
+const BUILTIN_AGENTS = [];
 
 const BUILTIN_TOOL_DETAILS = {
   'da-tools': [
@@ -126,6 +142,25 @@ const TOOLS_FILTER_THRESHOLD = 6;
 const CHAT_DRAWER_WIDTH = 380;
 const AGENT_USAGE_ICON = '\u26A1';
 
+/**
+ * Experience Governance MFE embed config. SPA Pipeline serves the built bundle
+ * at this same fixed path on every environment, and only the host changes. See
+ * utils/egov-embed.js for how EMBED_URLS is picked at runtime.
+ */
+const EGOV_EMBED_PATH = '/solutions/Adobe-AEM-Foundation-experience-governance-mfe/static-assets/resources/embed.html';
+
+const EGOV_MFE = {
+  CHANNEL: '@aemsec/experience-governance-mfe',
+  PROTOCOL: '@assets/microfrontend/MessageRpc',
+  VERSION: '1.0.0',
+  EMBED_URLS: {
+    local: `https://localhost.corp.adobe.com:8443${EGOV_EMBED_PATH}`,
+    qa: `https://experience-qa.adobe.com${EGOV_EMBED_PATH}`,
+    stage: `https://experience-stage.adobe.com${EGOV_EMBED_PATH}`,
+    prod: `https://experience.adobe.com${EGOV_EMBED_PATH}`,
+  },
+};
+
 export {
   AGENT_USAGE_ICON,
   BUILTIN_AGENTS,
@@ -136,6 +171,8 @@ export {
   CATEGORY_OPTIONS,
   CHAT_DRAWER_WIDTH,
   DEP_TREE_MAX_TOOLS,
+  EGOV_MFE,
+  EW_COWORKER_FLAG,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   FRESH_FORM_STATE,
@@ -144,6 +181,7 @@ export {
   STATUS_TYPE,
   TAB_ACTIONS,
   TAB_AGENTS,
+  TAB_CONTEXT,
   TAB_MARKETPLACE,
   TAB_MCPS,
   TAB_MEMORY,

@@ -13,6 +13,7 @@ import {
   STATUS_TYPE,
   TAB_ACTIONS,
   TAB_AGENTS,
+  TAB_CONTEXT,
   TAB_DESCRIPTIONS,
   TAB_LABEL_MAP,
   TAB_MARKETPLACE,
@@ -21,12 +22,15 @@ import {
   TAB_PROMPTS,
   TAB_SKILLS,
 } from './constants.js';
+import { resolveEgovEmbedUrl } from './utils/egov-embed.js';
 import {
   isSensitiveHeaderName,
-  skillRowEnabled,
   skillRowStatus,
+  AO_SCOPE_PERSONAL,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
+  mergeMarketplacePluginView,
+  authorLabel,
 } from './skills-editor-api.js';
 
 // ─── tab icon SVGs ────────────────────────────────────────────────────────────
@@ -40,6 +44,7 @@ const TAB_ICON_MAP = {
   [TAB_SKILLS]: html`<svg viewBox="0 0 20 20" fill="none"><g clip-path="url(#ew-skill)"><path d="M17.583 9.99963C17.5829 9.83408 17.5506 9.67016 17.4873 9.51721C17.4239 9.36417 17.331 9.22517 17.2138 9.10803L15.8115 7.70667C15.6123 7.50764 15.4696 7.25844 15.3984 6.98596C15.3274 6.71375 15.3309 6.42763 15.4072 6.15686C15.4837 5.88587 15.6309 5.64003 15.834 5.44495C16.0369 5.24999 16.2878 5.11211 16.5615 5.04651C16.7919 4.99123 17.0039 4.87576 17.1748 4.71155C17.3457 4.54731 17.4698 4.34004 17.5341 4.11194C17.5984 3.88396 17.6007 3.64291 17.541 3.4137C17.4812 3.18435 17.3609 2.97487 17.1933 2.80725C17.0258 2.63979 16.817 2.51946 16.5879 2.45959C16.3585 2.39971 16.1168 2.40213 15.8886 2.46643C15.6607 2.53074 15.4542 2.6551 15.29 2.82581C15.1669 2.95384 15.0704 3.10457 15.0068 3.26917L14.9541 3.43811C14.8885 3.71189 14.7517 3.96361 14.5566 4.16663C14.3616 4.36965 14.1157 4.51691 13.8447 4.59338C13.5737 4.66985 13.2871 4.67233 13.0146 4.6012C12.7422 4.53005 12.4939 4.3873 12.2949 4.18811V4.18909L10.8925 2.78577C10.7754 2.66861 10.6355 2.57573 10.4824 2.51233C10.3295 2.44906 10.1655 2.41663 9.99997 2.41663C9.83445 2.41663 9.67049 2.44904 9.51755 2.51233C9.36447 2.57574 9.22455 2.6686 9.10739 2.78577V2.78674L7.70505 4.18811C7.69457 4.19858 7.68731 4.21186 7.68356 4.2262C7.67985 4.24051 7.67955 4.25591 7.68356 4.27014C7.6876 4.28424 7.69546 4.29708 7.70602 4.30725C7.71658 4.31739 7.7299 4.32426 7.74411 4.32776H7.74509C8.23484 4.44524 8.6847 4.69165 9.04782 5.04065C9.41083 5.38962 9.67375 5.82947 9.81052 6.31409C9.94727 6.79876 9.95321 7.31116 9.82614 7.79846C9.69906 8.2858 9.44393 8.73036 9.08786 9.08655C8.73179 9.44274 8.28708 9.69759 7.79977 9.82483C7.3125 9.95205 6.80012 9.94681 6.3154 9.81018C5.83068 9.67354 5.39107 9.41045 5.04196 9.04749C4.73656 8.72994 4.50958 8.34631 4.37888 7.92737L4.32907 7.74475C4.32562 7.73034 4.31785 7.71735 4.30759 7.70667C4.29733 7.69599 4.28472 7.68823 4.27048 7.6842C4.25621 7.68018 4.24087 7.67948 4.22653 7.68323C4.21249 7.68694 4.19976 7.69451 4.18942 7.70471L2.7861 9.10803C2.66899 9.22517 2.57605 9.36418 2.51267 9.51721C2.44931 9.67016 2.41701 9.83408 2.41696 9.99963C2.41696 10.1653 2.44926 10.33 2.51267 10.483C2.57607 10.636 2.66899 10.7751 2.7861 10.8922L4.18845 12.2936L4.32712 12.4518C4.4545 12.6183 4.54816 12.8091 4.60153 13.0133C4.67266 13.2856 4.67008 13.5725 4.59372 13.8434C4.51725 14.1144 4.36907 14.3602 4.16599 14.5553C3.96291 14.7504 3.71133 14.8872 3.43747 14.9528C3.20724 15.0081 2.99589 15.1246 2.82517 15.2887C2.65433 15.4529 2.53015 15.6602 2.46579 15.8883C2.40154 16.1163 2.39919 16.3574 2.45895 16.5865C2.51876 16.8159 2.63905 17.0254 2.80661 17.193C2.97402 17.3604 3.18306 17.4798 3.41208 17.5397C3.6414 17.5996 3.88317 17.5981 4.1113 17.5338C4.33926 17.4695 4.54571 17.3451 4.70993 17.1744C4.87423 17.0036 4.99051 16.7916 5.04587 16.5612C5.1115 16.2877 5.24852 16.0364 5.44333 15.8336C5.63836 15.6306 5.88432 15.4834 6.15524 15.4069C6.42623 15.3304 6.71289 15.3279 6.98532 15.399C7.25778 15.4702 7.507 15.6119 7.70602 15.8112L9.10739 17.2135C9.22455 17.3307 9.36447 17.4235 9.51755 17.4869C9.67057 17.5503 9.83435 17.5836 9.99997 17.5836C10.1656 17.5836 10.3294 17.5503 10.4824 17.4869C10.6355 17.4235 10.7754 17.3307 10.8925 17.2135L12.2949 15.8121L12.3164 15.774C12.3201 15.7597 12.3204 15.7444 12.3164 15.7301C12.3124 15.716 12.3045 15.7032 12.2939 15.693C12.2833 15.6828 12.2701 15.675 12.2558 15.6715H12.2549C11.7654 15.554 11.3161 15.3084 10.9531 14.9596C10.59 14.6106 10.3262 14.1709 10.1894 13.6862C10.0526 13.2014 10.0477 12.6891 10.1748 12.2018C10.3018 11.7145 10.5561 11.2698 10.9121 10.9137C11.2681 10.5575 11.7129 10.3027 12.2002 10.1754C12.6875 10.0482 13.1998 10.0534 13.6845 10.1901C14.1693 10.3267 14.6089 10.5898 14.958 10.9528C15.307 11.3157 15.5532 11.7649 15.6709 12.2545V12.2555C15.6743 12.2699 15.6821 12.2829 15.6924 12.2936C15.7026 12.3042 15.7153 12.312 15.7295 12.316C15.7437 12.3201 15.7591 12.3208 15.7734 12.317C15.7877 12.3133 15.8011 12.305 15.8115 12.2946L17.2138 10.8922C17.331 10.7751 17.4239 10.636 17.4873 10.483C17.5507 10.33 17.583 10.1653 17.583 9.99963ZM19.083 9.99963C19.083 10.3623 19.0118 10.7222 18.873 11.0573C18.7342 11.3922 18.5308 11.6964 18.2744 11.9528L16.872 13.3551C16.673 13.5543 16.4247 13.697 16.1523 13.7682C15.8799 13.8393 15.5932 13.8368 15.3222 13.7604C15.0512 13.6839 14.8054 13.5357 14.6103 13.3326C14.4153 13.1296 14.2774 12.8779 14.2119 12.6041V12.6031C14.1563 12.3736 14.0406 12.1631 13.8769 11.9928C13.7126 11.822 13.5054 11.6977 13.2773 11.6334C13.0493 11.5692 12.8083 11.5667 12.5791 11.6266C12.3498 11.6865 12.1402 11.8066 11.9726 11.9742C11.8052 12.1418 11.6857 12.3515 11.6259 12.5807C11.5662 12.8099 11.5684 13.051 11.6328 13.2789C11.6971 13.5069 11.8214 13.7134 11.9922 13.8776C12.163 14.0418 12.375 14.1582 12.6054 14.2135H12.6045C12.8783 14.279 13.1299 14.4159 13.333 14.611C13.536 14.806 13.6833 15.0519 13.7597 15.3229C13.8362 15.5939 13.8387 15.8805 13.7675 16.153C13.6964 16.4252 13.5545 16.6737 13.3554 16.8727L11.9531 18.275L11.9521 18.274C11.6957 18.5304 11.3916 18.7349 11.0566 18.8737C10.7217 19.0123 10.3625 19.0836 9.99997 19.0836C9.63743 19.0836 9.2783 19.0124 8.94333 18.8737C8.60826 18.7349 8.30329 18.5305 8.04684 18.274L6.6445 16.8717C6.63402 16.8612 6.62075 16.854 6.60642 16.8502C6.59209 16.8465 6.57671 16.8462 6.56247 16.8502C6.54837 16.8542 6.53554 16.8621 6.52536 16.8727C6.51509 16.8834 6.5083 16.8973 6.50485 16.9117H6.50388C6.38623 17.4015 6.14011 17.8515 5.79099 18.2145C5.44192 18.5773 5.00212 18.8406 4.51755 18.9772C4.03291 19.1137 3.52035 19.119 3.03317 18.9918C2.54595 18.8646 2.10111 18.6097 1.74509 18.2535C1.38915 17.8975 1.1349 17.4526 1.00778 16.9655C0.880699 16.4781 0.885635 15.9648 1.02243 15.4801C1.15924 14.9956 1.42312 14.5565 1.7861 14.2076C2.14922 13.8586 2.59908 13.6122 3.08884 13.4948L3.12692 13.4742C3.13761 13.464 3.14536 13.4504 3.14938 13.4362C3.15337 13.4219 3.15409 13.4065 3.15036 13.3922C3.14658 13.378 3.1383 13.3655 3.1279 13.3551L1.72556 11.9528C1.4692 11.6964 1.26571 11.3922 1.12692 11.0573C0.988127 10.7222 0.916962 10.3623 0.916962 9.99963C0.917015 9.63709 0.988178 9.27794 1.12692 8.94299C1.26569 8.60805 1.4692 8.30386 1.72556 8.04749L3.1279 6.64514L3.2861 6.50647C3.45268 6.37907 3.64338 6.28542 3.84763 6.23206C4.12003 6.16091 4.40673 6.16346 4.6777 6.23987C4.94861 6.3163 5.19456 6.46369 5.38962 6.66663C5.58466 6.86965 5.72249 7.12136 5.78806 7.39514L5.83981 7.56409C5.90342 7.72872 5.99988 7.87938 6.12302 8.00745C6.28731 8.17827 6.4945 8.30252 6.72263 8.36682C6.95063 8.43103 7.19167 8.43349 7.42087 8.37366C7.65019 8.31378 7.85975 8.19362 8.02731 8.026C8.19479 7.85841 8.31421 7.64882 8.37399 7.41956C8.43374 7.19028 8.4315 6.94934 8.36716 6.72131C8.30278 6.49321 8.17866 6.28594 8.00778 6.1217C7.83704 5.95771 7.62567 5.84203 7.39548 5.78674C7.12168 5.72121 6.87001 5.5843 6.66696 5.38928C6.46396 5.19426 6.3167 4.94827 6.2402 4.67737C6.16375 4.4064 6.16128 4.11971 6.23239 3.84729C6.30354 3.57484 6.4453 3.32561 6.6445 3.12659L8.04684 1.72522C8.30329 1.46876 8.60826 1.26538 8.94333 1.12659C9.27831 0.987867 9.6374 0.916632 9.99997 0.916626C10.3625 0.916626 10.7216 0.987884 11.0566 1.12659C11.3917 1.26537 11.6967 1.46878 11.9531 1.72522L13.3554 3.12756V3.12854C13.3659 3.13901 13.3792 3.14628 13.3935 3.15002C13.4079 3.15377 13.4232 3.15405 13.4375 3.15002C13.4516 3.14602 13.4644 3.13808 13.4746 3.12756C13.4848 3.11688 13.4926 3.10292 13.4961 3.0885L13.5459 2.90686C13.6765 2.48766 13.9034 2.10348 14.209 1.78577C14.558 1.4229 14.9978 1.15967 15.4824 1.02307C15.9671 0.88651 16.4795 0.881201 16.9668 1.00842C17.454 1.13568 17.8988 1.39055 18.2549 1.7467C18.6108 2.1028 18.8651 2.5476 18.9922 3.03479C19.1192 3.52202 19.1142 4.03456 18.9775 4.51917C18.8407 5.00388 18.577 5.4436 18.2138 5.7926C17.8508 6.1415 17.4017 6.38798 16.9121 6.50549H16.9111C16.8968 6.50894 16.8836 6.51586 16.873 6.526C16.8623 6.53627 16.8546 6.54983 16.8506 6.56409C16.8467 6.57812 16.846 6.59295 16.8496 6.60706C16.8533 6.62139 16.8616 6.63467 16.872 6.64514L18.2744 8.04749L18.457 8.24866C18.6287 8.45802 18.769 8.69192 18.873 8.94299C19.0118 9.27794 19.0829 9.63709 19.083 9.99963Z" fill="currentColor"/></g><defs><clipPath id="ew-skill"><rect width="20" height="20" fill="white"/></clipPath></defs></svg>`,
   [TAB_MCPS]: html`<svg viewBox="0 0 20 20" fill="none"><g clip-path="url(#ew-mcp)"><path d="M16.667 10.917C18.0017 10.917 19.084 11.9993 19.084 13.334V16.667C19.0838 18.0015 18.0016 19.084 16.667 19.084H3.33398C1.99942 19.084 0.91719 18.0015 0.916992 16.667V13.334C0.916992 11.9993 1.9993 10.917 3.33398 10.917H16.667ZM3.33398 12.417C2.82772 12.417 2.41699 12.8277 2.41699 13.334V16.667C2.41719 17.1731 2.82785 17.584 3.33398 17.584H16.667C17.1731 17.584 17.5838 17.1731 17.584 16.667V13.334C17.584 12.8277 17.1733 12.417 16.667 12.417H3.33398ZM5.00879 14.25C5.42279 14.2502 5.75879 14.5859 5.75879 15C5.75879 15.4141 5.42279 15.7498 5.00879 15.75H5C4.58579 15.75 4.25 15.4142 4.25 15C4.25 14.5858 4.58579 14.25 5 14.25H5.00879ZM16.667 0.916992C18.0017 0.916992 19.084 1.9993 19.084 3.33398V6.66699C19.0838 8.00151 18.0016 9.08398 16.667 9.08398H3.33398C1.99942 9.08398 0.91719 8.00151 0.916992 6.66699V3.33398C0.916992 1.9993 1.9993 0.916992 3.33398 0.916992H16.667ZM3.33398 2.41699C2.82772 2.41699 2.41699 2.82772 2.41699 3.33398V6.66699C2.41719 7.17308 2.82785 7.58398 3.33398 7.58398H16.667C17.1731 7.58398 17.5838 7.17308 17.584 6.66699V3.33398C17.584 2.82772 17.1733 2.41699 16.667 2.41699H3.33398ZM5.00879 4.25C5.42279 4.25025 5.75879 4.58594 5.75879 5C5.75879 5.41406 5.42279 5.74975 5.00879 5.75H5C4.58579 5.75 4.25 5.41421 4.25 5C4.25 4.58579 4.58579 4.25 5 4.25H5.00879Z" fill="currentColor"/></g><defs><clipPath id="ew-mcp"><rect width="20" height="20" fill="white"/></clipPath></defs></svg>`,
   [TAB_MARKETPLACE]: html`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.5V14h12V6.5"/><path d="M1 3h14v3.5H1z"/><path d="M6.5 10h3v4h-3z"/></svg>`,
+  [TAB_CONTEXT]: html`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M1.5 8h13M8 1.5c1.8 1.8 2.8 4 2.8 6.5s-1 4.7-2.8 6.5c-1.8-1.8-2.8-4-2.8-6.5S6.2 3.3 8 1.5z"/></svg>`,
   [TAB_MEMORY]: html`<svg viewBox="0 0 20 20" fill="none"><g clip-path="url(#ew-mem)"><path d="M6.65918 1.02734C7.1404 0.898469 7.64517 0.882385 8.13379 0.979492C8.62271 1.07675 9.08303 1.2854 9.47852 1.58887C9.67116 1.73671 9.84587 1.90522 10 2.09082C10.154 1.90536 10.329 1.73663 10.5215 1.58887C10.9169 1.28547 11.3774 1.07679 11.8662 0.979492C12.3548 0.882336 12.8596 0.898508 13.3408 1.02734C13.8223 1.15635 14.2678 1.39501 14.6426 1.72363C15.0174 2.05234 15.3122 2.46325 15.5029 2.92383C15.6092 3.18058 15.681 3.44909 15.7188 3.72266C16.1152 3.8856 16.4853 4.10951 16.8135 4.38867C17.2853 4.79007 17.6598 5.29389 17.9082 5.86133C18.1566 6.42864 18.2731 7.04529 18.248 7.66406C18.2308 8.0879 18.1449 8.50501 18 8.90137C18.3235 9.25235 18.5874 9.65761 18.7725 10.1045C19.1163 10.9348 19.1769 11.8555 18.9443 12.7236C18.7117 13.5918 18.1984 14.3591 17.4854 14.9062C17.4627 14.9236 17.438 14.9382 17.415 14.9551C17.4189 15.3498 17.3674 15.744 17.2578 16.125C17.1035 16.6613 16.841 17.1609 16.4863 17.5918C16.1317 18.0226 15.6919 18.3764 15.1953 18.6309C14.6989 18.8851 14.1552 19.0351 13.5986 19.0713C13.0418 19.1074 12.4824 19.0289 11.957 18.8408C11.4319 18.6527 10.9502 18.3587 10.543 17.9775C10.3411 17.7886 10.1589 17.58 10 17.3555C9.84116 17.5799 9.65975 17.7886 9.45801 17.9775C9.0507 18.3589 8.5692 18.6527 8.04395 18.8408C7.51874 19.0289 6.96 19.1073 6.40332 19.0713C5.84655 19.0352 5.30227 18.8852 4.80566 18.6309C4.30904 18.3764 3.86933 18.0226 3.51465 17.5918C3.16 17.161 2.89746 16.6613 2.74316 16.125C2.63361 15.744 2.58114 15.3498 2.58496 14.9551C2.56199 14.9382 2.5373 14.9236 2.51465 14.9062C1.80165 14.3591 1.28835 13.5917 1.05566 12.7236C0.823129 11.8556 0.883709 10.9348 1.22754 10.1045C1.41263 9.65761 1.67546 9.2514 1.99902 8.90039C1.85418 8.50449 1.77012 8.08735 1.75293 7.66406C1.72793 7.04532 1.84443 6.42861 2.09277 5.86133C2.34124 5.29395 2.71572 4.79002 3.1875 4.38867C3.51558 4.10964 3.88506 3.88552 4.28125 3.72266C4.31898 3.44916 4.39085 3.18053 4.49707 2.92383C4.68776 2.46342 4.98282 2.05228 5.35742 1.72363C5.73208 1.3951 6.17788 1.15638 6.65918 1.02734ZM7.8418 2.4502C7.57861 2.39789 7.30606 2.40711 7.04688 2.47656C6.78782 2.54608 6.54736 2.67471 6.3457 2.85156C6.14429 3.02842 5.9854 3.24943 5.88281 3.49707C5.78027 3.74486 5.7364 4.01364 5.75391 4.28125C5.77152 4.54894 5.85025 4.80966 5.98438 5.04199C6.1914 5.40067 6.06861 5.8593 5.70996 6.06641C5.35136 6.27313 4.89262 6.15045 4.68555 5.79199C4.59662 5.63798 4.5213 5.47695 4.45898 5.31152C4.35416 5.37728 4.25392 5.45068 4.15918 5.53125C3.86083 5.7851 3.62396 6.10407 3.4668 6.46289C3.3097 6.82177 3.23614 7.21208 3.25195 7.60352C3.25785 7.74859 3.27575 7.8929 3.30566 8.03418C3.57434 8.02462 3.83973 8.15646 3.9834 8.40527C4.18997 8.76372 4.06709 9.22252 3.70898 9.42969C3.21653 9.71404 2.83088 10.1533 2.61328 10.6787C2.39585 11.204 2.35774 11.7868 2.50488 12.3359C2.65215 12.8849 2.97677 13.3707 3.42773 13.7168C3.87871 14.0626 4.43167 14.2499 5 14.25C5.41393 14.2502 5.74985 14.5861 5.75 15C5.74984 15.414 5.41394 15.7498 5 15.75C4.72035 15.75 4.44354 15.7172 4.17285 15.6611C4.17721 15.6775 4.17988 15.6946 4.18457 15.7109C4.2822 16.0501 4.44852 16.3662 4.67285 16.6387C4.89718 16.9111 5.17521 17.135 5.48926 17.2959C5.8034 17.4568 6.1478 17.5514 6.5 17.5742C6.85221 17.597 7.2058 17.5477 7.53809 17.4287C7.87027 17.3097 8.175 17.1239 8.43262 16.8828C8.69032 16.6415 8.89648 16.3492 9.03711 16.0254C9.17648 15.7043 9.24841 15.3578 9.25 15.0078V10.7236C8.80212 11.1015 8.27906 11.3864 7.70996 11.5527C7.31262 11.6686 6.89652 11.4412 6.78027 11.0439C6.66416 10.6465 6.89266 10.2296 7.29004 10.1133C7.85519 9.94797 8.35175 9.60386 8.70508 9.13281C9.05837 8.66171 9.24955 8.08885 9.25 7.5V4.16699C9.25 3.89864 9.18799 3.63327 9.06934 3.39258C8.95062 3.15201 8.77826 2.94163 8.56543 2.77832C8.35258 2.61503 8.1049 2.50258 7.8418 2.4502ZM12.9531 2.47656C12.6939 2.40715 12.4214 2.39784 12.1582 2.4502C11.8952 2.50262 11.6473 2.6151 11.4346 2.77832C11.2219 2.94159 11.0493 3.15218 10.9307 3.39258C10.8121 3.63319 10.75 3.89876 10.75 4.16699V7.5C10.7505 8.08878 10.9417 8.66174 11.2949 9.13281C11.6482 9.60384 12.1449 9.94792 12.71 10.1133C13.1075 10.2295 13.3359 10.6464 13.2197 11.0439C13.1034 11.4413 12.6874 11.6687 12.29 11.5527C11.7209 11.3863 11.1979 11.1016 10.75 10.7236V14.9834C10.7501 14.9885 10.751 14.9939 10.751 14.999C10.7514 15.3521 10.8242 15.7016 10.9648 16.0254C11.1055 16.3492 11.3107 16.6416 11.5684 16.8828C11.826 17.1239 12.1307 17.3097 12.4629 17.4287C12.7951 17.5476 13.1489 17.597 13.501 17.5742C13.8531 17.5513 14.1976 17.4568 14.5117 17.2959C14.8258 17.135 15.1038 16.9111 15.3281 16.6387C15.5524 16.3661 15.7188 16.0501 15.8164 15.7109C15.8211 15.6946 15.8228 15.6775 15.8271 15.6611C15.5564 15.7172 15.2797 15.75 15 15.75C14.586 15.7499 14.2501 15.414 14.25 15C14.2501 14.586 14.586 14.2502 15 14.25C15.5684 14.25 16.1212 14.0627 16.5723 13.7168C17.0232 13.3707 17.3479 12.885 17.4951 12.3359C17.6423 11.7868 17.6042 11.204 17.3867 10.6787C17.1692 10.1534 16.7843 9.71405 16.292 9.42969C15.9335 9.22258 15.8107 8.76391 16.0176 8.40527C16.1611 8.15688 16.4254 8.02506 16.6934 8.03418C16.7233 7.8928 16.7431 7.7487 16.749 7.60352C16.7648 7.21203 16.6913 6.82181 16.5342 6.46289C16.377 6.10393 16.1403 5.78518 15.8418 5.53125C15.7469 5.4505 15.646 5.37742 15.541 5.31152C15.4787 5.47686 15.4033 5.63806 15.3145 5.79199C15.1072 6.15034 14.6486 6.27344 14.29 6.06641C13.9316 5.85933 13.8089 5.40058 14.0156 5.04199C14.1497 4.80968 14.2285 4.54892 14.2461 4.28125C14.2636 4.01354 14.2198 3.74494 14.1172 3.49707C14.0145 3.24926 13.8559 3.02848 13.6543 2.85156C13.4525 2.67462 13.2123 2.54605 12.9531 2.47656Z" fill="currentColor"/></g><defs><clipPath id="ew-mem"><rect width="20" height="20" fill="white"/></clipPath></defs></svg>`,
 };
 /* eslint-enable max-len */
@@ -74,6 +79,24 @@ function mcpServerToolData(vm, serverId) {
   const builtinList = BUILTIN_TOOL_DETAILS[serverId];
   if (builtinList) return { tools: builtinList, error: null, source: 'builtin' };
 
+  // Bridge/CMA path: servers come from the bridge (fetchMcpServersFromBridge)
+  // with their resolved tools attached; vm.mcpTools is only populated for the
+  // config-sheet path. Use the bridge server's own tools when present.
+  const bridgeServer = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  if (bridgeServer) {
+    const bridgeTools = Array.isArray(bridgeServer.tools) ? bridgeServer.tools : [];
+    if (bridgeTools.length) {
+      const tools = bridgeTools.map((t) => ({ name: t.name, description: t.description || '' }));
+      return { tools, error: null, source: 'live' };
+    }
+    // The bridge resolves each server's tools once, up front — a bridge server
+    // that came back with no tools is NOT "still loading". It couldn't be
+    // reached, failed to authenticate, or exposes none. Surface a terminal
+    // disconnected state (with retry/remove) instead of an endless
+    // "Connecting…" spinner.
+    return { tools: [], error: null, source: 'disconnected' };
+  }
+
   if (!vm.mcpTools) return { tools: [], error: null, source: 'pending' };
 
   const server = (vm.mcpTools.servers || []).find((s) => s.id === serverId);
@@ -101,10 +124,6 @@ function agentsUsingSkill(vm, skillId) {
     if (skills.includes(skillId)) result.push(a.label || a.name || a.id);
   });
   return result;
-}
-
-function isPluginSkill(skillId) {
-  return BUILTIN_AGENTS.some((a) => a.skills?.includes(skillId));
 }
 
 // ─── shared icon constants (used in catalog cards and detail views) ───────────
@@ -135,14 +154,11 @@ function renderViewToggle(vm) {
 }
 
 function renderSkillCard(vm, id) {
-  const body = vm.skills[id] || '';
-  const title = extractTitle(body);
-  const status = vm.skillStatuses[id] || STATUS.APPROVED;
+  const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
-  const isDraft = status === STATUS.DRAFT;
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const usedBy = agentsUsingSkill(vm, id);
-  const approxTokens = Math.round(body.length / 4);
-  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
+  const lineCount = vm.skillLineCounts[id] || 0;
 
   return html`
     <article class="plugin-card ${isViewing ? 'is-selected' : ''}"
@@ -157,28 +173,26 @@ function renderSkillCard(vm, id) {
       <header class="plugin-card-top">
         <span class="plugin-card-pill">${SKILL_ICON}</span>
         <div class="plugin-card-identity">
-          <span class="plugin-card-name">${id}</span>
+          <span class="plugin-card-name">${displayName}</span>
         </div>
       </header>
-      ${title ? html`<p class="plugin-card-desc">${title}</p>` : nothing}
       <footer class="plugin-card-meta">
         ${usedBy.length ? html`
           ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
-        <span class="plugin-card-badge">${isDraft ? 'DRAFT' : 'APPROVED'}</span>
-        <span class="plugin-card-count" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
+        ${isPersonal ? html`<span class="plugin-card-badge">Personal</span>` : nothing}
+        <span class="plugin-card-count" title="Line count">${lineCount} lines</span>
       </footer>
     </article>
   `;
 }
 
 function renderSkillRow(vm, id) {
-  const body = vm.skills[id] || '';
-  const title = extractTitle(body);
+  const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
   const usedBy = agentsUsingSkill(vm, id);
-  const approxTokens = Math.round(body.length / 4);
-  const tokenLabel = approxTokens >= 1000 ? `~${Math.round(approxTokens / 1000)}k` : `~${approxTokens}`;
+  const lineCount = vm.skillLineCounts[id] || 0;
 
   return html`
     <div class="catalog-row ${isViewing ? 'is-selected' : ''}" role="button"
@@ -192,14 +206,14 @@ function renderSkillRow(vm, id) {
       <span class="catalog-row-pill">${SKILL_ICON}</span>
       <div class="catalog-row-body">
         <div class="catalog-row-title-line">
-          <span class="catalog-row-name">${id}</span>
+          <span class="catalog-row-name">${displayName}</span>
+          ${isPersonal ? html`<span class="catalog-row-meta">Personal</span>` : nothing}
           ${usedBy.length ? html`
             <span class="catalog-row-meta">⚡ ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
           ` : nothing}
         </div>
-        ${title ? html`<span class="catalog-row-desc">${title}</span>` : nothing}
       </div>
-      <span class="catalog-row-meta" title="Approximate token count (1 token ≈ 4 chars)">${tokenLabel}</span>
+      <span class="catalog-row-meta" title="Line count">${lineCount} lines</span>
       ${DRILL_CHEVRON}
     </div>
   `;
@@ -214,14 +228,18 @@ function renderSkillDetail(vm) {
   const body = vm.skills[id] || '';
   const fm = parseFrontmatter(body);
   const name = fm?.fields?.name || id;
-  const description = fm?.fields?.description || extractTitle(body) || '';
-  const status = vm.skillStatuses[id] || STATUS.APPROVED;
-  const isDraft = status === STATUS.DRAFT;
-  const usedBy = agentsUsingSkill(vm, id);
-  const readOnly = isPluginSkill(id);
-  const pluginName = usedBy.length ? usedBy[0] : null;
-  const origin = readOnly ? 'built-in' : 'user-created';
-  const badgeLabel = isDraft ? 'DRAFT' : 'APPROVED';
+  // A bare block-scalar indicator (">", "|", with optional chomp/indent) means
+  // an upstream parser failed to fold a multi-line description — treat it as
+  // absent so we fall through to the locally-parsed SKILL.md value.
+  const isDegenerate = (s) => !s || /^[|>][+-]?\d*$/.test(s);
+  const aoDesc = (vm.skillDescriptions[id] || '').trim();
+  const fmDesc = (fm?.fields?.description || '').trim();
+  const description = (!isDegenerate(aoDesc) && aoDesc)
+    || (!isDegenerate(fmDesc) && fmDesc)
+    || extractTitle(body)
+    || '';
+  const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
+  const readOnly = !isPersonal;
 
   return html`
     <div class="skill-detail">
@@ -230,28 +248,16 @@ function renderSkillDetail(vm) {
           <span class="skill-detail-icon">${TAB_ICON_MAP[TAB_SKILLS]}</span>
           <div>
             <span class="skill-detail-name">${name}</span>
-            <span class="skill-detail-sub">
-              ${pluginName ? html`${PLUGIN_ICON} Plugin: ${pluginName}` : html`${origin}`}
-            </span>
           </div>
         </div>
         ${!readOnly ? html`
           <div class="skill-detail-actions">
-            <button type="button" class="skill-detail-action-btn"
-              @click=${() => vm.onChangeSkillStatus(id, isDraft ? STATUS.APPROVED : STATUS.DRAFT)}
-            >${isDraft ? 'Approve' : 'Move to Draft'}</button>
-            <button type="button" class="skill-detail-action-btn"
-              @click=${() => vm.onEditSkill(id)}
-            >Edit</button>
             <button type="button" class="skill-detail-action-btn is-negative"
               @click=${() => vm.onDeleteSkillById(id)}
             >Delete</button>
           </div>
         ` : nothing}
       </header>
-
-      <span class="skill-detail-badge ${isDraft ? 'is-draft' : ''}">${readOnly ? 'BUILT-IN' : badgeLabel}</span>
-
       <div class="skill-detail-description">
         ${description || 'No description provided.'}
       </div>
@@ -276,7 +282,6 @@ function agentMcpServerIds(agent, isBuiltin) {
 
 function renderAgentCard(vm, agent, isBuiltin = false) {
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
-  const description = agent.description || agent.preset?.description || '';
   const skills = agentSkillIds(agent);
   const mcps = agentMcpServerIds(agent, isBuiltin);
   const skillCount = skills.length;
@@ -296,7 +301,6 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
           <span class="plugin-card-source">${isBuiltin ? 'built-in' : 'custom'}</span>
         </div>
       </header>
-      ${description ? html`<p class="plugin-card-desc">${description}</p>` : nothing}
       <footer class="plugin-card-meta">
         ${skillCount ? html`<span class="plugin-card-count">${skillCount} Skill${skillCount > 1 ? 's' : ''}</span>` : nothing}
         ${mcpCount ? html`<span class="plugin-card-count">${mcpCount} MCP${mcpCount > 1 ? 's' : ''}</span>` : nothing}
@@ -304,9 +308,9 @@ function renderAgentCard(vm, agent, isBuiltin = false) {
           <span class="plugin-card-badge is-builtin">Built-in</span>
         ` : html`
           <button type="button" class="plugin-card-action is-uninstall"
-            aria-label="Uninstall agent ${title}"
+            aria-label="Remove agent ${title}"
             @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-          >Uninstall</button>
+          >Remove</button>
         `}
       </footer>
     </article>
@@ -338,9 +342,9 @@ function renderAgentRow(vm, agent, isBuiltin = false) {
       </div>
       ${isBuiltin ? nothing : html`
         <button type="button" class="plugin-row-action is-uninstall"
-          aria-label="Uninstall agent ${title}"
+          aria-label="Remove agent ${title}"
           @click=${(e) => { e.stopPropagation(); vm.onDeleteAgent(agent); }}
-        >× Uninstall</button>
+        >× Remove</button>
       `}
       ${DRILL_CHEVRON}
     </div>
@@ -357,7 +361,6 @@ function renderPluginDetail(vm) {
 
   const isBuiltin = BUILTIN_AGENTS.some((a) => a.id === agent.id);
   const title = agent.label || agent.name || agent.preset?.name || agent.id;
-  const source = isBuiltin ? 'built-in' : 'custom';
   const description = agent.description || agent.preset?.description || '';
   const skillIds = agentSkillIds(agent);
   const isGrid = vm.catalogViewMode === 'grid';
@@ -369,14 +372,13 @@ function renderPluginDetail(vm) {
           <span class="skill-detail-icon">${PLUGIN_ICON}</span>
           <div>
             <span class="skill-detail-name">${title}</span>
-            <span class="skill-detail-sub">${source}</span>
           </div>
         </div>
         ${!isBuiltin ? html`
           <div class="skill-detail-actions">
             <button type="button" class="skill-detail-action-btn is-negative"
               @click=${() => vm.onDeleteAgent(agent)}
-            >Uninstall</button>
+            >Remove</button>
           </div>
         ` : nothing}
       </header>
@@ -420,6 +422,13 @@ const CHAT_TOGGLE_ICON = html`<svg class="chat-toggle-icon" viewBox="0 0 20 20" 
 // ─── exported render functions ────────────────────────────────────────────────
 
 export function renderTopNav(vm) {
+  // Marketplace (bridge-only, Claude-plugin concept) needs both Coworker
+  // enabled AND the site routed to the CMA bridge - CMA routing alone isn't
+  // enough (see EW_COWORKER_FLAG's doc comment in constants.js). Everything
+  // else keeps the static tab list.
+  const items = vm.marketplaceAvailable
+    ? TAB_ITEMS
+    : TAB_ITEMS.filter((t) => t.id !== TAB_MARKETPLACE);
   return html`
     <nav class="top-nav" aria-label="Skills Editor navigation">
       ${!vm.isChatOpen ? html`<button type="button"
@@ -429,7 +438,7 @@ export function renderTopNav(vm) {
       >${CHAT_TOGGLE_ICON}</button>` : nothing}
       <div class="nav-pill">
         <nx-tabs
-          .items=${TAB_ITEMS}
+          .items=${items}
           .active=${vm.catalogTab}
           @tab-change=${(e) => vm.onTabChange(e.detail.id)}
         ></nx-tabs>
@@ -439,13 +448,20 @@ export function renderTopNav(vm) {
 }
 
 export function renderChatDrawer(vm) {
+  // CMA sites get nx-chat-ao (which routes to the bridge via its
+  // harnessConfig); everything else gets the da-agent nx-chat. The editor
+  // imports the matching component before this renders (_ensureChatLoaded).
+  const chatEl = vm.chatCma
+    ? html`<nx-chat-ao
+        agent-id=${vm.chatAgentId || nothing}
+        .harnessConfig=${vm.chatHarnessConfig}
+      ></nx-chat-ao>`
+    : html`<nx-chat agent-id=${vm.chatAgentId || nothing}></nx-chat>`;
   return html`
     <div class="chat-drawer" aria-hidden=${vm.isChatOpen ? 'false' : 'true'}
       ?inert=${!vm.isChatOpen}
       @nx-panel-close=${(e) => { e.stopPropagation(); vm.onToggleChat(); }}>
-      ${vm.isChatOpen ? html`
-        <nx-chat agent-id=${vm.chatAgentId || nothing}></nx-chat>
-      ` : nothing}
+      ${vm.isChatOpen ? chatEl : nothing}
     </div>
   `;
 }
@@ -462,7 +478,9 @@ function renderDetailView(vm) {
   const isPrompt = tab === TAB_PROMPTS;
   const isMcp = tab === TAB_MCPS;
   const isAgent = tab === TAB_AGENTS;
+  const isMarketplace = tab === TAB_MARKETPLACE;
   const isMemory = tab === TAB_MEMORY;
+  const isContext = tab === TAB_CONTEXT;
 
   const skillDrillDown = isSkill && vm.viewingSkillId && !vm.isFormEdit;
   if (skillDrillDown) {
@@ -476,20 +494,32 @@ function renderDetailView(vm) {
     `;
   }
 
+  const marketplaceDrillDown = isMarketplace && vm.viewingPluginName;
+  if (marketplaceDrillDown) {
+    return html`
+      <div class="detail-view">
+        <button type="button" class="detail-back-btn"
+          @click=${() => vm.onCloseEditor()}
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Marketplace'}</span></button>
+        ${renderMarketplacePluginDetail(vm)}
+      </div>
+    `;
+  }
+
   const pluginDrillDown = isAgent && vm.isAgentViewTools && vm.selectedAgentId;
   if (pluginDrillDown) {
     return html`
       <div class="detail-view">
         <button type="button" class="detail-back-btn"
           @click=${() => vm.onCloseEditor()}
-        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Plugins'}</span></button>
+        >${BACK_ARROW_ICON}<span>${TAB_LABEL_MAP[tab] || 'Agents'}</span></button>
         ${renderPluginDetail(vm)}
       </div>
     `;
   }
 
   const title = editorTitle(vm, tab);
-  const showBack = tab !== TAB_MEMORY;
+  const showBack = tab !== TAB_MEMORY && tab !== TAB_CONTEXT;
   const backLabel = (isSkill && vm.viewingSkillId)
     ? vm.viewingSkillId
     : (TAB_LABEL_MAP[tab] || 'List');
@@ -501,35 +531,45 @@ function renderDetailView(vm) {
           @click=${() => vm.onCloseEditor()}
         >${BACK_ARROW_ICON}<span>${backLabel}</span></button>
       ` : nothing}
-      <div class="editor-header">
-        <h3 class="editor-title">${title}</h3>
-      </div>
+      ${!isContext ? html`
+        <div class="editor-header">
+          <h3 class="editor-title">${title}</h3>
+        </div>
+      ` : nothing}
       ${vm.isFormDirty && !isMcp ? html`
         <div class="dirty-notice" role="status">Unsaved edits · save to persist</div>
       ` : nothing}
-      <div class="editor-body ${isMemory ? 'editor-body-memory' : ''} ${isSkill ? 'editor-body-skill' : ''}">
+      <div class="editor-body ${isMemory ? 'editor-body-memory' : ''} ${isSkill ? 'editor-body-skill' : ''} ${isContext ? 'editor-body-context' : ''}">
         ${isSkill ? renderSkillForm(vm) : nothing}
         ${isAgent && !vm.isAgentViewTools ? renderAgentForm(vm) : nothing}
         ${isPrompt ? renderPromptForm(vm) : nothing}
         ${isMcp && (vm.editingMcpKey || !vm.viewingMcpServerId)
-          ? renderMcpForm(vm) : nothing}
+      ? renderMcpForm(vm) : nothing}
         ${isMcp && vm.viewingMcpServerId && !vm.editingMcpKey
-          ? renderMcpServerInfo(vm) : nothing}
+      ? renderMcpServerInfo(vm) : nothing}
         ${isMcp && (vm.viewingMcpServerId || vm.editingMcpKey)
-          ? renderMcpToolsList(vm) : nothing}
+      ? renderMcpToolsList(vm) : nothing}
         ${isMemory ? html`
           <p class="form-hint">.da/agent/memory.md</p>
           ${renderMemoryContent(vm)}
         ` : nothing}
+        ${isContext ? renderContextContent(vm) : nothing}
       </div>
       ${(isSkill || (isAgent && !vm.isAgentViewTools) || isPrompt
-        || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
+      || (isMcp && (!vm.viewingMcpServerId || vm.editingMcpKey))) ? html`
         <div class="editor-footer">
           ${renderEditorFooter(vm, tab)}
         </div>
       ` : nothing}
     </div>
   `;
+}
+
+function renderMarketplaceTabContent(vm) {
+  if (!vm.marketplaceAvailable) {
+    return html`<div class="empty">Marketplace requires Coworker to be enabled on the bridge harness for this site.</div>`;
+  }
+  return renderMarketplaceCatalog(vm);
 }
 
 function renderCatalogView(vm) {
@@ -548,11 +588,13 @@ function renderCatalogView(vm) {
           </div>
           ${TAB_ACTIONS[tab] ? html`
             <button type="button" class="new-btn"
-              ?disabled=${TAB_ACTIONS[tab].disabled || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])}
+              ?disabled=${TAB_ACTIONS[tab].disabled
+                || (TAB_ACTIONS[tab].canWriteKey && !vm[TAB_ACTIONS[tab].canWriteKey])
+                || (TAB_ACTIONS[tab].requiresKey && !vm[TAB_ACTIONS[tab].requiresKey])}
               @click=${() => {
-                const { opener } = TAB_ACTIONS[tab];
-                if (opener && typeof vm[opener] === 'function') vm[opener]();
-              }}
+        const { opener } = TAB_ACTIONS[tab];
+        if (opener && typeof vm[opener] === 'function') vm[opener]();
+      }}
             >${ACTION_ICONS[TAB_ACTIONS[tab].icon] ? html`<span class="new-btn-icon">${ACTION_ICONS[TAB_ACTIONS[tab].icon]}</span>` : nothing}${TAB_ACTIONS[tab].btnLabel}</button>
           ` : nothing}
         </div>
@@ -573,17 +615,17 @@ function renderCatalogView(vm) {
       ${tab === TAB_AGENTS ? renderAgentsCatalog(vm) : nothing}
       ${tab === TAB_PROMPTS ? renderPromptsCatalog(vm) : nothing}
       ${tab === TAB_MCPS ? renderMcpsCatalog(vm) : nothing}
-      ${tab === TAB_MARKETPLACE ? html`<div class="empty">Coming soon</div>` : nothing}
+      ${tab === TAB_MARKETPLACE ? renderMarketplaceTabContent(vm) : nothing}
     </div>
   `;
 }
 
 export function renderListCol(vm) {
-  const isMemoryDirect = vm.catalogTab === TAB_MEMORY;
+  const isDirectView = vm.catalogTab === TAB_MEMORY || vm.catalogTab === TAB_CONTEXT;
 
   return html`
     <div class="col col-list" role="region" aria-label="Catalog">
-      ${vm.isEditorOpen || isMemoryDirect
+      ${vm.isEditorOpen || isDirectView
         ? renderDetailView(vm)
         : renderCatalogView(vm)}
     </div>
@@ -693,30 +735,30 @@ export function renderAssociatedToolsSelector(vm) {
         <ul class="tools-group-list" aria-label="${ns} tools">
           ${!tools.length ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
           ${tools.map((toolId) => {
-            const isActive = selected.has(toolId);
-            return html`
+      const isActive = selected.has(toolId);
+      return html`
               <li class="tool-item ${isActive ? 'is-active' : ''}">
                 <span class="tool-dot ${isActive ? 'is-dot-active' : 'is-dot-inactive'}" aria-hidden="true"></span>
                 <label class="tool-label-wrap" title=${toolId}>
                   <input type="checkbox" class="tool-checkbox"
                     .checked=${isActive}
                     @change=${(e) => {
-                      const prevTools = vm.formPromptTools ? [...vm.formPromptTools] : [];
-                      const next = new Set(prevTools);
-                      if (e.target.checked) next.add(toolId);
-                      else next.delete(toolId);
-                      vm.setFormPromptTools([...next]);
-                      const { serverId, toolName } = vm.parseToolId(toolId);
-                      vm.onToggleToolEnabled(serverId, toolName, e.target.checked, () => {
-                        vm.setFormPromptTools(prevTools);
-                      });
-                    }}
+          const prevTools = vm.formPromptTools ? [...vm.formPromptTools] : [];
+          const next = new Set(prevTools);
+          if (e.target.checked) next.add(toolId);
+          else next.delete(toolId);
+          vm.setFormPromptTools([...next]);
+          const { serverId, toolName } = vm.parseToolId(toolId);
+          vm.onToggleToolEnabled(serverId, toolName, e.target.checked, () => {
+            vm.setFormPromptTools(prevTools);
+          });
+        }}
                   >
                   <span class="tool-label">${toolId}</span>
                 </label>
               </li>
             `;
-          })}
+    })}
         </ul>
       </details>
     `;
@@ -770,8 +812,8 @@ export function renderMcpForm(vm) {
       <div class="mcp-auth-section ${hasSecret ? 'is-sensitive' : ''}">
         <p class="form-hint">HTTP headers (optional — e.g. Authorization, x-api-key)</p>
         ${headers.map((h, i) => {
-          const masked = isSensitiveHeaderName(h.name);
-          return html`
+    const masked = isSensitiveHeaderName(h.name);
+    return html`
             <div class="mcp-header-row">
               <input
                 type="text"
@@ -794,7 +836,7 @@ export function renderMcpForm(vm) {
               >✕</button>
             </div>
           `;
-        })}
+  })}
         <button type="button" class="action-btn mcp-header-add"
           @click=${() => vm.addMcpHeader()}
         >+ Add header</button>
@@ -811,11 +853,17 @@ export function renderMcpForm(vm) {
 export function renderMcpServerInfo(vm) {
   const serverId = vm.viewingMcpServerId;
   const builtin = BUILTIN_MCP_SERVERS.find((s) => s.id === serverId);
-  if (!builtin) return nothing;
+  const bridge = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  const server = builtin || bridge;
+  if (!server) return nothing;
+  // Scope-aware badge: agent/preset → built-in; user → personal; org → org.
+  let label = 'built-in';
+  if (!builtin && bridge?.scope === 'user') label = 'personal';
+  else if (!builtin && bridge?.scope === 'org') label = 'org';
   return html`
     <div class="mcp-server-info">
-      <p class="mcp-server-desc">${builtin.description}</p>
-      <span class="badge">built-in</span>
+      <p class="mcp-server-desc">${server.description || server.url || ''}</p>
+      <span class="badge">${label}</span>
     </div>
   `;
 }
@@ -836,6 +884,13 @@ export function renderMcpToolsList(vm) {
   const emptyMsg = () => {
     if (source === 'pending') return 'Connecting to agent to discover tools…';
     if (source === 'unconfigured') return 'Enable this server to discover its tools';
+    if (source === 'disconnected') {
+      return html`
+        <strong>Can’t connect to this MCP server.</strong><br>
+        No tools could be retrieved — it may be unreachable, misconfigured, or
+        failing to authenticate. Retry the connection, or remove the server.
+      `;
+    }
     if (source === 'error') {
       const urlMatch = error?.match(/https?:\/\/\S+/);
       const hint = urlMatch?.[0];
@@ -847,10 +902,10 @@ export function renderMcpToolsList(vm) {
           <span class="mcp-error-hint">Did you mean:
             <a class="mcp-error-url" href="#"
               @click=${(e) => {
-                e.preventDefault();
-                vm.setMcpUrl(hint);
-                vm.onSetStatus(`URL updated to ${hint} — save to apply`, STATUS_TYPE.WARN);
-              }}
+            e.preventDefault();
+            vm.setMcpUrl(hint);
+            vm.onSetStatus(`URL updated to ${hint} — save to apply`, STATUS_TYPE.WARN);
+          }}
             >${hint}</a>?
           </span>
         ` : nothing}
@@ -858,6 +913,10 @@ export function renderMcpToolsList(vm) {
     }
     return 'Server reported 0 tools';
   };
+
+  const bridge = (vm.builtinMcpServers || []).find((s) => s.id === serverId);
+  const removable = Boolean(bridge && (bridge.scope === 'user' || bridge.scope === 'org'));
+  const isBroken = source === 'error' || source === 'disconnected';
 
   return html`
     <div class="mcp-tools-section">
@@ -870,13 +929,29 @@ export function renderMcpToolsList(vm) {
         >
       ` : nothing}
       ${!tools.length
-        ? html`<div class="empty ${source === 'error' ? 'empty-err' : ''}">${emptyMsg()}</div>`
-        : html`
+      ? html`
+          <div class="empty ${isBroken ? 'empty-err' : ''}">${emptyMsg()}</div>
+          ${source === 'disconnected' ? html`
+            <div class="mcp-tools-actions">
+              <button type="button" data-variant="secondary"
+                ?disabled=${vm.isSaveBusy}
+                @click=${() => vm.onRetryMcpTools?.()}
+              >Retry connection</button>
+              ${removable ? html`
+                <button type="button" data-variant="negative"
+                  ?disabled=${vm.isSaveBusy}
+                  @click=${() => vm.onDeleteMcpDirect({ key: bridge.key })}
+                >Remove server</button>
+              ` : nothing}
+            </div>
+          ` : nothing}
+        `
+      : html`
           <ul class="tools-group-list" aria-label="Tools for ${serverId}">
             ${filtered.map((t) => {
-              const key = `${serverId}/${t.name}`;
-              const isEnabled = overrides[key] !== false;
-              return html`
+        const key = `${serverId}/${t.name}`;
+        const isEnabled = overrides[key] !== false;
+        return html`
                 <li class="tool-item ${isEnabled ? 'is-active' : ''}">
                   <label class="tool-label-wrap" title=${t.name}>
                     <input type="checkbox" class="tool-checkbox"
@@ -892,9 +967,9 @@ export function renderMcpToolsList(vm) {
                   </label>
                 </li>
               `;
-            })}
+      })}
             ${filtered.length === 0 && tools.length
-              ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
+          ? html`<li class="tool-item-empty">No tools match filter</li>` : nothing}
           </ul>
         `}
     </div>
@@ -983,9 +1058,9 @@ export function renderEditorFooter(vm, tab) {
           title="Insert prompt text into the chat input without sending"
           ?disabled=${vm.isSaveBusy || !vm.formPromptBody.trim()}
           @click=${() => {
-            vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
-            vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
-          }}
+        vm.onDispatchPromptToChat(DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
+        vm.onDispatchPromptToChat(DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT, vm.formPromptBody);
+      }}
         >Add to Chat</button>
         <button type="button" data-variant="secondary"
           title="Send prompt to the assistant immediately"
@@ -1028,13 +1103,14 @@ export function renderSkillsCatalog(vm) {
   const ids = Object.keys(vm.skills);
   const searchQuery = vm.promptSearch.trim().toLowerCase();
 
-  let filtered = vm.catalogFilter === 'all' ? ids
-    : ids.filter((id) => vm.skillStatuses[id] === vm.catalogFilter);
+  let filtered = vm.catalogFilter === 'personal'
+    ? ids.filter((id) => vm.skillScopes[id] === AO_SCOPE_PERSONAL)
+    : ids;
 
   if (searchQuery) {
     filtered = filtered.filter((id) => {
-      const title = extractTitle(vm.skills[id]).toLowerCase();
-      return id.toLowerCase().includes(searchQuery) || title.includes(searchQuery);
+      const description = (vm.skillDescriptions[id] || '').toLowerCase();
+      return id.toLowerCase().includes(searchQuery) || description.includes(searchQuery);
     });
   }
 
@@ -1042,18 +1118,16 @@ export function renderSkillsCatalog(vm) {
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Filter skills">
-      ${[STATUS.APPROVED, STATUS.DRAFT].map((status) => html`
-        <button type="button"
-          class="filter-chip ${vm.catalogFilter === status ? 'is-active' : ''}"
-          aria-pressed=${vm.catalogFilter === status ? 'true' : 'false'}
-          @click=${() => vm.setCatalogFilter(status)}
-        >${status.charAt(0).toUpperCase() + status.slice(1)}</button>
-      `)}
       <button type="button"
         class="filter-chip ${vm.catalogFilter === 'all' ? 'is-active' : ''}"
         aria-pressed=${vm.catalogFilter === 'all' ? 'true' : 'false'}
         @click=${() => vm.setCatalogFilter('all')}
       >All</button>
+      <button type="button"
+        class="filter-chip ${vm.catalogFilter === 'personal' ? 'is-active' : ''}"
+        aria-pressed=${vm.catalogFilter === 'personal' ? 'true' : 'false'}
+        @click=${() => vm.setCatalogFilter('personal')}
+      >Personal</button>
       ${renderViewToggle(vm)}
     </div>
     ${!filtered.length ? html`<div class="empty">No skills found</div>` : nothing}
@@ -1079,8 +1153,8 @@ function renderDepTree(vm, agent, isBuiltin) {
         </div>
       `)}
       ${mcps.map((mcpId) => {
-        const tools = BUILTIN_TOOL_DETAILS[mcpId] || [];
-        return html`
+    const tools = BUILTIN_TOOL_DETAILS[mcpId] || [];
+    return html`
           <div class="dep-tree-node dep-tree-indent">
             <span class="dep-tree-connector">├─</span>
             <span class="entity-chip entity-chip-mcp">${mcpId}</span>
@@ -1098,7 +1172,7 @@ function renderDepTree(vm, agent, isBuiltin) {
             </div>
           ` : nothing}
         `;
-      })}
+  })}
     </div>
   `;
 }
@@ -1119,7 +1193,7 @@ export function renderAgentsCatalog(vm) {
 
   return html`
     <div class="catalog-toolbar" role="toolbar" aria-label="Agent view controls">
-      <div class="filter-pills" role="tablist" aria-label="Filter plugins">
+      <div class="filter-pills" role="tablist" aria-label="Filter agents">
         <button type="button" class="filter-pill ${filter === 'all' ? 'is-active' : ''}"
           role="tab" aria-selected=${filter === 'all'}
           @click=${() => vm.onSetAgentFilter('all')}
@@ -1138,9 +1212,13 @@ export function renderAgentsCatalog(vm) {
       ${renderViewToggle(vm)}
     </div>
 
-    ${isGrid
+    ${!filtered.length ? html`<div class="empty">No agents yet. Agent presets live in <code>.da/agents/</code>.</div>` : nothing}
+    ${filtered.length && isGrid
       ? html`<div class="plugin-grid">${filtered.map(({ agent, builtin }) => renderAgentCard(vm, agent, builtin))}</div>`
-      : html`<div class="catalog-list">${filtered.map(({ agent, builtin }) => renderAgentRow(vm, agent, builtin))}</div>`}
+      : nothing}
+    ${filtered.length && !isGrid
+      ? html`<div class="catalog-list">${filtered.map(({ agent, builtin }) => renderAgentRow(vm, agent, builtin))}</div>`
+      : nothing}
   `;
 }
 
@@ -1158,12 +1236,12 @@ export function renderPromptsCatalog(vm) {
   return html`
     <div class="prompt-list" role="list" aria-label="Prompts">
       ${prompts.map((row) => {
-        const title = row.title || '';
-        const isSelected = vm.isEditorOpen && vm.isFormPromptEdit
-          && vm.formPromptTitle === title;
-        const cat = (row.category || '').toLowerCase().trim();
-        const catClass = KNOWN_CATEGORY_CLASSES.has(cat) ? cat : 'default';
-        return html`
+    const title = row.title || '';
+    const isSelected = vm.isEditorOpen && vm.isFormPromptEdit
+      && vm.formPromptTitle === title;
+    const cat = (row.category || '').toLowerCase().trim();
+    const catClass = KNOWN_CATEGORY_CLASSES.has(cat) ? cat : 'default';
+    return html`
           <article role="listitem" data-testid="prompt-card" data-prompt-title=${title}>
             <div class="prompt-row ${isSelected ? 'is-selected' : ''}" role="button"
               tabindex="0"
@@ -1187,40 +1265,61 @@ export function renderPromptsCatalog(vm) {
             </div>
           </article>
         `;
-      })}
+  })}
     </div>
   `;
 }
 
 function mcpShared(vm, s, isBuiltin) {
-  const key = isBuiltin ? s.id : (s.key || '');
+  // A bridge override (user/org scope) is user/admin-registered: it shows the
+  // bridge-resolved tools like a built-in, but is deletable and labelled by
+  // scope rather than "Built-in".
+  const isOverride = !isBuiltin && (s.scope === 'user' || s.scope === 'org');
+  const viewTools = isBuiltin || isOverride; // click opens the tools view vs the edit form
+  const key = (isBuiltin || isOverride) ? s.id : (s.key || '');
   const desc = isBuiltin ? s.description : (s.url || s.value || '');
-  const toolCount = isBuiltin
-    ? (BUILTIN_TOOL_DETAILS[s.id]?.length || 0)
-    : mcpServerToolData(vm, key).tools.length;
+  let toolCount;
+  if (isBuiltin || isOverride) {
+    toolCount = Array.isArray(s.tools) ? s.tools.length : (BUILTIN_TOOL_DETAILS[s.id]?.length || 0);
+  } else {
+    toolCount = mcpServerToolData(vm, key).tools.length;
+  }
   let transport = '';
   if (!isBuiltin) transport = s.url ? 'HTTP' : 'stdio';
-  const isSelected = isBuiltin
-    ? vm.viewingMcpServerId === s.id && !vm.editingMcpKey
+  // Scope-based label: agent/preset servers (the AEM MCPs) are ALWAYS
+  // "Built-in"; a server the user/admin registered is "Personal"/"Org"; a
+  // config-sheet row is "Custom".
+  let scopeLabel = 'Built-in';
+  if (!isBuiltin) {
+    if (s.scope === 'user') scopeLabel = 'Personal';
+    else if (s.scope === 'org') scopeLabel = 'Org';
+    else scopeLabel = 'Custom';
+  }
+  // Agent/preset built-ins are fixed; overrides and config rows are removable.
+  const canDelete = !isBuiltin;
+  const isSelected = viewTools
+    ? vm.viewingMcpServerId === key && !vm.editingMcpKey
     : vm.isEditorOpen && (vm.editingMcpKey === key || vm.viewingMcpServerId === key);
-  const onClick = isBuiltin
-    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(s.id))
+  const onClick = viewTools
+    ? (e) => vm.onMcpCardClick(e, () => vm.onViewMcpTools(key))
     : (e) => vm.onMcpCardClick(e, () => vm.onEditMcp(s));
-  const onKey = isBuiltin
-    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(s.id))
+  const onKey = viewTools
+    ? (e) => vm.onMcpCardKeydown(e, () => vm.onViewMcpTools(key))
     : (e) => vm.onMcpCardKeydown(e, () => vm.onEditMcp(s));
-  let badge = 'BUILT-IN';
-  if (!isBuiltin) badge = (skillRowStatus(s) === STATUS.APPROVED && skillRowEnabled(s)) ? 'CONNECTED' : 'DISABLED';
-  return { key, desc, toolCount, transport, isSelected, onClick, onKey, badge };
+  return {
+    key, desc, toolCount, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  };
 }
 
 function renderMcpCard(vm, s, isBuiltin) {
-  const { key, desc, toolCount, transport, isSelected, onClick, onKey, badge } = mcpShared(vm, s, isBuiltin);
+  const {
+    key, desc, toolCount, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  } = mcpShared(vm, s, isBuiltin);
 
   return html`
     <article class="plugin-card ${isSelected ? 'is-selected' : ''}"
       role="button" tabindex="0"
-      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      aria-label="${viewTools ? 'View' : 'Edit'} MCP server ${key}"
       data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
       data-mcp-key=${key}
       @click=${onClick} @keydown=${onKey}
@@ -1234,9 +1333,9 @@ function renderMcpCard(vm, s, isBuiltin) {
         ${transport ? html`<span class="plugin-card-badge">${transport}</span>` : nothing}
       </header>
       <footer class="plugin-card-meta">
-        <span class="plugin-card-badge">${badge}</span>
+        <span class="skill-detail-badge plugin-card-badge">${scopeLabel}</span>
         <span class="plugin-card-count">${toolCount} tools</span>
-        ${!isBuiltin ? html`
+        ${canDelete ? html`
           <button type="button" class="plugin-card-action is-uninstall"
             aria-label="Delete MCP server ${key}"
             data-testid="mcp-delete-btn"
@@ -1249,11 +1348,13 @@ function renderMcpCard(vm, s, isBuiltin) {
 }
 
 function renderMcpRow(vm, s, isBuiltin) {
-  const { key, desc, transport, isSelected, onClick, onKey } = mcpShared(vm, s, isBuiltin);
+  const {
+    key, desc, transport, scopeLabel, canDelete, viewTools, isSelected, onClick, onKey,
+  } = mcpShared(vm, s, isBuiltin);
 
   return html`
     <div class="catalog-row ${isSelected ? 'is-selected' : ''}" role="button" tabindex="0"
-      aria-label="${isBuiltin ? 'View' : 'Edit'} MCP server ${key}"
+      aria-label="${viewTools ? 'View' : 'Edit'} MCP server ${key}"
       data-testid=${isBuiltin ? 'mcp-builtin-card' : 'mcp-card'}
       data-mcp-key=${key}
       @click=${onClick} @keydown=${onKey}
@@ -1262,10 +1363,10 @@ function renderMcpRow(vm, s, isBuiltin) {
       <div class="catalog-row-body">
         <div class="catalog-row-title-line">
           <span class="catalog-row-name">${key || '(unnamed)'}</span>
-          <span class="catalog-row-meta">${desc} · ${transport || 'built-in'}</span>
+          <span class="catalog-row-meta">${desc} · ${scopeLabel}${transport ? ` · ${transport}` : ''}</span>
         </div>
       </div>
-      ${!isBuiltin ? html`
+      ${canDelete ? html`
         <button type="button" class="plugin-row-action is-uninstall"
           aria-label="Delete MCP server ${key}"
           data-testid="mcp-delete-btn"
@@ -1280,9 +1381,35 @@ function renderMcpRow(vm, s, isBuiltin) {
 export function renderMcpsCatalog(vm) {
   const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
-  let filteredCustom = vm.mcpRows.filter((row) => filterPasses(skillRowStatus(row)));
+
+  // On the CMA/bridge path the connected list is the CMA agent's real
+  // MCP servers (vm.builtinMcpServers), each tagged with a scope. Agent-scope
+  // servers are the true built-ins (e.g. the AEM MCPs) — view-only. user/org
+  // scope servers are user/admin-registered overrides the bridge returns here
+  // too; split them out so they render as deletable "Custom"/Personal entries
+  // instead of masquerading as built-ins.
+  const bridgeServers = vm.builtinMcpServers || [];
+  const hasBridge = bridgeServers.length > 0;
+  const connected = hasBridge
+    ? bridgeServers.filter((s) => (s.scope ?? 'agent') === 'agent')
+    : BUILTIN_MCP_SERVERS;
+  // Normalize overrides to the custom-row shape so the existing delete handler
+  // (keyed by `key`) works — the bridge card's `id` IS the override entry's key.
+  const overrideRows = hasBridge
+    ? bridgeServers
+      .filter((s) => s.scope === 'user' || s.scope === 'org')
+      .map((s) => ({
+        key: s.id,
+        id: s.id,
+        url: s.url || s.description || '',
+        scope: s.scope,
+        tools: Array.isArray(s.tools) ? s.tools : [],
+      }))
+    : [];
+
+  let custom = [...overrideRows, ...vm.mcpRows].filter((row) => filterPasses(skillRowStatus(row)));
   if (searchQuery) {
-    filteredCustom = filteredCustom.filter((row) => {
+    custom = custom.filter((row) => {
       const key = (row.key || '').toLowerCase();
       const url = (row.url || row.value || '').toLowerCase();
       return key.includes(searchQuery) || url.includes(searchQuery);
@@ -1296,15 +1423,343 @@ export function renderMcpsCatalog(vm) {
       ${renderViewToggle(vm)}
     </div>
     ${showBuiltins ? html`
-      <h3 class="section-h">Connected (${BUILTIN_MCP_SERVERS.length})</h3>
+      <h3 class="section-h">Connected (${connected.length})</h3>
       ${isGrid
-        ? html`<div class="plugin-grid">${BUILTIN_MCP_SERVERS.map((s) => renderMcpCard(vm, s, true))}</div>`
-        : html`<div class="catalog-list">${BUILTIN_MCP_SERVERS.map((s) => renderMcpRow(vm, s, true))}</div>`}
+        ? html`<div class="plugin-grid">${connected.map((s) => renderMcpCard(vm, s, true))}</div>`
+        : html`<div class="catalog-list">${connected.map((s) => renderMcpRow(vm, s, true))}</div>`}
     ` : nothing}
-    <h3 class="section-h">Custom (${filteredCustom.length})</h3>
-    ${!filteredCustom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
-    ${filteredCustom.length && isGrid ? html`<div class="plugin-grid">${filteredCustom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
-    ${filteredCustom.length && !isGrid ? html`<div class="catalog-list">${filteredCustom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
+    <h3 class="section-h">Custom (${custom.length})</h3>
+    ${!custom.length ? html`<div class="empty">No custom MCP servers registered</div>` : nothing}
+    ${custom.length && isGrid ? html`<div class="plugin-grid">${custom.map((r) => renderMcpCard(vm, r, false))}</div>` : nothing}
+    ${custom.length && !isGrid ? html`<div class="catalog-list">${custom.map((r) => renderMcpRow(vm, r, false))}</div>` : nothing}
+  `;
+}
+
+// ─── Marketplace plugins (bridge-only - aem-sites-claudebridge#163/#189) ─────────
+
+// Adobe corporate "A" mark, used to badge a plugin whose source is the adobe org.
+const ADOBE_LOGO = html`<svg class="plugin-adobe-logo" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="#EB1000" d="M13.7 1H23v22zM10.3 1H1v22zM12 8l5.2 15h-3.3l-1.5-4.6H9z"/></svg>`;
+
+function marketplaceInstalledEntry(vm, name) {
+  return (vm.plugins || []).find((p) => (p?.ref || p?.manifest?.name) === name);
+}
+
+// Merged view of a plugin (installed + catalog) for consistent source display.
+function pluginView(vm, name) {
+  return mergeMarketplacePluginView(name, vm.plugins || [], vm.marketplaceCatalog || []);
+}
+
+// The source label ("adobe/skills" + optional Adobe logo + Built-in tag).
+function renderPluginSourceLine(view) {
+  if (!view || (!view.sourceOwner && !view.sourceRepo)) return nothing;
+  return html`<span class="plugin-card-src">
+    ${view.isAdobe ? ADOBE_LOGO : nothing}${view.sourceOwner}/${view.sourceRepo}${view.builtIn ? html` <span class="plugin-src-builtin">Built-in</span>` : nothing}
+  </span>`;
+}
+
+function renderMarketplaceInstalledCard(vm, installed) {
+  const ref = installed?.ref || installed?.manifest?.name || '';
+  const name = installed?.manifest?.name || ref;
+  const description = installed?.manifest?.description || '';
+  const enabled = installed?.enabled !== false;
+  const resolved = installed?.resolved;
+  const skillCount = resolved?.skills?.length || 0;
+  const mcpCount = resolved?.mcpServers?.length || 0;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  const view = pluginView(vm, name);
+  const statusLabel = mcpCount
+    ? `${skillCount} Skill${skillCount === 1 ? '' : 's'} \u00b7 ${mcpCount} MCP${mcpCount === 1 ? '' : 's'}`
+    : `${skillCount} Skill${skillCount === 1 ? '' : 's'}`;
+
+  return html`
+    <article class="plugin-card is-clickable" role="button" tabindex="0"
+      data-testid="plugin-installed-card" data-plugin-ref=${ref}
+      aria-label="View plugin ${name}"
+      @click=${() => vm.onViewPlugin(name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(name); } }}
+    >
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${name}</span>
+          <span class="plugin-card-source" title=${description || nothing}>${description}</span>
+          ${renderPluginSourceLine(view)}
+        </div>
+        <span class="plugin-card-badge">${enabled ? 'Enabled' : 'Disabled'}</span>
+      </header>
+      <footer class="plugin-card-meta">
+        <span class="plugin-card-count"
+          title=${resolved ? nothing : 'Could not resolve this plugin\'s repository - its skills/MCP servers are not available yet'}
+        >${resolved ? statusLabel : 'Not yet available'}</span>
+        <button type="button" class="plugin-card-action"
+          aria-label="${enabled ? 'Disable' : 'Enable'} plugin ${name}"
+          data-testid="plugin-toggle-btn"
+          ?disabled=${isBusy}
+          @click=${(e) => { e.stopPropagation(); vm.onTogglePlugin(ref, !enabled); }}
+        >${enabled ? 'Disable' : 'Enable'}</button>
+        <button type="button" class="plugin-card-action is-uninstall"
+          aria-label="Uninstall plugin ${name}"
+          data-testid="plugin-uninstall-btn"
+          ?disabled=${isBusy}
+          @click=${(e) => { e.stopPropagation(); vm.onUninstallPlugin(ref); }}
+        >${TRASH_ICON}</button>
+      </footer>
+    </article>
+  `;
+}
+
+function renderMarketplaceCatalogCard(vm, entry) {
+  const installed = marketplaceInstalledEntry(vm, entry.name);
+  const isBusy = !!vm.pluginBusyRef?.[entry.name];
+  const view = pluginView(vm, entry.name);
+  return html`
+    <article class="plugin-card is-clickable" role="button" tabindex="0"
+      data-testid="plugin-catalog-card" data-plugin-name=${entry.name}
+      aria-label="View plugin ${entry.name}"
+      @click=${() => vm.onViewPlugin(entry.name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(entry.name); } }}
+    >
+      <header class="plugin-card-top">
+        <span class="plugin-card-pill">${PLUGIN_ICON}</span>
+        <div class="plugin-card-identity">
+          <span class="plugin-card-name">${entry.name}</span>
+          <span class="plugin-card-source" title=${entry.description || nothing}>${entry.description}</span>
+          ${renderPluginSourceLine(view)}
+        </div>
+      </header>
+      <footer class="plugin-card-meta">
+        ${entry.version ? html`<span class="plugin-card-count">v${entry.version}</span>` : nothing}
+        ${installed ? html`
+          <span class="plugin-card-badge">Installed</span>
+        ` : html`
+          <button type="button" class="plugin-card-action"
+            aria-label="Install plugin ${entry.name}"
+            data-testid="plugin-install-btn"
+            ?disabled=${isBusy}
+            @click=${(e) => { e.stopPropagation(); vm.onInstallPlugin(entry); }}
+          >Install</button>
+        `}
+      </footer>
+    </article>
+  `;
+}
+
+// ── list-view rows (mirror the grid cards; share the detail drill-down) ──────
+function renderMarketplaceInstalledRow(vm, installed) {
+  const ref = installed?.ref || installed?.manifest?.name || '';
+  const name = installed?.manifest?.name || ref;
+  const description = installed?.manifest?.description || '';
+  const enabled = installed?.enabled !== false;
+  const resolved = installed?.resolved;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  const view = pluginView(vm, name);
+  const src = view && view.sourceOwner ? `${view.sourceOwner}/${view.sourceRepo}` : '';
+  return html`
+    <div class="catalog-row is-clickable" role="button" tabindex="0"
+      data-testid="plugin-installed-row" data-plugin-ref=${ref}
+      aria-label="View plugin ${name}"
+      @click=${() => vm.onViewPlugin(name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(name); } }}
+    >
+      <span class="catalog-row-pill">${view?.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${name}</span>
+          <span class="catalog-row-meta">${enabled ? 'Enabled' : 'Disabled'}${src ? ` \u00b7 ${src}` : ''}${resolved ? '' : ' \u00b7 not yet available'}</span>
+        </div>
+        ${description ? html`<span class="catalog-row-desc">${description}</span>` : nothing}
+      </div>
+      <button type="button" class="plugin-row-action"
+        aria-label="${enabled ? 'Disable' : 'Enable'} plugin ${name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onTogglePlugin(ref, !enabled); }}
+      >${enabled ? 'Disable' : 'Enable'}</button>
+      <button type="button" class="plugin-row-action is-uninstall"
+        aria-label="Uninstall plugin ${name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onUninstallPlugin(ref); }}
+      >${TRASH_ICON}</button>
+      ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+function renderMarketplaceCatalogRow(vm, entry) {
+  const installed = marketplaceInstalledEntry(vm, entry.name);
+  const isBusy = !!vm.pluginBusyRef?.[entry.name];
+  const view = pluginView(vm, entry.name);
+  const src = view && view.sourceOwner ? `${view.sourceOwner}/${view.sourceRepo}` : '';
+  return html`
+    <div class="catalog-row is-clickable" role="button" tabindex="0"
+      data-testid="plugin-catalog-row" data-plugin-name=${entry.name}
+      aria-label="View plugin ${entry.name}"
+      @click=${() => vm.onViewPlugin(entry.name)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vm.onViewPlugin(entry.name); } }}
+    >
+      <span class="catalog-row-pill">${view?.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+      <div class="catalog-row-body">
+        <div class="catalog-row-title-line">
+          <span class="catalog-row-name">${entry.name}</span>
+          <span class="catalog-row-meta">${entry.version ? `v${entry.version}` : ''}${src ? `${entry.version ? ' \u00b7 ' : ''}${src}` : ''}</span>
+        </div>
+        ${entry.description ? html`<span class="catalog-row-desc">${entry.description}</span>` : nothing}
+      </div>
+      ${installed
+    ? html`<span class="plugin-row-badge">Installed</span>`
+    : html`<button type="button" class="plugin-row-action"
+        aria-label="Install plugin ${entry.name}" ?disabled=${isBusy}
+        @click=${(e) => { e.stopPropagation(); vm.onInstallPlugin(entry); }}
+      >Install</button>`}
+      ${DRILL_CHEVRON}
+    </div>
+  `;
+}
+
+/**
+ * Plugin detail drill-down (click a card/row): full name, full description,
+ * marketplace source (+ Adobe logo when the source is the adobe org), version,
+ * and the same install/enable/disable/uninstall actions as the card.
+ */
+export function renderMarketplacePluginDetail(vm) {
+  const view = pluginView(vm, vm.viewingPluginName);
+  if (!view) return html`<div class="empty">Plugin not found.</div>`;
+  const ref = view.name;
+  const isBusy = !!vm.pluginBusyRef?.[ref];
+  const authorText = authorLabel(view.author);
+  return html`
+    <div class="skill-detail">
+      <header class="skill-detail-header">
+        <div class="skill-detail-identity">
+          <span class="skill-detail-icon">${view.isAdobe ? ADOBE_LOGO : PLUGIN_ICON}</span>
+          <div>
+            <span class="skill-detail-name">${view.name}</span>
+            ${view.sourceOwner ? html`<span class="plugin-detail-source">
+              ${view.sourceOwner}/${view.sourceRepo}${view.builtIn ? html` <span class="plugin-src-builtin">Built-in</span>` : nothing}
+            </span>` : nothing}
+          </div>
+        </div>
+        <div class="skill-detail-actions">
+          ${view.isInstalled ? html`
+            <button type="button" class="plugin-card-action" ?disabled=${isBusy}
+              @click=${() => vm.onTogglePlugin(ref, !view.enabled)}>${view.enabled ? 'Disable' : 'Enable'}</button>
+            <button type="button" class="skill-detail-action-btn is-negative" ?disabled=${isBusy}
+              @click=${() => vm.onUninstallPlugin(ref)}>Uninstall</button>
+          ` : html`
+            <button type="button" class="plugin-card-action" ?disabled=${isBusy}
+              @click=${() => vm.onInstallPlugin({ name: view.name, description: view.description, version: view.version, author: view.author, repository: view.repository })}>Install</button>
+          `}
+        </div>
+      </header>
+      <div class="plugin-detail-meta">
+        ${view.version ? html`<span class="plugin-detail-tag">v${view.version}</span>` : nothing}
+        ${authorText ? html`<span class="plugin-detail-tag">by ${authorText}</span>` : nothing}
+        ${view.isInstalled ? html`<span class="plugin-detail-tag">${view.enabled ? 'Enabled' : 'Disabled'}</span>` : nothing}
+        ${view.isInstalled && !view.resolved ? html`<span class="plugin-detail-tag is-warn">Not yet available</span>` : nothing}
+        ${view.isInstalled && view.resolved ? html`<span class="plugin-detail-tag">${view.skillCount} Skill${view.skillCount === 1 ? '' : 's'}${view.mcpCount ? ` \u00b7 ${view.mcpCount} MCP${view.mcpCount === 1 ? '' : 's'}` : ''}</span>` : nothing}
+      </div>
+      ${view.description ? html`<div class="skill-detail-description">${view.description}</div>` : html`<div class="empty">No description provided.</div>`}
+      ${view.repository ? html`<p class="plugin-detail-repo"><a href=${view.repository} target="_blank" rel="noopener noreferrer">${view.repository}</a></p>` : nothing}
+    </div>
+  `;
+}
+
+/**
+ * The "Marketplace sources" strip: the permanent built-in source plus any
+ * custom ones the caller has registered, each with a Remove action for users
+ * with config-write access (except the built-in one, which has none). Sits
+ * above the Install cards so it's clear the catalog below is the union of
+ * these sources, not one fixed list.
+ *
+ * Registering a source is gated on DA config-write permission
+ * (skills-editor-api.js's canWriteConfig) - DA's own CONFIG ACL, which
+ * da-admin enforces server-side (a config POST without config-write is 403'd
+ * regardless of the UI). Any repo listed here can have its skills/MCP servers
+ * installed into a user's session, so this is a real trust boundary. Users
+ * without config-write still see the registered sources (so they understand
+ * what the catalog below draws from) but get neither the Add form nor a
+ * Remove button.
+ */
+function renderMarketplaceSources(vm) {
+  const custom = vm.marketplaceSources || [];
+  const busy = !!vm.marketplaceSourceBusy;
+  const canManage = !!vm.canManageSources;
+  return html`
+    <div class="marketplace-sources">
+      <span class="marketplace-source-chip is-builtin" data-testid="marketplace-source-builtin">
+        adobe/skills <span class="marketplace-source-badge">Built-in</span>
+      </span>
+      ${custom.map((s) => html`
+        <span class="marketplace-source-chip" data-testid="marketplace-source-chip">
+          ${s.owner}/${s.repo}
+          ${canManage ? html`
+            <button type="button" class="marketplace-source-remove"
+              aria-label="Remove marketplace source ${s.owner}/${s.repo}"
+              data-testid="marketplace-source-remove-btn"
+              ?disabled=${busy}
+              @click=${() => vm.onRemoveMarketplaceSource(s.owner, s.repo)}
+            >&times;</button>
+          ` : nothing}
+        </span>
+      `)}
+    </div>
+    ${canManage ? html`
+      <form class="marketplace-source-form" @submit=${(e) => { e.preventDefault(); vm.onAddMarketplaceSource(); }}>
+        <input type="text" class="marketplace-source-input"
+          placeholder="owner/repo or a github.com URL"
+          aria-label="Add a marketplace source"
+          data-testid="marketplace-source-input"
+          .value=${vm.marketplaceSourceInput || ''}
+          ?disabled=${busy}
+          @input=${(e) => vm.onMarketplaceSourceInput(e.target.value)}
+        />
+        <button type="submit" class="plugin-card-action"
+          data-testid="marketplace-source-add-btn"
+          ?disabled=${busy || !(vm.marketplaceSourceInput || '').trim()}
+        >Add Marketplace</button>
+      </form>
+      <p class="marketplace-source-warning" data-testid="marketplace-source-warning">
+        Only add sources you trust — skills and MCP servers a source lists can be installed into users’ sessions for this site.
+      </p>
+    ` : html`
+      <p class="marketplace-source-admin-note" data-testid="marketplace-source-admin-note">
+        You need config-write access to add or remove marketplace sources.
+      </p>
+    `}
+  `;
+}
+
+/**
+ * The Marketplace tab (issue #189): the caller's personally-installed
+ * plugins (with their materialized skill/MCP counts - or "Not yet
+ * available" when the bridge couldn't resolve the manifest's repository,
+ * see aem-sites-claudebridge#163) above a browsable catalog fetched from the
+ * built-in plus any registered custom source(s) (skills-editor-api.js
+ * fetchMarketplaceCatalog). Bridge-only for install/enable/disable -
+ * renderTopNav hides this tab entirely off the CMA harness.
+ */
+export function renderMarketplaceCatalog(vm) {
+  const installed = vm.plugins || [];
+  const catalog = vm.marketplaceCatalog || [];
+  const isGrid = vm.catalogViewMode === 'grid';
+
+  return html`
+    <h3 class="section-h">Marketplace sources</h3>
+    ${renderMarketplaceSources(vm)}
+    ${vm.marketplaceCatalogError ? html`
+      <div class="empty">
+        Could not load the marketplace catalog.
+        <button type="button" class="plugin-card-action" @click=${() => vm.onRetryMarketplace()}>Retry</button>
+      </div>
+    ` : nothing}
+    <div class="catalog-toolbar" role="toolbar" aria-label="Plugin view controls">
+      ${renderViewToggle(vm)}
+    </div>
+    <h3 class="section-h">Installed (${installed.length})</h3>
+    ${!installed.length ? html`<div class="empty">No plugins installed yet</div>` : nothing}
+    ${installed.length && isGrid ? html`<div class="plugin-grid">${installed.map((p) => renderMarketplaceInstalledCard(vm, p))}</div>` : nothing}
+    ${installed.length && !isGrid ? html`<div class="catalog-list">${installed.map((p) => renderMarketplaceInstalledRow(vm, p))}</div>` : nothing}
+    <h3 class="section-h">Browse marketplace (${catalog.length})</h3>
+    ${!catalog.length && !vm.marketplaceCatalogError ? html`<div class="empty">Loading\u2026</div>` : nothing}
+    ${catalog.length && isGrid ? html`<div class="plugin-grid">${catalog.map((entry) => renderMarketplaceCatalogCard(vm, entry))}</div>` : nothing}
+    ${catalog.length && !isGrid ? html`<div class="catalog-list">${catalog.map((entry) => renderMarketplaceCatalogRow(vm, entry))}</div>` : nothing}
   `;
 }
 
@@ -1316,4 +1771,12 @@ export function renderMemoryContent(vm) {
     return html`<div class="empty">No project memory yet. The DA agent writes here as it learns about your site.</div>`;
   }
   return html`<div class="memory-cm-host"></div>`;
+}
+
+export function renderContextContent(_vm) {
+  return html`
+    <iframe class="egov-mfe-iframe" title="Experience Governance"
+      allow="clipboard-write"
+      src=${resolveEgovEmbedUrl()}></iframe>
+  `;
 }

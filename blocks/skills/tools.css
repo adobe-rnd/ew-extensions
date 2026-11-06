@@ -175,6 +175,12 @@
 
 .mcp-tools-section .empty-err { color: var(--s2-red-700); }
 
+.mcp-tools-section .mcp-tools-actions {
+  display: flex;
+  gap: var(--s2-spacing-100);
+  margin-top: var(--s2-spacing-100);
+}
+
 /* ─── MCP server info (read-only built-in view) ─────────────────────────────── */
 
 .mcp-server-info {

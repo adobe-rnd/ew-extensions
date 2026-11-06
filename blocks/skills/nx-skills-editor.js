@@ -4,10 +4,21 @@ import { toSafeId } from './utils/sheet-utils.js';
 import './shared/tabs/tabs.js';
 import './shared/card/card.js';
 import './shared/popover/popover.js';
+import { showToast, VARIANT_SUCCESS, VARIANT_ERROR, VARIANT_WARNING } from './shared/toast/toast.js';
 import {
   fetchDaConfigSheets,
-  loadSkillsWithStatuses,
-  syncOrphanSkillsToConfig,
+  fetchEwFlags,
+  loadSkillsFromAo,
+  fetchSkillFileResultFromAo,
+  uploadSkillFileToAo,
+  updateSkillOnAo,
+  removePersonalSkillSource,
+  markSkillDeleted,
+  setSkillsBackend,
+  isSkillsBackendCma,
+  resolveCmaHarness,
+  fetchMcpServersFromBridge,
+  AO_SCOPE_PERSONAL,
   upsertSkillInConfig,
   deleteSkillFromConfig,
   writeSkillMdFile,
@@ -25,6 +36,16 @@ import {
   registerMcpServer,
   setMcpServerEnabled,
   deleteMcpServer,
+  fetchMarketplaceCatalog,
+  loadInstalledPlugins,
+  loadMarketplaceSources,
+  addMarketplaceSource,
+  removeMarketplaceSource,
+  canWriteConfig,
+  BUILT_IN_MARKETPLACE_SOURCES,
+  installPlugin,
+  setPluginEnabled,
+  uninstallPlugin,
   setToolOverride,
   deleteToolOverride,
   skillRowStatus,
@@ -43,6 +64,7 @@ import {
   FRESH_FORM_STATE,
   STATUS,
   STATUS_TYPE,
+  TAB_CONTEXT,
 } from './constants.js';
 import {
   renderTopNav,
@@ -53,6 +75,11 @@ import { ensureSkillFrontmatter } from './utils/skill-frontmatter.js';
 import {
   createReadOnlyViewer, createEditor, replaceDoc, destroyEditor,
 } from './utils/codemirror-loader.js';
+import { setupEgovBridge } from './utils/egov-bridge.js';
+import {
+  resolveEgovApiUrl, resolveEgovMfeEnv, resolveEgovPath, setEgovPath,
+} from './utils/egov-embed.js';
+import { getToken } from './utils/da-fetch.js';
 import {
   onMessage,
   sendMessage,
@@ -75,10 +102,25 @@ class NxSkillsEditor extends LitElement {
     _catalogFilter: { state: true },
     _skills: { state: true },
     _skillStatuses: { state: true },
+    _skillScopes: { state: true },
+    _skillDescriptions: { state: true },
+    _skillDisplayNames: { state: true },
+    _skillLineCounts: { state: true },
+    _skillIds: { state: true },
     _prompts: { state: true },
     _agents: { state: true },
+    _plugins: { state: true },
+    _marketplaceCatalog: { state: true },
+    _marketplaceCatalogError: { state: true },
+    _marketplaceSources: { state: true },
+    _marketplaceSourceInput: { state: true },
+    _marketplaceSourceBusy: { state: true },
+    _viewingPluginName: { state: true },
+    _canManageSources: { state: true },
+    _pluginBusyRef: { state: true },
     _agentRows: { state: true },
     _mcpRows: { state: true },
+    _builtinMcpServers: { state: true },
     _mcpTools: { state: true },
     _configuredMcpServers: { state: true },
     _configuredMcpServerHeaders: { state: true },
@@ -125,7 +167,9 @@ class NxSkillsEditor extends LitElement {
     _gateSite: { state: true },
     _canWrite: { state: true },
     _confirmDialog: { state: true },
+    _configError: { state: true },
     chatImportUrl: { type: String, attribute: 'chat-import-url' },
+    chatAoImportUrl: { type: String, attribute: 'chat-ao-import-url' },
     chatAgentId: { type: String, attribute: 'chat-agent-id' },
   };
 
@@ -142,9 +186,20 @@ class NxSkillsEditor extends LitElement {
 
   _chatLoaded = false;
 
-  _syncOrphansInFlight = false;
+  // The chat module currently imported ('' until one loads). Tracked so the
+  // CMA flip (da-agent nx-chat ↔ CMA nx-chat-ao) re-imports the right
+  // component.
+  _loadedChatUrl = '';
+
+  // Marketplace/plugins (bridge-only, Claude marketplace concept) require the
+  // site to resolve to the CMA bridge harness (resolveCmaHarness: ew.coworker
+  // === 'cma' + entitlement). Computed in _reload() alongside the other ew.*
+  // flags.
+  _marketplaceAvailable = false;
 
   _agentsLoadInFlight = false;
+
+  _pluginsLoadInFlight = false;
 
   _mcpToolsLoadInFlight = false;
 
@@ -167,14 +222,30 @@ class NxSkillsEditor extends LitElement {
     this._hash = new HashController(this);
     this._isLoading = true;
     this._refreshingCount = 0;
+    this._configError = null;
     this._catalogTab = 'skills';
     this._catalogFilter = 'all';
     this._skills = {};
     this._skillStatuses = {};
+    this._skillScopes = {};
+    this._skillDescriptions = {};
+    this._skillDisplayNames = {};
+    this._skillLineCounts = {};
+    this._skillIds = {};
     this._prompts = [];
     this._agents = [];
+    this._plugins = [];
+    this._marketplaceCatalog = [];
+    this._marketplaceCatalogError = false;
+    this._marketplaceSources = [];
+    this._marketplaceSourceInput = '';
+    this._marketplaceSourceBusy = false;
+    this._viewingPluginName = null;
+    this._canManageSources = false;
+    this._pluginBusyRef = {};
     this._agentRows = [];
     this._mcpRows = [];
+    this._builtinMcpServers = [];
     this._mcpTools = null;
     this._configuredMcpServers = {};
     this._configuredMcpServerHeaders = {};
@@ -210,12 +281,15 @@ class NxSkillsEditor extends LitElement {
    * Promise-based replacement for window.confirm().
    * @param {string} itemType - e.g. "skill", "prompt", "MCP server"
    * @param {string} itemId   - the identifier shown to the user
+   * @param {object} [options]
+   * @param {'delete'|'install'|'enable'|'disable'} [options.action='delete']
    * @returns {Promise<boolean>}
    */
-  _confirm(itemType, itemId) {
+  _confirm(itemType, itemId, options = {}) {
+    const action = options.action || 'delete';
     return new Promise((resolve) => {
       this._resolveConfirm = resolve;
-      this._confirmDialog = { itemType, itemId };
+      this._confirmDialog = { itemType, itemId, action };
     });
   }
 
@@ -225,15 +299,64 @@ class NxSkillsEditor extends LitElement {
     this._confirmDialog = null;
   }
 
+  /**
+   * Copy + button styling for the confirm dialog, keyed by `action`.
+   * `delete` keeps the original destructive ("cannot be undone", red confirm
+   * button) framing. `install`/`enable`/`disable` are reversible plugin
+   * mutations that still touch the user's live sessions (skills/MCP access),
+   * so they get a neutral (non-red) confirm button and accurate, non-scary
+   * copy instead of reusing the delete framing verbatim.
+   */
+  _confirmCopy({ itemType, action }) {
+    switch (action) {
+      case 'install':
+        return {
+          heading: `Install ${itemType}:`,
+          warning: 'This adds its skills and MCP server access to your sessions. You can uninstall it later.',
+          confirmLabel: 'Install',
+          tone: 'primary',
+        };
+      case 'enable':
+        return {
+          heading: `Enable ${itemType}:`,
+          warning: 'This makes its skills and MCP server access available in your sessions again.',
+          confirmLabel: 'Enable',
+          tone: 'primary',
+        };
+      case 'disable':
+        return {
+          heading: `Disable ${itemType}:`,
+          warning: 'This removes its skills and MCP server access from your sessions until re-enabled.',
+          confirmLabel: 'Disable',
+          tone: 'default',
+        };
+      case 'register':
+        return {
+          heading: `Add ${itemType}:`,
+          // eslint-disable-next-line max-len
+          warning: 'Anyone can publish a GitHub repo. Any skills or MCP servers this source lists can be installed into users\' sessions for this whole site. Only add sources you trust.',
+          confirmLabel: 'Add anyway',
+          tone: 'danger',
+        };
+      default:
+        return {
+          heading: `You're about to delete ${itemType}:`,
+          warning: 'This action cannot be undone',
+          confirmLabel: 'Confirm',
+          tone: 'danger',
+        };
+    }
+  }
+
   connectedCallback() {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [styles, catalogStyles, editorStyles, toolsStyles];
     this._isChatOpen = this.chatImportUrl
       ? sessionStorage.getItem('nx-skills-editor-chat-open') === '1'
       : false;
-    if (this._isChatOpen && this.chatImportUrl) {
-      import(this.chatImportUrl).then(() => { this._chatLoaded = true; });
-    }
+    // Defer the chat import until _reload resolves the harness, so a CMA
+    // site loads nx-chat-ao directly instead of flashing the
+    // da-agent nx-chat first.
 
     // BroadcastChannel listeners (future da-nx + cross-tab)
     this._unsubBC = [
@@ -256,6 +379,14 @@ class NxSkillsEditor extends LitElement {
     if (pending) this._onSuggestionFromChannel(pending);
 
     window.addEventListener('popstate', this._onPopstateHandler);
+    // Restore the active tab synchronously BEFORE the first paint so a reload
+    // lands directly on the previous tab instead of flashing Skills first
+    // (history.state survives a reload and carries the last tab - see
+    // _onTabChange/_onPopstate). The fuller sessionStorage restore
+    // (_restoreNavState, which also reopens a detail/item) still runs later in
+    // updated(); this just prevents the visible Skills→tab jump.
+    const savedTab = history.state?.skillsEditorTab;
+    if (savedTab && savedTab !== this._catalogTab) this._catalogTab = savedTab;
     history.replaceState({ ...history.state, skillsEditorTab: this._catalogTab }, '');
   }
 
@@ -273,6 +404,7 @@ class NxSkillsEditor extends LitElement {
     this._disposeCMModal();
     this._disposeMemoryCM();
     this._disposeSkillCM();
+    this._disposeEgovBridge();
   }
 
   async updated(changed) {
@@ -287,7 +419,6 @@ class NxSkillsEditor extends LitElement {
         await this._reload({
           silent: true,
           showRefreshIndicator: true,
-          includeMdFiles: false,
         });
       } else {
         await this._reload();
@@ -303,6 +434,16 @@ class NxSkillsEditor extends LitElement {
     }
     if ((changed?.has('_memory') || changed?.has('_catalogTab')) && this._catalogTab === 'memory' && this._memory) {
       this.updateComplete.then(() => this._mountMemoryCM());
+    }
+    if (changed?.has('_catalogTab') && this._catalogTab === TAB_CONTEXT && !this._egovBridge) {
+      this.updateComplete.then(() => this._mountEgovBridge());
+    }
+    // The `_egovBridge` check narrows this to a genuine tab exit. No bridge
+    // exists on the initial tab assignment, where clearing `?egovPath=` would
+    // wipe an incoming deep link before it is read.
+    if (changed?.has('_catalogTab') && this._catalogTab !== TAB_CONTEXT && this._egovBridge) {
+      this._disposeEgovBridge();
+      setEgovPath('/');
     }
     // ── Skill body CM: mount when skill form appears, dispose when it hides ──
     const skillFormVisible = this._isEditorOpen && this._catalogTab === 'skills'
@@ -325,6 +466,9 @@ class NxSkillsEditor extends LitElement {
 
     if (changed?.has('_catalogTab') && this._catalogTab === 'agents') {
       this._ensureAgentsLoaded();
+    }
+    if (changed?.has('_catalogTab') && this._catalogTab === 'marketplace' && this._marketplaceAvailable) {
+      this._ensurePluginsLoaded();
     }
     if (changed?.has('_catalogTab') && this._catalogTab === 'mcps') {
       this._ensureMcpToolsLoaded();
@@ -374,6 +518,11 @@ class NxSkillsEditor extends LitElement {
     const snapshot = {
       skills: this._skills,
       skillStatuses: this._skillStatuses,
+      skillScopes: this._skillScopes,
+      skillDescriptions: this._skillDescriptions,
+      skillDisplayNames: this._skillDisplayNames,
+      skillLineCounts: this._skillLineCounts,
+      skillIds: this._skillIds,
       prompts: this._prompts,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
@@ -381,6 +530,9 @@ class NxSkillsEditor extends LitElement {
       configuredMcpServerHeaders: this._configuredMcpServerHeaders,
       toolOverrides: this._toolOverrides,
       agents: this._agents,
+      plugins: this._plugins,
+      marketplaceCatalog: this._marketplaceCatalog,
+      marketplaceSources: this._marketplaceSources,
     };
     try {
       sessionStorage.setItem(this._dataSnapshotStorageKey(), JSON.stringify(snapshot));
@@ -396,6 +548,11 @@ class NxSkillsEditor extends LitElement {
       if (!snap || typeof snap !== 'object') return false;
       this._skills = snap.skills || {};
       this._skillStatuses = snap.skillStatuses || {};
+      this._skillScopes = snap.skillScopes || {};
+      this._skillDescriptions = snap.skillDescriptions || {};
+      this._skillDisplayNames = snap.skillDisplayNames || {};
+      this._skillLineCounts = snap.skillLineCounts || {};
+      this._skillIds = snap.skillIds || {};
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
@@ -403,6 +560,9 @@ class NxSkillsEditor extends LitElement {
       this._configuredMcpServerHeaders = snap.configuredMcpServerHeaders || {};
       this._toolOverrides = snap.toolOverrides || {};
       this._agents = Array.isArray(snap.agents) ? snap.agents : [];
+      this._plugins = Array.isArray(snap.plugins) ? snap.plugins : [];
+      this._marketplaceCatalog = Array.isArray(snap.marketplaceCatalog) ? snap.marketplaceCatalog : [];
+      this._marketplaceSources = Array.isArray(snap.marketplaceSources) ? snap.marketplaceSources : [];
       return true;
     } catch {
       return false;
@@ -476,43 +636,34 @@ class NxSkillsEditor extends LitElement {
 
   // ─── data loading ─────────────────────────────────────────────────────────
 
-  _scheduleOrphanSkillSync() {
-    if (this._syncOrphansInFlight || !this._org || !this._site) return;
-    const loadKey = this._loadedKey;
-    this._syncOrphansInFlight = true;
-    syncOrphanSkillsToConfig(this._org, this._site)
-      .then((backfilled) => {
-        const changed = backfilled?.configBackfilled?.length || backfilled?.filesWritten?.length;
-        if (!changed) return;
-        // eslint-disable-next-line no-console
-        console.info('[skills-editor] background sync:', backfilled);
-        if (`${this._org}/${this._site}` === loadKey) {
-          this._reload({
-            silent: true,
-            showRefreshIndicator: true,
-            includeMdFiles: true,
-          }).catch(() => {});
-        }
-      })
-      .catch(() => { /* non-fatal */ })
-      .finally(() => { this._syncOrphansInFlight = false; });
-  }
-
   async _reload(options = {}) {
     if (!this._org || !this._site) return;
     const {
       silent = false,
       showRefreshIndicator = false,
-      includeMdFiles = true,
     } = options;
     if (!silent) this._isLoading = true;
     if (showRefreshIndicator) this._refreshingCount += 1;
 
     try {
       const configResult = await fetchDaConfigSheets(this._org, this._site);
+      // Flags live in the `flags` sheet, keyed `ew.*`, read merged across
+      // ORG + SITE config (site overrides org), same as da-nx's getEWFlags -
+      // a flag set only at the org level would otherwise be missed here
+      // while the chat still sees it. The harness rule matches da-nx's
+      // loadChat(): `ew.coworker === 'cma'` AND the IMS entitlement pre-check.
+      // It drives everything bridge-side: skills, MCPs, plugins/marketplace
+      // and the drawer chat component.
+      const ewFlags = await fetchEwFlags(this._org, this._site, configResult);
+      const cma = await resolveCmaHarness(ewFlags);
+      setSkillsBackend({ cma });
+      // ew.coworker=cma already means Coworker-on-bridge, so CMA resolution is
+      // the marketplace gate on its own.
+      this._marketplaceAvailable = cma;
+
       const permKey = `${this._org}/${this._site}`;
       const [skillsResult, hasWritePermission] = await Promise.all([
-        loadSkillsWithStatuses(this._org, this._site, configResult, { includeMdFiles }),
+        loadSkillsFromAo(this._org, this._site, configResult),
         this._canWriteKey === permKey
           ? Promise.resolve(this._canWrite)
           : fetchSkillsPermission(this._org, this._site),
@@ -522,21 +673,47 @@ class NxSkillsEditor extends LitElement {
         this._canWriteKey = permKey;
         this._canWrite = hasWritePermission;
       }
-      this._skills = skillsResult.map;
-      this._skillStatuses = skillsResult.statuses;
-      this._prompts = configResult.json?.prompts?.data || [];
-      this._agentRows = configResult.agentRows || [];
-      this._mcpRows = configResult.mcpRows || [];
-      this._configuredMcpServers = configResult.configuredMcpServers || {};
-      this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
-      this._toolOverrides = configResult.toolOverrides || {};
-      this._saveDataSnapshot();
 
-      this._applySuggestion();
-      this._scheduleOrphanSkillSync();
+      this._configError = configResult.ok ? null : {
+        status: configResult.status,
+        message: configResult.status === 401 || configResult.status === 403
+          ? "You don't have access to this organization or site."
+          : 'Could not load configuration for this organization or site.',
+      };
+
+      // On failure, keep whatever was previously loaded instead of collapsing it to empty.
+      if (configResult.ok) {
+        this._skills = skillsResult.map;
+        this._skillStatuses = skillsResult.statuses;
+        this._skillScopes = skillsResult.scopes || {};
+        this._skillDescriptions = skillsResult.descriptions || {};
+        this._skillDisplayNames = skillsResult.displayNames || {};
+        this._skillLineCounts = skillsResult.lineCounts || {};
+        this._skillIds = skillsResult.skillIds || {};
+        this._prompts = configResult.json?.prompts?.data || [];
+        this._agentRows = configResult.agentRows || [];
+        this._mcpRows = configResult.mcpRows || [];
+        this._configuredMcpServers = configResult.configuredMcpServers || {};
+        this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
+        this._toolOverrides = configResult.toolOverrides || {};
+        // On the bridge path, the "Connected" MCPs come from the CMA agent
+        // (fetchMcpServersFromBridge), not the hardcoded client presets. Empty
+        // off-bridge or on failure → renderer falls back to its built-in list.
+        this._builtinMcpServers = cma
+          ? (await fetchMcpServersFromBridge()) || []
+          : [];
+        this._saveDataSnapshot();
+
+        this._applySuggestion();
+      }
     } finally {
       if (!silent) this._isLoading = false;
       if (showRefreshIndicator) this._refreshingCount = Math.max(0, this._refreshingCount - 1);
+      // Load the chat in `finally` so a restored-open chat always mounts even if
+      // the config/harness load above threw. _ensureChatLoaded falls back to
+      // the da-agent nx-chat when the harness is unresolved (legacy path must
+      // keep working); on success it picks nx-chat-ao for CMA sites. Idempotent.
+      if (this._isChatOpen) this._ensureChatLoaded();
     }
   }
 
@@ -555,6 +732,45 @@ class NxSkillsEditor extends LitElement {
       // non-fatal: agent presets unavailable
     } finally {
       this._agentsLoadInFlight = false;
+      this._refreshingCount = Math.max(0, this._refreshingCount - 1);
+    }
+  }
+
+  /**
+   * Loads the Marketplace tab's three lists in parallel-ish: the site's
+   * registered marketplace sources (built-in + custom, from the `.da`
+   * config), the caller's personally-installed plugins (bridge-backed, per-
+   * site like everything else here even though the data itself is personal/
+   * global to the user - same org/site change-guard as _ensureAgentsLoaded
+   * so a slow load from a since-abandoned org/site never clobbers a newer
+   * one), and the catalog fetched from those sources.
+   */
+  async _ensurePluginsLoaded() {
+    if (this._pluginsLoadInFlight || this._plugins.length || this._marketplaceCatalog.length) return;
+    const loadKey = this._loadedKey;
+    this._pluginsLoadInFlight = true;
+    this._refreshingCount += 1;
+    try {
+      const [sources, canManage] = await Promise.all([
+        loadMarketplaceSources(this._org, this._site),
+        canWriteConfig(this._org, this._site),
+      ]);
+      const [installed, catalog] = await Promise.all([
+        loadInstalledPlugins(),
+        fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]),
+      ]);
+      if (`${this._org}/${this._site}` === loadKey) {
+        this._marketplaceSources = sources;
+        this._canManageSources = canManage;
+        this._plugins = installed;
+        this._marketplaceCatalog = catalog.entries;
+        this._marketplaceCatalogError = catalog.hadError;
+        this._saveDataSnapshot();
+      }
+    } catch {
+      if (`${this._org}/${this._site}` === loadKey) this._marketplaceCatalogError = true;
+    } finally {
+      this._pluginsLoadInFlight = false;
       this._refreshingCount = Math.max(0, this._refreshingCount - 1);
     }
   }
@@ -613,6 +829,7 @@ class NxSkillsEditor extends LitElement {
     this._viewingSkillId = null;
     this._skillMdModalOpen = false;
     this._selectedAgentId = null;
+    this._viewingPluginName = null;
   }
 
   _dismissForm() {
@@ -628,23 +845,46 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = false;
       return;
     }
+    this._viewingPluginName = null;
     this._isEditorOpen = false;
     if (!this._isFormDirty) this._clearForm();
+  }
+
+  // The chat component to mount: nx-chat-ao (CMA) on the alt harness, else the
+  // da-agent nx-chat. Falls back to the da-agent URL if the AO one wasn't
+  // provided.
+  _activeChatImportUrl() {
+    return isSkillsBackendCma() && this.chatAoImportUrl
+      ? this.chatAoImportUrl
+      : this.chatImportUrl;
+  }
+
+  async _ensureChatLoaded() {
+    const url = this._activeChatImportUrl();
+    if (!url) return;
+    if (this._loadedChatUrl !== url) {
+      await import(url);
+      this._loadedChatUrl = url;
+    }
+    this._chatLoaded = true;
   }
 
   async _toggleChat() {
     this._isChatOpen = !this._isChatOpen;
     sessionStorage.setItem('nx-skills-editor-chat-open', this._isChatOpen ? '1' : '0');
-    if (this._isChatOpen && !this._chatLoaded && this.chatImportUrl) {
-      await import(this.chatImportUrl);
-      this._chatLoaded = true;
-    }
+    if (this._isChatOpen) await this._ensureChatLoaded();
   }
 
   _setStatus(msg, type = STATUS_TYPE.OK) {
     clearTimeout(this._statusTimer);
     this._statusMsg = msg;
     this._statusType = type;
+    if (msg) {
+      let variant = VARIANT_SUCCESS;
+      if (type === STATUS_TYPE.ERR) variant = VARIANT_ERROR;
+      else if (type === STATUS_TYPE.WARN) variant = VARIANT_WARNING;
+      showToast({ text: msg, variant });
+    }
     if (type === 'ok') {
       this._statusTimer = setTimeout(() => { this._statusMsg = ''; }, 3000);
     }
@@ -711,7 +951,7 @@ class NxSkillsEditor extends LitElement {
       this._isFormDirty = true;
     } else {
       this._clearForm();
-      this._isEditorOpen = newTab === 'memory';
+      this._isEditorOpen = newTab === 'memory' || newTab === TAB_CONTEXT;
     }
 
     this._pushTabState(newTab);
@@ -790,11 +1030,28 @@ class NxSkillsEditor extends LitElement {
     this._isEditorOpen = true;
   }
 
-  _openNewSkillEditor() {
-    this._editorTriggerSelector = this._captureTriggerSelector();
-    this._clearForm();
-    if (this._catalogTab !== 'agents') this._catalogTab = 'skills';
-    this._isEditorOpen = true;
+  _onPickSkillFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.md,text/markdown';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (file) this._onSkillFileSelected(file);
+    }, { once: true });
+    input.click();
+  }
+
+  async _onSkillFileSelected(file) {
+    this._isSaveBusy = true;
+    const result = await uploadSkillFileToAo(file);
+    this._isSaveBusy = false;
+
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to upload skill', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus('Skill uploaded');
+    await this._reload();
   }
 
   _openNewMcpEditor() {
@@ -866,6 +1123,31 @@ class NxSkillsEditor extends LitElement {
     this._isSaveBusy = true;
     this._statusMsg = '';
 
+    // CMA/bridge edit: persist as a new Managed Agents skill version, not the
+    // .da config sheet. Create-new on CMA goes through the upload flow.
+    if (this._isFormEdit && isSkillsBackendCma()) {
+      const result = await updateSkillOnAo(
+        this._skillIds[id],
+        body,
+        this._skillDisplayNames?.[id] || id,
+      );
+      if (!result.ok) {
+        this._setStatus(result.error || 'Failed to save skill', STATUS_TYPE.ERR);
+        this._isSaveBusy = false;
+        return;
+      }
+      this._setStatus('Saved');
+      this._clearDirty();
+      this._isSaveBusy = false;
+      this._hasSuggestion = false;
+      clearSuggestionSession();
+      this._viewingSkillId = null;
+      this._clearForm();
+      this._isEditorOpen = false;
+      await this._reload();
+      return;
+    }
+
     // Write the .md file first — if it fails we don't touch the config sheet.
     const fileResult = await writeSkillMdFile(this._org, this._site, id, body);
     if (!fileResult.ok) {
@@ -935,6 +1217,27 @@ class NxSkillsEditor extends LitElement {
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
+    // On the CMA/bridge path skills live in Managed Agents, not the
+    // .da config sheet — route to the same bridge delete the catalog card uses.
+    // AO-direct/da-agent config-sheet path below is unchanged.
+    if (isSkillsBackendCma()) {
+      const result = await removePersonalSkillSource(id, this._skillIds[id]);
+      this._isSaveBusy = false;
+      if (!result.ok) {
+        this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
+        return;
+      }
+      // Guard against the bridge's eventual consistency resurrecting the skill
+      // on the immediate reload: hide it locally until the catalog catches up.
+      markSkillDeleted(id);
+      this._viewingSkillId = null;
+      this._clearForm();
+      this._isEditorOpen = false;
+      await this._reload();
+      this._setStatus('Skill deleted');
+      return;
+    }
+
     // Read existing content before deleting, so we can rollback if needed.
     const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
 
@@ -964,32 +1267,25 @@ class NxSkillsEditor extends LitElement {
   }
 
   async _onDeleteSkillById(id) {
+    if (this._skillScopes[id] !== AO_SCOPE_PERSONAL) return;
     if (!await this._confirm('skill', id)) return;
     this._isSaveBusy = true;
 
-    const { text: rollbackBody } = await readSkillMdFile(this._org, this._site, id);
-
-    const fileResult = await deleteSkillMdFile(this._org, this._site, id);
-    if (!fileResult.ok) {
-      this._setStatus('Failed to delete skill file', STATUS_TYPE.ERR);
-      this._isSaveBusy = false;
-      return;
-    }
-
-    const configResult = await deleteSkillFromConfig(this._org, this._site, id);
+    const result = await removePersonalSkillSource(id, this._skillIds[id]);
     this._isSaveBusy = false;
 
-    if (!configResult.ok) {
-      if (rollbackBody) {
-        writeSkillMdFile(this._org, this._site, id, rollbackBody).catch(() => {});
-      }
-      this._setStatus(configResult.error || 'Failed to delete skill', STATUS_TYPE.ERR);
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to delete skill', STATUS_TYPE.ERR);
       return;
     }
+    // Guard against the bridge's eventual consistency resurrecting the skill
+    // on the immediate reload: hide it locally until the catalog catches up.
+    markSkillDeleted(id);
     this._viewingSkillId = null;
     this._clearForm();
     this._isEditorOpen = false;
     await this._reload();
+    this._setStatus('Skill deleted');
   }
 
   _openSkillMenu(e, id) {
@@ -1019,6 +1315,19 @@ class NxSkillsEditor extends LitElement {
     this._isFormEdit = false;
     this._catalogTab = 'skills';
     this._isEditorOpen = true;
+    // Lazily pull the SKILL.md so the detail view can parse the real
+    // description locally — the bridge-stored description can be a degenerate
+    // YAML block-scalar indicator (e.g. a bare ">") for multi-line fields.
+    this._ensureSkillBody(skillId);
+  }
+
+  async _ensureSkillBody(id) {
+    if (!id || this._skills[id]) return;
+    const result = await fetchSkillFileResultFromAo(id, 'SKILL.md', this._skillIds[id]);
+    const body = result?.content || '';
+    if (body && this._viewingSkillId === id) {
+      this._skills = { ...this._skills, [id]: body };
+    }
   }
 
   _openSkillMdModal() {
@@ -1033,7 +1342,14 @@ class NxSkillsEditor extends LitElement {
 
   async _mountCMModal() {
     const id = this._viewingSkillId;
-    const body = this._skills[id] || '';
+    let body = this._skills[id] || '';
+    let loadError = false;
+    if (!body) {
+      const result = await fetchSkillFileResultFromAo(id, 'SKILL.md', this._skillIds[id]);
+      body = result.content || '';
+      loadError = result.error;
+      if (body) this._skills = { ...this._skills, [id]: body };
+    }
 
     this._cmPortal = document.createElement('div');
     this._cmPortal.className = 'skill-md-portal';
@@ -1063,7 +1379,11 @@ class NxSkillsEditor extends LitElement {
     footer.className = 'skill-md-modal-footer';
     const meta = document.createElement('span');
     meta.className = 'skill-md-modal-meta';
-    meta.textContent = `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`;
+    const hasBody = body.trim().length > 0;
+    let metaText = 'No content';
+    if (hasBody) metaText = `${(body.length / 1024).toFixed(1)}KB \u00b7 Markdown`;
+    else if (loadError) metaText = 'Content unavailable';
+    meta.textContent = metaText;
     const closeBtn = document.createElement('button');
     closeBtn.className = 'skill-md-modal-close-btn';
     closeBtn.textContent = 'Close';
@@ -1080,6 +1400,17 @@ class NxSkillsEditor extends LitElement {
     this._cmPortal.appendChild(styleLink);
 
     document.body.appendChild(this._cmPortal);
+
+    if (!hasBody) {
+      // Either the skill genuinely has no body (frontmatter-only) or its content
+      // could not be loaded (e.g. a bridge/service error) — show an honest,
+      // distinct message instead of a blank viewer.
+      editorHost.classList.add('skill-md-empty');
+      editorHost.textContent = loadError
+        ? "Content unavailable \u2014 couldn't load this skill's content (service error). Please try again."
+        : 'This skill has no content yet.';
+      return;
+    }
 
     try {
       this._cmEditor = await createReadOnlyViewer(editorHost, body);
@@ -1108,6 +1439,40 @@ class NxSkillsEditor extends LitElement {
   _disposeMemoryCM() {
     destroyEditor(this._memoryCM);
     this._memoryCM = null;
+  }
+
+  async _mountEgovBridge() {
+    this._disposeEgovBridge();
+    const iframe = this.shadowRoot.querySelector('.egov-mfe-iframe');
+    if (!iframe) return;
+    let imsOrg;
+    try { imsOrg = (await window.adobeIMS?.getProfile?.())?.ownerOrg; } catch { /* anonymous session */ }
+    this._egovBridge = setupEgovBridge({
+      iframe,
+      getProps: () => ({
+        path: resolveEgovPath(),
+        env: resolveEgovMfeEnv(),
+        apiUrl: resolveEgovApiUrl(),
+        imsToken: getToken(),
+        imsOrg,
+      }),
+      // The MFE says whether each navigation deserves its own history entry.
+      // We ignore that and always replace, so Back never lands inside this tab.
+      // Adding entries first needs a popstate listener that feeds the path back
+      // into the MFE. Without one, Back would change the URL while the iframe
+      // kept showing the same screen.
+      onNavigate: (path) => setEgovPath(path),
+    });
+  }
+
+  /**
+   * Tears down the bridge only. Clearing `?egovPath=` is the caller's job (see
+   * `updated`), since this also runs defensively from `_mountEgovBridge`, which
+   * is about to read that param.
+   */
+  _disposeEgovBridge() {
+    this._egovBridge?.destroy();
+    this._egovBridge = null;
   }
 
   async _mountSkillCM() {
@@ -1176,7 +1541,12 @@ class NxSkillsEditor extends LitElement {
     // Capture the context at the time of the request to guard against stale responses.
     const requestedId = skillId;
     const requestedTab = tab;
-    const { text } = await readSkillMdFile(this._org, this._site, skillId);
+    // On the CMA/bridge path SKILL.md comes from Managed Agents
+    // (fetchSkillFileResultFromAo has a bridge branch); the config-sheet read
+    // has no content there.
+    const { text } = isSkillsBackendCma()
+      ? { text: (await fetchSkillFileResultFromAo(skillId, 'SKILL.md', this._skillIds[skillId])).content || '' }
+      : await readSkillMdFile(this._org, this._site, skillId);
     // Discard the response if the user navigated away before it resolved.
     if (text && !this._isFormDirty
       && this._formSkillId === requestedId
@@ -1307,8 +1677,10 @@ class NxSkillsEditor extends LitElement {
     // (canvas/browse mount nx-chat at the document level).
     if (this.chatImportUrl && !this._isChatOpen) await this._toggleChat();
     await this.updateComplete;
-    const chat = this.shadowRoot.querySelector('nx-chat')
-      ?? document.querySelector('nx-chat');
+    // The drawer mounts nx-chat (da-agent) or nx-chat-ao (CMA) depending on the
+    // harness, so match either.
+    const chat = this.shadowRoot.querySelector('nx-chat, nx-chat-ao')
+      ?? document.querySelector('nx-chat, nx-chat-ao');
     if (!chat) {
       this._setStatus('Chat is not available', STATUS_TYPE.ERR);
       return;
@@ -1330,6 +1702,21 @@ class NxSkillsEditor extends LitElement {
     });
     if (dupes.length) {
       this._setStatus(`Duplicate header name: ${dupes[0]}`, STATUS_TYPE.ERR);
+      return;
+    }
+    // Reject malformed registrations up front. A server with no name, or no
+    // usable http(s) URL, produces a nameless/tool-less card that can't be
+    // managed (and makes the bridge reject session-create). Validate before we
+    // persist it.
+    if (!String(this._mcpKey || '').trim()) {
+      this._setStatus('MCP server name is required', STATUS_TYPE.ERR);
+      return;
+    }
+    const trimmedUrl = String(this._mcpUrl || '').trim();
+    let parsedUrl = null;
+    try { parsedUrl = new URL(trimmedUrl); } catch { parsedUrl = null; }
+    if (!parsedUrl || !/^https?:$/.test(parsedUrl.protocol)) {
+      this._setStatus('Enter a valid http(s) URL for the MCP server', STATUS_TYPE.ERR);
       return;
     }
     this._isSaveBusy = true;
@@ -1369,6 +1756,140 @@ class NxSkillsEditor extends LitElement {
     }
     if (this._editingMcpKey === key) this._closeEditor();
     await this._reload();
+  }
+
+  async _onRetryMcpTools() {
+    // Re-run the load so bridge MCP servers (and their resolved tools) are
+    // re-fetched; a server that was unreachable may now connect.
+    await this._reload({ showRefreshIndicator: true });
+  }
+
+  async _reloadPlugins() {
+    // Unlike _reload() (the whole-config reload), the Marketplace tab's own
+    // lists are loaded lazily on first visit (_ensurePluginsLoaded) and kept
+    // in memory after that - so a mutation here re-fetches just the installed
+    // list directly rather than clearing state and waiting for the tab-switch
+    // guard to fire again (which wouldn't re-fire on an already-active tab).
+    try {
+      this._plugins = await loadInstalledPlugins();
+    } catch {
+      // non-fatal: keep whatever was previously loaded
+    }
+  }
+
+  async _onInstallPlugin(entry) {
+    const ref = String(entry?.name || '').trim();
+    if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: 'install' })) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await installPlugin(entry);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to install plugin', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${ref} installed`);
+    await this._reloadPlugins();
+  }
+
+  async _onTogglePlugin(ref, enabled) {
+    if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref, { action: enabled ? 'enable' : 'disable' })) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await setPluginEnabled(ref, enabled);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not update plugin state', STATUS_TYPE.ERR);
+      return;
+    }
+    await this._reloadPlugins();
+  }
+
+  async _onUninstallPlugin(ref) {
+    if (!ref || this._pluginBusyRef[ref]) return;
+    if (!await this._confirm('plugin', ref)) return;
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: true };
+    const result = await uninstallPlugin(ref);
+    this._pluginBusyRef = { ...this._pluginBusyRef, [ref]: false };
+    if (!result.ok) {
+      this._setStatus(result.error || 'Failed to uninstall plugin', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${ref} uninstalled`);
+    await this._reloadPlugins();
+  }
+
+  async _onRetryMarketplace() {
+    await this._reloadMarketplace();
+  }
+
+  /**
+   * Re-loads registered sources + catalog (not the installed-plugins list,
+   * which _reloadPlugins already handles separately) after a source is
+   * added/removed, or as the Retry action's full refresh.
+   */
+  async _reloadMarketplace() {
+    // Same org/site change-guard as _ensurePluginsLoaded: a slow reload from a
+    // since-abandoned org/site must not clobber the now-current view (e.g. the
+    // user adds a source then navigates away before the refetch lands).
+    const loadKey = this._loadedKey;
+    try {
+      const sources = await loadMarketplaceSources(this._org, this._site);
+      const catalog = await fetchMarketplaceCatalog([...BUILT_IN_MARKETPLACE_SOURCES, ...sources]);
+      if (`${this._org}/${this._site}` !== loadKey) return;
+      this._marketplaceSources = sources;
+      this._marketplaceCatalog = catalog.entries;
+      this._marketplaceCatalogError = catalog.hadError;
+    } catch {
+      if (`${this._org}/${this._site}` === loadKey) this._marketplaceCatalogError = true;
+    }
+  }
+
+  _onMarketplaceSourceInput(value) {
+    this._marketplaceSourceInput = value;
+  }
+
+  async _onAddMarketplaceSource() {
+    const input = this._marketplaceSourceInput.trim();
+    if (!input || this._marketplaceSourceBusy || !this._canManageSources) return;
+    if (!await this._confirm('marketplace source', input, { action: 'register' })) return;
+    this._marketplaceSourceBusy = true;
+    const result = await addMarketplaceSource(this._org, this._site, input);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not add marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._marketplaceSourceInput = '';
+    this._setStatus(`${input} added to Marketplace`);
+    await this._reloadMarketplace();
+  }
+
+  async _onRemoveMarketplaceSource(owner, repo) {
+    const label = `${owner}/${repo}`;
+    if (this._marketplaceSourceBusy || !this._canManageSources) return;
+    if (!await this._confirm('marketplace source', label)) return;
+    this._marketplaceSourceBusy = true;
+    const result = await removeMarketplaceSource(this._org, this._site, owner, repo);
+    this._marketplaceSourceBusy = false;
+    if (!result.ok) {
+      this._setStatus(result.error || 'Could not remove marketplace source', STATUS_TYPE.ERR);
+      return;
+    }
+    this._setStatus(`${label} removed`);
+    await this._reloadMarketplace();
+  }
+
+  _onViewPlugin(name) {
+    const ref = String(name || '').trim();
+    if (!ref) return;
+    this._viewingPluginName = ref;
+    this._catalogTab = 'marketplace';
+    this._isEditorOpen = true;
+  }
+
+  _openMarketplaceTab() {
+    this._onTabChange('marketplace');
   }
 
   _clearMcpForm() {
@@ -1600,6 +2121,13 @@ class NxSkillsEditor extends LitElement {
       catalogFilter: this._catalogFilter,
       isChatOpen: this._isChatOpen,
       chatAgentId: this.chatAgentId,
+      chatCma: isSkillsBackendCma(),
+      marketplaceAvailable: this._marketplaceAvailable,
+      // `{ key, harness }` is the da-nx nx-chat-ao contract.
+      chatHarnessConfig: {
+        key: this._org && this._site ? `${this._org}/${this._site}` : null,
+        harness: isSkillsBackendCma() ? 'cma' : 'coworker',
+      },
       isEditorOpen: this._isEditorOpen,
       isFormDirty: this._isFormDirty,
       isFormEdit: this._isFormEdit,
@@ -1612,10 +2140,24 @@ class NxSkillsEditor extends LitElement {
       promptSearch: this._promptSearch,
       skills: this._skills,
       skillStatuses: this._skillStatuses,
+      skillScopes: this._skillScopes,
+      skillDescriptions: this._skillDescriptions,
+      skillDisplayNames: this._skillDisplayNames,
+      skillLineCounts: this._skillLineCounts,
       prompts: this._prompts,
       agents: this._agents,
+      plugins: this._plugins,
+      marketplaceCatalog: this._marketplaceCatalog,
+      marketplaceCatalogError: this._marketplaceCatalogError,
+      marketplaceSources: this._marketplaceSources,
+      marketplaceSourceInput: this._marketplaceSourceInput,
+      marketplaceSourceBusy: this._marketplaceSourceBusy,
+      canManageSources: this._canManageSources,
+      viewingPluginName: this._viewingPluginName,
+      pluginBusyRef: this._pluginBusyRef,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
+      builtinMcpServers: this._builtinMcpServers,
       mcpTools: this._mcpTools,
       mcpEnableBusy: this._mcpEnableBusy,
       configuredMcpServers: this._configuredMcpServers,
@@ -1714,6 +2256,15 @@ class NxSkillsEditor extends LitElement {
       onRegisterMcp: this._onRegisterMcp.bind(this),
       onToggleMcpEnabled: (row) => this._onToggleMcpEnabled(row),
       onDeleteMcpDirect: (row) => this._onDeleteMcpDirect(row),
+      onRetryMcpTools: () => this._onRetryMcpTools(),
+      onInstallPlugin: (entry) => this._onInstallPlugin(entry),
+      onTogglePlugin: (ref, enabled) => this._onTogglePlugin(ref, enabled),
+      onUninstallPlugin: (ref) => this._onUninstallPlugin(ref),
+      onRetryMarketplace: () => this._onRetryMarketplace(),
+      onMarketplaceSourceInput: (v) => this._onMarketplaceSourceInput(v),
+      onAddMarketplaceSource: () => this._onAddMarketplaceSource(),
+      onRemoveMarketplaceSource: (owner, repo) => this._onRemoveMarketplaceSource(owner, repo),
+      onViewPlugin: (name) => this._onViewPlugin(name),
       onOpenMcpMenu: (e, key) => this._openMcpMenu(e, key),
       onCloseMcpMenu: (key) => this._closeMcpMenu(key),
       onToggleToolEnabled: (serverId, name, enabled, rollback) => (
@@ -1724,8 +2275,9 @@ class NxSkillsEditor extends LitElement {
       getAgentToolIds: (agent, isBuiltin) => this._agentToolIds(agent, isBuiltin),
       parseToolId: (toolId) => this._parseToolId(toolId),
       // ── TAB_ACTIONS openers ────────────────────────────────────────────────
-      openNewSkillEditor: () => this._openNewSkillEditor(),
+      onPickSkillFile: () => this._onPickSkillFile(),
       openNewAgentEditor: () => this._openNewAgentEditor(),
+      openMarketplaceTab: () => this._openMarketplaceTab(),
       openNewEditor: () => this._openNewEditor(),
       openNewMcpEditor: () => this._openNewMcpEditor(),
     };
@@ -1773,6 +2325,21 @@ class NxSkillsEditor extends LitElement {
     if (this._isLoading) {
       return html`<div class="loading" aria-live="polite">Loading capabilities\u2026</div>`;
     }
+    if (this._configError) {
+      return html`
+        <div class="gate">
+          <div class="inline-alert inline-alert-negative" role="alert">
+            <div class="inline-alert-header">
+              <h2 class="inline-alert-title">Can't load this site</h2>
+              <svg class="inline-alert-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <use href="/img/icons/s2-icon-alerttriangle-20-n.svg#icon"></use>
+              </svg>
+            </div>
+            <p class="inline-alert-content">${this._configError.message}</p>
+          </div>
+        </div>
+      `;
+    }
     const rootCls = [
       'root',
       this._isChatOpen ? 'is-chat-open' : '',
@@ -1796,26 +2363,29 @@ class NxSkillsEditor extends LitElement {
           </div>
         </div>
       </div>
-      ${dlg ? html`
+      ${dlg ? (() => {
+        const copy = this._confirmCopy(dlg);
+        return html`
         <div class="confirm-backdrop" @click=${() => this._closeConfirm(false)}>
           <div class="confirm-dialog" role="alertdialog"
                aria-labelledby="confirm-title"
                aria-describedby="confirm-desc"
                @click=${(e) => e.stopPropagation()}>
             <p id="confirm-title" class="confirm-heading">
-              You're about to delete ${dlg.itemType}:
+              ${copy.heading}
             </p>
             <p id="confirm-desc" class="confirm-id"><code>${dlg.itemId}</code></p>
-            <p class="confirm-warning">This action cannot be undone</p>
+            <p class="confirm-warning">${copy.warning}</p>
             <div class="confirm-actions">
               <button class="confirm-btn confirm-btn-cancel"
                       @click=${() => this._closeConfirm(false)}>Cancel</button>
-              <button class="confirm-btn confirm-btn-confirm"
-                      @click=${() => this._closeConfirm(true)}>Confirm</button>
+              <button class="confirm-btn confirm-btn-confirm confirm-btn-confirm-${copy.tone}"
+                      @click=${() => this._closeConfirm(true)}>${copy.confirmLabel}</button>
             </div>
           </div>
         </div>
-      ` : nothing}
+      `;
+      })() : nothing}
     </div>`;
   }
 }

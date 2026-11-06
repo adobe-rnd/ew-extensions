@@ -9,7 +9,36 @@ import {
   isSkillRecentlyDeleted,
   parseActionsHasWrite,
   fetchSkillsPermission,
+  setSkillsBackend,
+  isCmaEntitled,
+  resolveCmaHarness,
+  CMA_REQUIRED_SERVICE_CODES,
+  fetchEwFlags,
+  fetchSkillsFromAo,
+  fetchSkillFileFromAo,
+  fetchSkillFileResultFromAo,
+  uploadSkillFileToAo,
+  updateSkillOnAo,
+  removePersonalSkillSource,
+  registerMcpServer,
+  setMcpServerEnabled,
+  deleteMcpServer,
+  fetchMcpServersFromBridge,
+  loadInstalledPlugins,
+  installPlugin,
+  setPluginEnabled,
+  uninstallPlugin,
+  fetchMarketplaceCatalog,
+  __resetMarketplaceCatalogCacheForTests,
+  parseMarketplaceSourceInput,
+  loadMarketplaceSources,
+  addMarketplaceSource,
+  removeMarketplaceSource,
+  canWriteConfig,
+  mergeMarketplacePluginView,
+  authorLabel,
 } from '../../blocks/skills/skills-editor-api.js';
+import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
 describe('skillRowStatus', () => {
   it('returns "approved" for null/undefined/non-object', () => {
@@ -281,5 +310,827 @@ describe('fetchSkillsPermission', () => {
   it('returns true (optimistic) on network error', async () => {
     window.fetch = async () => { throw new Error('network'); };
     expect(await fetchSkillsPermission('org', 'site')).to.be.true;
+  });
+});
+
+describe('AO / bridge backend switch', () => {
+  const realFetch = window.fetch;
+  const realAdobeIMS = window.adobeIMS;
+
+  const AO_SKILLS_RESPONSE = {
+    skills: [
+      {
+        name: 'my-skill', scope: 'owner', description: 'desc', display_name: 'My Skill', lineCount: 3,
+      },
+    ],
+  };
+  const BRIDGE_SKILLS_RESPONSE = {
+    data: [{ id: 'skill-uuid-1' }],
+    skills: [
+      {
+        id: 'skill-uuid-1', name: 'my-skill', scope: 'owner', description: 'desc', display_name: 'My Skill', lineCount: 3,
+      },
+    ],
+  };
+
+  function mockAuth() {
+    initAuth('test-ims-token');
+    window.adobeIMS = {
+      getAccessToken: () => ({ token: 'test-ims-token' }),
+      getProfile: async () => ({
+        userId: 'user-123',
+        projectedProductContext: [{ prodCtx: { owningEntity: 'ORGID123@AdobeOrg' } }],
+      }),
+    };
+  }
+
+  function trackFetch(handler) {
+    const calls = [];
+    window.fetch = async (url, opts = {}) => {
+      calls.push({ url, opts });
+      return handler(url, opts);
+    };
+    return calls;
+  }
+
+  beforeEach(() => {
+    mockAuth();
+  });
+
+  afterEach(() => {
+    window.fetch = realFetch;
+    window.adobeIMS = realAdobeIMS;
+    setSkillsBackend({ cma: false });
+    initAuth(null);
+  });
+
+  describe('CMA off (AO, byte-for-byte unchanged)', () => {
+    it('fetchSkillsFromAo hits the AO base with no x-user-id header', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
+      const result = await fetchSkillsFromAo();
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://agent-orchestrator-stage-va7.adobe.io/api/v1/skills?manifest_id=experience-workspace');
+      expect(calls[0].opts.headers['x-user-id']).to.be.undefined;
+      expect(calls[0].opts.headers.authorization).to.equal('Bearer test-ims-token');
+      expect(result[0].id).to.equal('my-skill');
+      expect(result[0].skillId).to.be.undefined;
+    });
+
+    it('fetchSkillFileFromAo hits the per-skill files endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ content: '# Hello' }) }));
+      const text = await fetchSkillFileFromAo('my-skill');
+      expect(calls[0].url).to.include('/api/v1/skills/my-skill/files');
+      expect(calls[0].opts.headers['x-user-id']).to.be.undefined;
+      expect(text).to.equal('# Hello');
+    });
+
+    it('removePersonalSkillSource rewrites overrides via GET+PUT with x-user-id (AO contract)', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => ({ settings: { skills: { sources: [{ name: 'my-skill' }] } } }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await removePersonalSkillSource('my-skill');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(2);
+      expect(calls[0].url).to.equal('https://agent-orchestrator-stage-va7.adobe.io/api/v1/overrides/user');
+      expect(calls[1].opts.method).to.equal('PUT');
+      // AO branch always sent x-user-id already — unchanged either way.
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('uploadSkillFileToAo uses the presigned initiate/PUT/finalize flow', async () => {
+      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const calls = trackFetch((url) => {
+        if (url.includes('/api/v1/files/upload')) {
+          return { ok: true, json: async () => ({ upload_url: 'https://blob.example/x', file_id: 'f1' }) };
+        }
+        if (url === 'https://blob.example/x') return { ok: true };
+        if (url.includes('/finalize')) return { ok: true, json: async () => ({ skill_registration_ok: true }) };
+        return { ok: false };
+      });
+      const result = await uploadSkillFileToAo(file);
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(3);
+      expect(calls[0].url).to.include('/api/v1/files/upload');
+    });
+  });
+
+  describe('CMA on (bridge)', () => {
+    beforeEach(() => setSkillsBackend({ cma: true }));
+
+    it('fetchMcpServersFromBridge tags scope, carries key/url/tools, and dedupes by url (agent wins)', async () => {
+      const BRIDGE_MCP = {
+        agent: [{ name: 'AEM', url: 'https://aem-mcp.example/mcp', tools: [{ name: 'list_pages', description: '' }] }],
+        org: [{ key: 'org-tools', url: 'https://org.example/mcp' }],
+        // Same url as the agent server → deduped out (agent wins); plus a real
+        // personal override that must survive with scope/key/url.
+        user: [
+          { key: 'dupe', url: 'https://aem-mcp.example/mcp' },
+          { key: 'workfront-mcp', url: 'https://workfront.example/mcp' },
+        ],
+      };
+      trackFetch(() => ({ ok: true, json: async () => BRIDGE_MCP }));
+      const cards = await fetchMcpServersFromBridge();
+
+      const byKey = Object.fromEntries(cards.map((c) => [c.id, c]));
+      expect(byKey.AEM.scope).to.equal('agent');
+      expect(byKey.AEM.tools.map((t) => t.name)).to.include('list_pages');
+      expect(byKey['org-tools']).to.include({ scope: 'org', key: 'org-tools', url: 'https://org.example/mcp' });
+      expect(byKey['workfront-mcp']).to.include({ scope: 'user', key: 'workfront-mcp', url: 'https://workfront.example/mcp' });
+      // The user entry with the same url as the agent server is deduped away.
+      expect(cards.filter((c) => c.url === 'https://aem-mcp.example/mcp')).to.have.length(1);
+    });
+
+    it('fetchSkillsFromAo hits the bridge base with x-user-id and maps skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => BRIDGE_SKILLS_RESPONSE }));
+      const result = await fetchSkillsFromAo();
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills?manifest_id=experience-workspace');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+      expect(result[0].id).to.equal('my-skill');
+      expect(result[0].skillId).to.equal('skill-uuid-1');
+    });
+
+    it('fetchSkillFileFromAo resolves skill_id then GETs /api/v1/skills/:skillId', async () => {
+      const b64 = btoa('# Hello bridge');
+      const calls = trackFetch((url) => {
+        if (url.includes('?manifest_id=')) return { ok: true, json: async () => BRIDGE_SKILLS_RESPONSE };
+        return {
+          ok: true,
+          json: async () => ({ files: [{ path: 'skills/my-skill/SKILL.md', content: b64 }] }),
+        };
+      });
+      const text = await fetchSkillFileFromAo('my-skill', 'SKILL.md');
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+      expect(text).to.equal('# Hello bridge');
+    });
+
+    it('fetchSkillFileFromAo uses a provided skillId without a catalog lookup', async () => {
+      const b64 = btoa('# Direct');
+      const calls = trackFetch(() => ({
+        ok: true,
+        json: async () => ({ files: [{ path: 'SKILL.md', content: b64 }] }),
+      }));
+      const text = await fetchSkillFileFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(text).to.equal('# Direct');
+    });
+
+    it('fetchSkillFileResultFromAo flags a service error (non-ok) distinctly from empty', async () => {
+      trackFetch(() => ({ ok: false, status: 502, json: async () => ({}) }));
+      const result = await fetchSkillFileResultFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(result).to.deep.equal({ content: null, error: true });
+    });
+
+    it('fetchSkillFileResultFromAo reports empty (not error) when the file is absent', async () => {
+      trackFetch(() => ({ ok: true, json: async () => ({ files: [] }) }));
+      const result = await fetchSkillFileResultFromAo('my-skill', 'SKILL.md', 'skill-uuid-1');
+      expect(result).to.deep.equal({ content: null, error: false });
+    });
+
+    it('uploadSkillFileToAo posts multipart/form-data to /api/v1/skills', async () => {
+      const file = new File(
+        ['---\nname: my-skill\ndescription: a test skill\nversion: 1\n---\n# Body'],
+        'SKILL.md',
+        { type: 'text/markdown' },
+      );
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ id: 'skill-uuid-2' }) }));
+      const result = await uploadSkillFileToAo(file);
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills');
+      expect(calls[0].opts.method).to.equal('POST');
+      expect(calls[0].opts.body).to.be.instanceOf(FormData);
+      expect(calls[0].opts.body.get('file').name).to.equal('SKILL.md');
+      // display_title comes from the frontmatter name, not the filename ("SKILL")
+      expect(calls[0].opts.body.get('display_title')).to.equal('my-skill');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('removePersonalSkillSource resolves skill_id then DELETEs /api/v1/skills/:skillId', async () => {
+      const calls = trackFetch((url) => {
+        if (url.includes('?manifest_id=')) return { ok: true, json: async () => BRIDGE_SKILLS_RESPONSE };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await removePersonalSkillSource('my-skill');
+      expect(result.ok).to.be.true;
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[1].opts.method).to.equal('DELETE');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('removePersonalSkillSource uses a provided skillId without a catalog lookup', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await removePersonalSkillSource('my-skill', 'skill-uuid-9');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-9');
+    });
+
+    it('uploadSkillFileToAo passes scope:org in the multipart body when requested', async () => {
+      const file = new File(['# Body'], 'my-skill.md', { type: 'text/markdown' });
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({ id: 'skill-uuid-3' }) }));
+      const result = await uploadSkillFileToAo(file, 'org');
+      expect(result.ok).to.be.true;
+      expect(calls[0].opts.body.get('scope')).to.equal('org');
+    });
+
+    it('updateSkillOnAo PUTs a multipart SKILL.md to /api/v1/skills/:skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await updateSkillOnAo('skill-uuid-1', '# Edited body', 'My Skill');
+      expect(result.ok).to.be.true;
+      expect(calls).to.have.length(1);
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/skills/skill-uuid-1');
+      expect(calls[0].opts.method).to.equal('PUT');
+      expect(calls[0].opts.body).to.be.instanceOf(FormData);
+      expect(calls[0].opts.body.get('file').name).to.equal('SKILL.md');
+      expect(calls[0].opts.body.get('display_title')).to.equal('My Skill');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
+    });
+
+    it('updateSkillOnAo returns an error without a skillId', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await updateSkillOnAo('', '# body', 'x');
+      expect(result.ok).to.be.false;
+      expect(calls).to.have.length(0);
+    });
+
+    // MCP servers: GET the overrides bag, mutate mcp_servers, PUT it back.
+    const OVERRIDES_BAG = (servers) => ({
+      settings: { skills: { sources: [], disabled_skills: [] }, mcp_servers: servers, plugins: { installed: [] } },
+    });
+
+    it('registerMcpServer GETs overrides then PUTs the appended server', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => OVERRIDES_BAG([]) };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await registerMcpServer('o', 's', 'my-mcp', 'https://mcp.example', 'desc', [{ name: 'H', value: 'v' }]);
+      expect(result.ok).to.be.true;
+      expect(calls[0].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user');
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user/settings/mcp_servers');
+      expect(calls[1].opts.method).to.equal('PUT');
+      expect(calls[1].opts.headers['x-user-id']).to.equal('user-123');
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ key: 'my-mcp', url: 'https://mcp.example', description: 'desc' });
+      expect(sent[0].headers).to.deep.equal([{ name: 'H', value: 'v' }]);
+    });
+
+    it('registerMcpServer replaces an existing entry by key, preserving enabled', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'my-mcp', url: 'old', enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      await registerMcpServer('o', 's', 'my-mcp', 'https://new.example');
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ key: 'my-mcp', url: 'https://new.example', enabled: false });
+    });
+
+    it('setMcpServerEnabled toggles enabled on the matching entry', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'my-mcp', url: 'u', enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setMcpServerEnabled('o', 's', 'my-mcp', true);
+      expect(result.ok).to.be.true;
+      expect(JSON.parse(calls[1].opts.body).value[0].enabled).to.be.true;
+    });
+
+    it('deleteMcpServer removes the entry by key and PUTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => OVERRIDES_BAG([{ key: 'a', url: 'u' }, { key: 'my-mcp', url: 'u' }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await deleteMcpServer('o', 's', 'my-mcp');
+      expect(result.ok).to.be.true;
+      const sent = JSON.parse(calls[1].opts.body).value;
+      expect(sent.map((x) => x.key)).to.deep.equal(['a']);
+    });
+
+    // Plugins (aem-sites-claudebridge#163/#189): GET the overrides bag, mutate
+    // plugins.installed, PUT it back - same shape as the MCP servers tests above.
+    const PLUGINS_BAG = (installed) => ({
+      settings: {
+        skills: { sources: [], disabled_skills: [] },
+        mcp_servers: [],
+        plugins: { installed },
+      },
+    });
+    const MANIFEST = { name: 'web', description: 'Browser skills', repository: 'https://github.com/adobe/skills' };
+
+    it('loadInstalledPlugins GETs overrides and returns the installed array', async () => {
+      trackFetch(() => ({ ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST }]) }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.have.length(1);
+      expect(result[0].ref).to.equal('web');
+    });
+
+    it('loadInstalledPlugins degrades to [] on a failed read rather than throwing', async () => {
+      trackFetch(() => ({ ok: false, status: 502 }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.deep.equal([]);
+    });
+
+    it('installPlugin appends a new ref + manifest and PUTs the result', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => PLUGINS_BAG([]) };
+        return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: true }]) };
+      });
+      const result = await installPlugin(MANIFEST);
+      expect(result.ok).to.be.true;
+      expect(calls[1].url).to.equal('https://aem-sites-claudebridge-va6.adobe.io/api/v1/overrides/user/settings/plugins');
+      expect(calls[1].opts.method).to.equal('PUT');
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent).to.have.length(1);
+      expect(sent[0]).to.deep.include({ ref: 'web', enabled: true });
+      expect(sent[0].manifest).to.deep.equal(MANIFEST);
+    });
+
+    it('installPlugin re-installs (refresh + re-enable) an existing ref instead of duplicating it', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: false }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      await installPlugin(MANIFEST);
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent).to.have.length(1);
+      expect(sent[0].enabled).to.be.true;
+    });
+
+    it('setPluginEnabled toggles enabled on the matching ref', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return { ok: true, json: async () => PLUGINS_BAG([{ ref: 'web', manifest: MANIFEST, enabled: true }]) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setPluginEnabled('web', false);
+      expect(result.ok).to.be.true;
+      expect(JSON.parse(calls[1].opts.body).value.installed[0].enabled).to.be.false;
+    });
+
+    it('setPluginEnabled fails without writing when the ref is not installed', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) return { ok: true, json: async () => PLUGINS_BAG([]) };
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await setPluginEnabled('missing', true);
+      expect(result.ok).to.be.false;
+      expect(calls).to.have.length(1);
+    });
+
+    it('uninstallPlugin removes the entry by ref and PUTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts.method === undefined) {
+          return {
+            ok: true,
+            json: async () => PLUGINS_BAG([
+              { ref: 'web', manifest: MANIFEST },
+              { ref: 'other', manifest: { name: 'other' } },
+            ]),
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      const result = await uninstallPlugin('web');
+      expect(result.ok).to.be.true;
+      const sent = JSON.parse(calls[1].opts.body).value.installed;
+      expect(sent.map((r) => r.ref)).to.deep.equal(['other']);
+    });
+
+    it('fetchMarketplaceCatalog normalizes marketplace.json entries and reports no error on success', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          plugins: [
+            { name: 'web', description: 'Browser skills', version: '1.0.0', repository: 'https://github.com/adobe/skills' },
+            { name: '' }, // malformed entry, dropped
+          ],
+        }),
+      }));
+      const { entries, hadError } = await fetchMarketplaceCatalog();
+      expect(hadError).to.be.false;
+      expect(entries).to.have.length(1);
+      expect(entries[0]).to.deep.include({ name: 'web', description: 'Browser skills', version: '1.0.0' });
+    });
+
+    it('fetchMarketplaceCatalog reports hadError without throwing when the source is unreachable', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch(() => ({ ok: false, status: 404 }));
+      const { entries, hadError } = await fetchMarketplaceCatalog();
+      expect(hadError).to.be.true;
+      expect(entries).to.deep.equal([]);
+    });
+
+    it('fetchMarketplaceCatalog falls back to the master branch when main 404s', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => {
+        urls.push(String(url));
+        if (String(url).includes('/main/')) return { ok: false, status: 404 };
+        if (String(url).includes('/master/')) {
+          return { ok: true, json: async () => ({ plugins: [{ name: 'legacy', description: 'on master' }] }) };
+        }
+        return { ok: false, status: 404 };
+      });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'old-repo' }]);
+      expect(hadError).to.be.false;
+      expect(entries.map((e) => e.name)).to.deep.equal(['legacy']);
+      expect(urls.some((u) => u.includes('/main/'))).to.be.true; // tried main first
+      expect(urls.some((u) => u.includes('/master/'))).to.be.true; // then master
+    });
+
+    it('fetchMarketplaceCatalog does not hammer past a non-404 error (e.g. 403)', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      const urls = [];
+      trackFetch((url) => { urls.push(String(url)); return { ok: false, status: 403 }; });
+      const { entries, hadError } = await fetchMarketplaceCatalog([{ owner: 'acme', repo: 'rate-limited' }]);
+      expect(hadError).to.be.true;
+      expect(entries).to.deep.equal([]);
+      expect(urls.filter((u) => u.includes('raw.githubusercontent')).length).to.equal(1); // gave up after the first
+    });
+  });
+
+  describe('Plugins CMA off (CMA-only, no AO equivalent)', () => {
+    beforeEach(() => setSkillsBackend({ cma: false }));
+
+    it('loadInstalledPlugins returns [] without calling any endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => ({}) }));
+      const result = await loadInstalledPlugins();
+      expect(result).to.deep.equal([]);
+      expect(calls).to.have.length(0);
+    });
+
+    it('installPlugin/setPluginEnabled/uninstallPlugin all fail closed with a clear error', async () => {
+      const installResult = await installPlugin({ name: 'web', repository: 'https://github.com/adobe/skills' });
+      const enableResult = await setPluginEnabled('web', true);
+      const uninstallResult = await uninstallPlugin('web');
+      for (const result of [installResult, enableResult, uninstallResult]) {
+        expect(result.ok).to.be.false;
+        expect(result.error).to.match(/CMA harness/);
+      }
+    });
+  });
+
+  describe('MCP CMA off (DA config, unchanged)', () => {
+    it('deleteMcpServer does not call the bridge overrides endpoint', async () => {
+      const calls = trackFetch(() => ({ ok: true, text: async () => '{}', json: async () => ({}) }));
+      await deleteMcpServer('exp-workspace', 'frescopa', 'my-mcp');
+      expect(calls.every((c) => !String(c.url).includes('claudebridge'))).to.be.true;
+    });
+  });
+
+  describe('Marketplace sources (.da config sheet, DA CONFIG-ACL gated)', () => {
+    beforeEach(() => mockAuth());
+
+    // canWriteConfig probes HEAD /config/{org}/{site}/ and reads x-da-actions;
+    // this wraps a mock response with (or without) a config-write grant.
+    const okCfg = (body = {}, write = true) => ({
+      ok: true,
+      headers: {
+        get: (n) => (n.toLowerCase() === 'x-da-actions'
+          ? (write ? '/site/CONFIG=read,write' : '/site/CONFIG=read')
+          : null),
+      },
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    });
+
+    it('canWriteConfig reads DA config-write from x-da-actions (GET /config) and fails CLOSED', async () => {
+      const calls1 = trackFetch(() => okCfg({}, true));
+      expect(await canWriteConfig('o', 's')).to.be.true;
+      expect(calls1.every((c) => c.opts.method === undefined || c.opts.method === 'GET')).to.be.true; // GET, not HEAD (/config has no HEAD handler)
+
+      trackFetch(() => okCfg({}, false));
+      expect(await canWriteConfig('o', 's')).to.be.false;
+
+      trackFetch(() => ({ ok: false, status: 404 }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // non-2xx => closed
+
+      trackFetch(() => ({ ok: true, headers: { get: () => null } }));
+      expect(await canWriteConfig('o', 's')).to.be.false; // no header => closed
+    });
+
+    it('parseMarketplaceSourceInput accepts owner/repo and github.com URLs, rejects garbage', () => {
+      expect(parseMarketplaceSourceInput('adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills.git')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('https://github.com/adobe/skills/tree/main')).to.deep.equal({ owner: 'adobe', repo: 'skills' });
+      expect(parseMarketplaceSourceInput('')).to.be.null;
+      expect(parseMarketplaceSourceInput('not-a-repo')).to.be.null;
+      expect(parseMarketplaceSourceInput('../../etc/passwd')).to.be.null;
+      expect(parseMarketplaceSourceInput('owner/repo/extra')).to.be.null;
+      expect(parseMarketplaceSourceInput('owner/../evil')).to.be.null;
+    });
+
+    it('loadMarketplaceSources reads + de-dupes the marketplace-sources sheet', async () => {
+      trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          'marketplace-sources': {
+            data: [{ source: 'acme/plugins' }, { source: 'ACME/Plugins' }, { source: 'not valid' }],
+          },
+        }),
+      }));
+      const sources = await loadMarketplaceSources('org-mkt', 'site-load');
+      expect(sources).to.deep.equal([{ owner: 'acme', repo: 'plugins' }]);
+    });
+
+    it('loadMarketplaceSources degrades to [] when config is unreachable', async () => {
+      trackFetch(() => ({ ok: false, status: 502 }));
+      expect(await loadMarketplaceSources('org-mkt', 'site-load-fail')).to.deep.equal([]);
+    });
+
+    it('addMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-no-perm', 'acme/plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects the built-in source (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-builtin', 'adobe/skills');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/already built in/);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects malformed input (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-bad', 'not a repo');
+      expect(result.ok).to.be.false;
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('addMarketplaceSource rejects a source already registered', async () => {
+      trackFetch(() => okCfg({ 'marketplace-sources': { data: [{ source: 'acme/plugins' }] } }, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-dup', 'ACME/plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/already registered/);
+    });
+
+    it('addMarketplaceSource probes config-write then GETs config and POSTs the appended row', async () => {
+      const calls = trackFetch(() => okCfg({}, true));
+      const result = await addMarketplaceSource('org-mkt', 'site-add-ok', 'https://github.com/acme/plugins');
+      expect(result.ok).to.be.true;
+      expect(calls.every((c) => c.opts.method === undefined || c.opts.method === 'GET' || c.opts.method === 'POST')).to.be.true; // never HEAD on /config
+      const postCall = calls.find((c) => c.opts.method === 'POST');
+      expect(postCall).to.exist;
+      const saved = JSON.parse(postCall.opts.body.get('config'));
+      expect(saved['marketplace-sources'].data).to.deep.equal([{ source: 'acme/plugins' }]);
+    });
+
+    it('removeMarketplaceSource rejects a caller without config-write (no config write performed)', async () => {
+      const calls = trackFetch(() => okCfg({}, false));
+      const result = await removeMarketplaceSource('org-mkt', 'site-remove-no-perm', 'acme', 'plugins');
+      expect(result.ok).to.be.false;
+      expect(result.error).to.match(/config-write/i);
+      expect(calls.some((c) => c.opts.method === 'POST')).to.be.false;
+    });
+
+    it('removeMarketplaceSource filters the row out and POSTs the rest', async () => {
+      const calls = trackFetch((url, opts) => {
+        if (opts?.method === 'POST') return okCfg({}, true);
+        return okCfg({
+          'marketplace-sources': { data: [{ source: 'acme/plugins' }, { source: 'other/thing' }] },
+        }, true);
+      });
+      const result = await removeMarketplaceSource('org-mkt', 'site-remove', 'ACME', 'Plugins');
+      expect(result.ok).to.be.true;
+      const postCall = calls.find((c) => c.opts.method === 'POST');
+      const saved = JSON.parse(postCall.opts.body.get('config'));
+      expect(saved['marketplace-sources'].data).to.deep.equal([{ source: 'other/thing' }]);
+    });
+
+    it('fetchMarketplaceCatalog merges the built-in source with extra sources and de-dupes by name', async () => {
+      __resetMarketplaceCatalogCacheForTests();
+      trackFetch((url) => {
+        if (String(url).includes('/adobe/skills/')) {
+          return { ok: true, json: async () => ({ plugins: [{ name: 'web', description: 'Built-in web' }] }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            plugins: [
+              { name: 'web', description: 'Should not shadow the built-in one' },
+              { name: 'acme-tools', description: 'Custom plugin' },
+            ],
+          }),
+        };
+      });
+      const { entries, hadError } = await fetchMarketplaceCatalog([
+        { owner: 'adobe', repo: 'skills' },
+        { owner: 'acme', repo: 'plugins' },
+      ]);
+      expect(hadError).to.be.false;
+      expect(entries.map((e) => e.name)).to.deep.equal(['web', 'acme-tools']);
+      expect(entries.find((e) => e.name === 'web')).to.deep.include({ description: 'Built-in web', builtIn: true });
+      expect(entries.find((e) => e.name === 'acme-tools')).to.deep.include({ builtIn: false, sourceOwner: 'acme', sourceRepo: 'plugins' });
+    });
+
+    it('mergeMarketplacePluginView merges installed + catalog, derives source, flags Adobe', () => {
+      const catalog = [
+        { name: 'web', description: 'Catalog desc', version: '1.0.0', sourceOwner: 'adobe', sourceRepo: 'skills', builtIn: true, repository: 'https://github.com/adobe/skills' },
+        { name: 'acme-tools', description: 'Acme', sourceOwner: 'acme', sourceRepo: 'plugins', builtIn: false, repository: 'https://github.com/acme/plugins' },
+      ];
+      const installed = [
+        { ref: 'web', enabled: true, manifest: { name: 'web', description: 'Installed desc', repository: 'https://github.com/adobe/skills' }, resolved: { skills: [1, 2], mcpServers: [1] } },
+      ];
+      const web = mergeMarketplacePluginView('web', installed, catalog);
+      expect(web).to.include({ name: 'web', description: 'Installed desc', isInstalled: true, enabled: true, isAdobe: true, builtIn: true, sourceOwner: 'adobe', sourceRepo: 'skills', skillCount: 2, mcpCount: 1, resolved: true });
+
+      const acme = mergeMarketplacePluginView('acme-tools', installed, catalog);
+      expect(acme).to.include({ name: 'acme-tools', isInstalled: false, isAdobe: false, builtIn: false, sourceOwner: 'acme', sourceRepo: 'plugins' });
+
+      // installed-only (not in catalog): source derived from the manifest repository
+      const instOnly = mergeMarketplacePluginView('solo', [
+        { ref: 'solo', enabled: false, manifest: { name: 'solo', repository: 'https://github.com/vendor/solo-plugin' } },
+      ], []);
+      expect(instOnly).to.include({ isInstalled: true, enabled: false, sourceOwner: 'vendor', sourceRepo: 'solo-plugin', isAdobe: false });
+
+      expect(mergeMarketplacePluginView('nope', installed, catalog)).to.be.null;
+      expect(mergeMarketplacePluginView('', installed, catalog)).to.be.null;
+    });
+
+    it('authorLabel normalizes string/object/empty author shapes (regression: "by [object Object]")', () => {
+      expect(authorLabel('Adobe')).to.equal('Adobe');
+      expect(authorLabel('  Adobe  ')).to.equal('Adobe');
+      expect(authorLabel({ name: 'Adobe' })).to.equal('Adobe');
+      expect(authorLabel({ email: 'skills@adobe.com' })).to.equal('skills@adobe.com');
+      expect(authorLabel({ url: 'https://adobe.com' })).to.equal('https://adobe.com');
+      expect(authorLabel({})).to.equal('');
+      expect(authorLabel(null)).to.equal('');
+      expect(authorLabel(undefined)).to.equal('');
+      expect(authorLabel('')).to.equal('');
+    });
+  });
+});
+
+describe('fetchEwFlags (org + site merge, mirrors da-nx getEWFlags)', () => {
+  const realFetch = window.fetch;
+  afterEach(() => { window.fetch = realFetch; });
+
+  // Site config URL has two path segments after /config/ (…/config/org/site/);
+  // org config has one (…/config/org/). Used to route the mock response.
+  const isSiteUrl = (url) => /\/config\/[^/]+\/[^/]+\/$/.test(String(url));
+
+  function mockConfigs({
+    orgFlags = null, siteFlags = null, orgStatus = 200, siteStatus = 200,
+  } = {}) {
+    window.fetch = async (url) => {
+      const site = isSiteUrl(url);
+      const status = site ? siteStatus : orgStatus;
+      const flags = site ? siteFlags : orgFlags;
+      if (status !== 200) return { ok: false, status, json: async () => ({}) };
+      return {
+        ok: true, status: 200, json: async () => (flags ? { flags: { data: flags } } : {}),
+      };
+    };
+  }
+
+  it('reads ew.coworker set only at the ORG level (the reported bug)', async () => {
+    mockConfigs({ orgFlags: [{ key: 'ew.coworker', value: 'cma' }], siteFlags: [] });
+    const flags = await fetchEwFlags('ew-orgonly', 'site-a');
+    expect(flags['ew.coworker']).to.equal('cma');
+  });
+
+  it('lets the site-level value override the org-level value', async () => {
+    mockConfigs({
+      orgFlags: [{ key: 'ew.coworker', value: 'cma' }],
+      siteFlags: [{ key: 'ew.coworker', value: 'true' }],
+    });
+    const flags = await fetchEwFlags('ew-override', 'site-b');
+    expect(flags['ew.coworker']).to.equal('true');
+  });
+
+  it('keeps only ew.* keys and tolerates a 404 org config', async () => {
+    mockConfigs({
+      orgStatus: 404,
+      siteFlags: [{ key: 'ew.coworker', value: 'cma' }, { key: 'other', value: 'x' }],
+    });
+    const flags = await fetchEwFlags('ew-404', 'site-c');
+    expect(flags['ew.coworker']).to.equal('cma');
+    expect(flags).to.not.have.property('other');
+  });
+
+  it('does not materialize (POST) an org config when it 404s', async () => {
+    const methods = [];
+    window.fetch = async (url, opts = {}) => {
+      methods.push(opts.method || 'GET');
+      if (isSiteUrl(url)) return { ok: true, status: 200, json: async () => ({ flags: { data: [] } }) };
+      return { ok: false, status: 404, json: async () => ({}) };
+    };
+    await fetchEwFlags('ew-nomat', 'site-d');
+    expect(methods).to.not.include('POST');
+  });
+});
+
+describe('CMA harness resolution (ew.coworker=cma + entitlement)', () => {
+  const realAdobeIMS = window.adobeIMS;
+  const profile = (serviceCode) => ({
+    projectedProductContext: [{ prodCtx: { owningEntity: 'ORG@AdobeOrg', ...(serviceCode ? { serviceCode } : {}) } }],
+  });
+  const withIms = (getProfile) => { window.adobeIMS = { getProfile }; };
+
+  afterEach(() => { window.adobeIMS = realAdobeIMS; });
+
+  it('mirrors the bridge/da-nx required service codes', () => {
+    expect(CMA_REQUIRED_SERVICE_CODES).to.deep.equal(['acp', 'dma_tartan']);
+  });
+
+  it('isCmaEntitled: true for each required service code', async () => {
+    withIms(async () => profile('acp'));
+    expect(await isCmaEntitled()).to.equal(true);
+    withIms(async () => profile('dma_tartan'));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('isCmaEntitled: false for other codes, no contexts, or an IMS error (fails closed)', async () => {
+    withIms(async () => profile('dma_aem_cloud'));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => ({}));
+    expect(await isCmaEntitled()).to.equal(false);
+    withIms(async () => { throw new Error('ims down'); });
+    expect(await isCmaEntitled()).to.equal(false);
+    window.adobeIMS = undefined;
+    expect(await isCmaEntitled()).to.equal(false);
+  });
+
+  it('isCmaEntitled: checks entitlement on the SELECTED tenant (first entry with an owningEntity), '
+    + 'matching getImsOrgId — not any entry in the array', async () => {
+    // Selected (first owningEntity) entry qualifies -> true, even with a
+    // later irrelevant entry.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'irrelevant' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+
+    // A LATER entry qualifies but the selected (first owningEntity) one
+    // doesn't -> false. getImsOrgId would send org-1 as x-tenant-id, which
+    // the bridge would reject since only org-2 is actually entitled.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'irrelevant' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'acp' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(false);
+
+    // Entries with no owningEntity are skipped when selecting, same as
+    // getImsOrgId.
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { serviceCode: 'acp' } },
+        { prodCtx: { owningEntity: 'org-2', serviceCode: 'dma_tartan' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('isCmaEntitled: checks ALL entries for the selected org, not just the first — IMS emits one '
+    + 'entry per product, not per org, so a profile with many entries for one org (most not '
+    + 'CMA-related) must still find the one that is', async () => {
+    withIms(async () => ({
+      projectedProductContext: [
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_aem_cloud' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'workfront' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_tartan' } },
+        { prodCtx: { owningEntity: 'org-1', serviceCode: 'dma_audiencemanager_int' } },
+      ],
+    }));
+    expect(await isCmaEntitled()).to.equal(true);
+  });
+
+  it('resolveCmaHarness: ew.coworker "cma" + entitled => cma', async () => {
+    withIms(async () => profile('acp'));
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(true);
+  });
+
+  it('resolveCmaHarness: ew.coworker=cma without entitlement, or any value other than "cma" => no cma', async () => {
+    withIms(async () => profile());
+    expect(await resolveCmaHarness({ 'ew.coworker': 'cma' })).to.equal(false);
+    withIms(async () => profile('acp'));
+    expect(await resolveCmaHarness({ 'ew.coworker': 'true' })).to.equal(false);
+    expect(await resolveCmaHarness({ 'ew.coworker': 'CMA' })).to.equal(false);
+    expect(await resolveCmaHarness({})).to.equal(false);
   });
 });

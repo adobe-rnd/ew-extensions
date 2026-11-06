@@ -121,6 +121,55 @@
   margin-top: var(--s2-spacing-100);
 }
 
+/* ─── inline alert (Spectrum InlineAlert, border style) ─────────────────────── */
+
+.inline-alert {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2-spacing-100);
+  padding: var(--s2-spacing-300);
+  border: 2px solid var(--s2-gray-300);
+  border-radius: var(--s2-corner-radius-200);
+  background: light-dark(white, var(--s2-gray-50));
+}
+
+.inline-alert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2-spacing-100);
+}
+
+.inline-alert-icon {
+  flex-shrink: 0;
+  width: var(--ew-icon-size-l);
+  height: var(--ew-icon-size-l);
+}
+
+.inline-alert-title {
+  margin: 0;
+  font-size: var(--s2-body-size-m);
+  font-weight: var(--s2-heading-font-weight);
+  color: var(--s2-gray-900);
+}
+
+.inline-alert-content {
+  margin: 0;
+  font-size: var(--s2-body-size-s);
+  color: var(--s2-gray-600);
+  line-height: 1.5;
+}
+
+.inline-alert-negative {
+  border-color: var(--s2-negative-content-default, #d1342f);
+}
+
+.inline-alert-negative .inline-alert-icon {
+  color: var(--s2-negative-content-default, #d1342f);
+}
+
 /* ─── button primitives ─────────────────────────────────────────────────────── */
 
 /* Shared base for all icon-sized buttons (close, more, row actions) */
@@ -410,15 +459,39 @@
   background: var(--s2-gray-100);
 }
 
-.confirm-btn-confirm {
+.confirm-btn-confirm,
+.confirm-btn-confirm-danger {
   background: var(--s2-negative-content-default, #d1342f);
   border-color: var(--s2-negative-content-default, #d1342f);
   color: white;
 }
 
-.confirm-btn-confirm:hover {
+.confirm-btn-confirm:hover,
+.confirm-btn-confirm-danger:hover {
   background: color-mix(in srgb, var(--s2-negative-content-default, #d1342f) 85%, black);
   border-color: color-mix(in srgb, var(--s2-negative-content-default, #d1342f) 85%, black);
+}
+
+.confirm-btn-confirm-primary {
+  background: var(--s2-accent-content-default, #0265dc);
+  border-color: var(--s2-accent-content-default, #0265dc);
+  color: white;
+}
+
+.confirm-btn-confirm-primary:hover {
+  background: color-mix(in srgb, var(--s2-accent-content-default, #0265dc) 85%, black);
+  border-color: color-mix(in srgb, var(--s2-accent-content-default, #0265dc) 85%, black);
+}
+
+.confirm-btn-confirm-default {
+  background: var(--s2-gray-700);
+  border-color: var(--s2-gray-700);
+  color: white;
+}
+
+.confirm-btn-confirm-default:hover {
+  background: var(--s2-gray-900);
+  border-color: var(--s2-gray-900);
 }
 
 .confirm-btn:focus-visible {

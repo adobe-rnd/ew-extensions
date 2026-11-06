@@ -31,6 +31,13 @@ export default {
           {
             "imports": {
               "da-lit": "/test/mocks/lit-stub.js"
+            },
+            "scopes": {
+              "/tools/block-editor/": {
+                "https://da.live/nx/utils/sdk.js": "/test/unit/block-editor/fixtures/utils/sdk.js",
+                "https://da.live/nx2/scripts/nx.js": "/test/unit/block-editor/fixtures/scripts/nx.js",
+                "https://da.live/nx2/blocks/shared/picker/picker.js": "/test/unit/block-editor/fixtures/blocks/shared/picker/picker.js"
+              }
             }
           }
         </script>

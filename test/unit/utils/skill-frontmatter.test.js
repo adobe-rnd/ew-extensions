@@ -87,6 +87,27 @@ describe('parseFrontmatter', () => {
     const md = '---\ndescription: "line1\\nline2"\n---\n';
     expect(parseFrontmatter(md).fields.description).to.equal('line1\nline2');
   });
+
+  it('folds a `>` block scalar into a single line', () => {
+    const fm = '---\nname: s\ndescription: >\n  This is a long description\n  that spans lines.\nversion: 1\n---\nBody';
+    expect(parseFrontmatter(fm).fields.description).to.equal('This is a long description that spans lines.\n');
+  });
+
+  it('keeps newlines in a `|` literal block scalar', () => {
+    const fm = '---\ndescription: |\n  line one\n  line two\n---\n';
+    expect(parseFrontmatter(fm).fields.description).to.equal('line one\nline two\n');
+  });
+
+  it('strips the trailing newline with the `-` chomping indicator', () => {
+    const fm = '---\ndescription: >-\n  a\n  b\n---\n';
+    expect(parseFrontmatter(fm).fields.description).to.equal('a b');
+  });
+
+  it('folds blank lines in `>` to a single newline and keeps later keys', () => {
+    const fm = '---\ndescription: >\n  para one\n\n  para two\nx: 1\n---\n';
+    expect(parseFrontmatter(fm).fields.description).to.equal('para one\npara two\n');
+    expect(parseFrontmatter(fm).fields.x).to.equal('1');
+  });
 });
 
 describe('stripFrontmatter', () => {

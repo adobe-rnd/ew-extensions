@@ -12,21 +12,27 @@ export function hasEwEnabled(json) {
   return flagRows.some((r) => r.key === 'ew.enabled' && String(r.value).toLowerCase() === 'true');
 }
 
-export function buildConfigWithEwEnabled(existingJson) {
-  const newRow = { key: 'ew.enabled', value: 'true' };
-  if (!existingJson) return { flags: { data: [newRow] } };
-  const flagsExisted = !!existingJson.flags;
-  const existingFlags = Array.isArray(existingJson.flags?.data) ? existingJson.flags.data : [];
-  const filtered = existingFlags.filter((r) => r.key !== 'ew.enabled');
-  const updatedFlags = { ...(existingJson.flags ?? {}), data: [...filtered, newRow] };
-  const result = { ...existingJson, flags: updatedFlags };
-  if (!flagsExisted && Array.isArray(existingJson[':names'])) {
-    result[':names'] = [...existingJson[':names'], 'flags'];
+function syncConfigMeta(cfg) {
+  const names = Object.keys(cfg).filter(
+    (k) => !k.startsWith(':') && cfg[k] !== null && typeof cfg[k] === 'object',
+  );
+  if (names.length) {
+    cfg[':names'] = names;
+    cfg[':type'] = 'multi-sheet';
   }
-  return result;
+  return cfg;
 }
 
-const SIDEKICK_EDIT_URL = 'https://da.live/#/{{org}}/{{site}}{{pathname}}';
+export function buildConfigWithEwEnabled(existingJson) {
+  const newRow = { key: 'ew.enabled', value: 'true' };
+  const result = { ...(existingJson ?? {}) };
+  const existingFlags = Array.isArray(result.flags?.data) ? result.flags.data : [];
+  const filtered = existingFlags.filter((r) => r.key !== 'ew.enabled');
+  result.flags = { ...(result.flags ?? {}), data: [...filtered, newRow] };
+  return syncConfigMeta(result);
+}
+
+const SIDEKICK_EDIT_URL = 'https://da.live/canvas#/{{org}}/{{site}}{{pathname}}';
 
 export function hasCorrectSidekickConfig(json) {
   return json?.editUrlPattern === SIDEKICK_EDIT_URL;
