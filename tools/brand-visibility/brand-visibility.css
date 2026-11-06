@@ -41,29 +41,11 @@ sl-button.ew-fill-accent::part(base):hover:not(:disabled) {
   border-color: var(--ew-accent-hover);
 }
 
-sl-button.ew-outline-accent {
-  background: transparent;
-  border: none;
-  padding: 0;
-  vertical-align: middle;
-}
-
-sl-button.ew-outline-accent::part(base) {
-  background: transparent;
-  border-color: var(--ew-accent);
-  color: var(--ew-accent);
-}
-
-sl-button.ew-outline-accent::part(base):hover:not(:disabled) {
-  background: var(--s2-blue-100, #eff6ff);
-  border-color: var(--ew-accent-hover);
-  color: var(--ew-accent-hover);
-}
-
 brand-visibility-app .card {
   padding: var(--spacing-300, 16px);
   border-radius: var(--s2-radius-200, 10px);
   box-shadow: 0 1px 6px 0 rgb(0 0 0 / 12%);
+  margin-bottom: var(--spacing-200, 12px);
 }
 
 brand-visibility-app .card.error {
@@ -73,14 +55,6 @@ brand-visibility-app .card.error {
 
 brand-visibility-app .card ul {
   margin: 0;
-}
-
-brand-visibility-app .card ul li {
-  margin-bottom: var(--spacing-75, 6px);
-}
-
-brand-visibility-app .card {
-  margin-bottom: var(--spacing-200, 12px);
 }
 
 brand-visibility-app .card:last-of-type {
@@ -148,91 +122,6 @@ brand-visibility-app .opportunity-item.is-open .opp-expand-toggle .bv-chevron {
   transform: rotate(180deg);
 }
 
-brand-visibility-app .drafts {
-  margin-bottom: var(--spacing-200, 12px);
-}
-
-brand-visibility-app .drafts-loading {
-  font-size: 13px;
-  color: var(--s2-gray-500, #999);
-  margin: 0 0 var(--spacing-200, 12px);
-}
-
-brand-visibility-app .draft-link {
-  font-size: 13px;
-  color: var(--ew-accent);
-  text-decoration: none;
-}
-
-brand-visibility-app .draft-link:hover {
-  text-decoration: underline;
-}
-
-brand-visibility-app .opp-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-brand-visibility-app .opp-generate-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px 5px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  color: var(--ew-accent);
-  background: transparent;
-  border: 1px solid var(--s2-gray-300, #ccc);
-  border-radius: 999px;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-
-brand-visibility-app .opp-generate-btn:hover {
-  background: var(--s2-blue-100, #eff6ff);
-  border-color: var(--ew-accent);
-}
-
-brand-visibility-app .opp-generate-btn .bv-sparkle {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-}
-
-brand-visibility-app .bv-preview-btn {
-  width: 100%;
-  margin-top: var(--spacing-150, 10px);
-}
-
-.bv-toast {
-  position: fixed;
-  bottom: var(--spacing-400, 24px);
-  left: 50%;
-  transform: translateX(-50%) translateY(12px);
-  background: var(--s2-gray-900, #1a1a1a);
-  color: #fff;
-  font-size: var(--s2-body-s-size, 13px);
-  padding: var(--spacing-150, 10px) var(--spacing-300, 16px);
-  border-radius: var(--s2-radius-200, 10px);
-  opacity: 0;
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
-  pointer-events: none;
-  z-index: 9999;
-  white-space: nowrap;
-}
-
-.bv-toast--visible {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
 .bv-scope-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: #6b6a64; margin: 4px 0 8px; padding: 8px 12px; background: #f1efe8; border-radius: 6px; }
 .bv-scope-banner strong { color: #222; }
 .bv-scope-toggle { flex-shrink: 0; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid #b4b2a9; background: #fff; color: #185fa5; cursor: pointer; white-space: nowrap; }
@@ -252,7 +141,7 @@ brand-visibility-app .bv-preview-btn {
 .bv-chip.is-active { background: #e6f1fb; border-color: #85b7eb; color: #0c447c; }
 .bv-count { font-size: 12px; color: #888780; margin: 0 0 8px; }
 .opp-clickable { cursor: pointer; }
-.opp-clickable--static { cursor: default; }
+.opp-clickable-static { cursor: default; }
 
 brand-visibility-app .bv-load-more {
   display: block;
@@ -272,14 +161,14 @@ brand-visibility-app .bv-load-more {
     border-color 0.15s;
 }
 
-brand-visibility-app .bv-load-more:hover:not(:disabled) {
-  background: var(--s2-blue-100, #eff6ff);
-  border-color: var(--ew-accent);
-}
-
 brand-visibility-app .bv-load-more:disabled {
   color: var(--s2-gray-500, #999);
   cursor: default;
+}
+
+brand-visibility-app .bv-load-more:hover:not(:disabled) {
+  background: var(--s2-blue-100, #eff6ff);
+  border-color: var(--ew-accent);
 }
 
 /* Tag chips — surfaces SpaceCat opportunity tags (e.g. "isElmo", "llm", "Engagement"). */
@@ -302,7 +191,7 @@ brand-visibility-app .bv-tag-chip {
   color: var(--s2-gray-700, #555);
 }
 
-brand-visibility-app .bv-tag-chip--elmo {
+brand-visibility-app .bv-tag-chip-elmo {
   background: var(--s2-blue-100, #eff6ff);
   border-color: #85b7eb;
   color: #0c447c;
@@ -313,6 +202,11 @@ brand-visibility-app .bv-tag-chip--elmo {
 .opp-detail-label { text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; color: #888780; margin-bottom: 3px !important; }
 .opp-detail ol { margin: 0; padding-left: 18px; font-size: 13px; color: #444441; line-height: 1.55; }
 .opp-detail ol li { margin-bottom: 4px; }
+
+brand-visibility-app .card ul li {
+  margin-bottom: var(--spacing-75, 6px);
+}
+
 .opp-data-list { margin: 0; font-size: 13px; color: #444441; }
 .opp-data-list div { display: flex; gap: 6px; }
 .opp-data-list .opp-data-key { color: #888780; }
@@ -322,12 +216,11 @@ brand-visibility-app .bv-tag-chip--elmo {
 .opp-stat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .opp-stat { font-size: 13px; color: #444441; margin: 0; }
 .opp-toc-list, .opp-evidence-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: #444441; line-height: 1.6; }
-.drafts-list { margin: 4px 0 8px; padding-left: 18px; }
 .bv-pill { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; margin-right: 6px; }
-.bv-pill--status-new { background: #e6f1fb; color: #0c447c; }
-.bv-pill--status-in_progress { background: #faeeda; color: #7a4a0b; }
-.bv-pill--status-resolved { background: #eaf3de; color: #27500a; }
-.bv-pill--status-ignored { background: #f1efe8; color: #5f5e5a; }
-.bv-pill--status-fixed { background: #eaf3de; color: #27500a; }
-.opp-suggestion-wrap--fixed { opacity: 0.6; }
-.opp-suggestion-wrap--fixed .opp-suggestion { filter: grayscale(0.3); }
+.bv-pill-status-new { background: #e6f1fb; color: #0c447c; }
+.bv-pill-status-in-progress { background: #faeeda; color: #7a4a0b; }
+.bv-pill-status-resolved { background: #eaf3de; color: #27500a; }
+.bv-pill-status-ignored { background: #f1efe8; color: #5f5e5a; }
+.bv-pill-status-fixed { background: #eaf3de; color: #27500a; }
+.opp-suggestion-wrap-fixed { opacity: 0.6; }
+.opp-suggestion-wrap-fixed .opp-suggestion { filter: grayscale(0.3); }

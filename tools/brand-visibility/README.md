@@ -10,8 +10,7 @@ The panel shows only opportunities tagged `isElmo` by the API.
 - An authenticated EW session with access to the DA organization and site.
 - An LLMO site ID and permission to read that site's opportunities and suggestions.
   The LLMO site ID is separate from the DA organization and repository names.
-- An EW host that loads DA App SDK extensions. Draft discovery requires the
-  host's `daFetch` action.
+- An EW host that loads DA App SDK extensions.
 - Existing opportunities in Brand Visibility. This extension does not create
   audits or configure the site's Brand Visibility integration.
 
@@ -50,20 +49,13 @@ The session token is cached in the current tab's session storage and reused unti
 shortly before expiry. The panel then reads opportunities and suggestions from
 the LLMO API. No separate login form is provided.
 
-### Optional Draft Comparison
-
-For **Compare drafts**, the EW host must resolve `showPanel('drafts-preview')` to
-the [Drafts Preview entry point](../drafts-preview/drafts-preview.html). Serve both
-tools from the same origin: draft metadata is passed through local storage.
-Registering Brand Visibility alone does not configure this host panel mapping.
-
 ## Using the Panel
 
 1. Open a page in the EW canvas, then open **Brand Visibility**.
 2. Wait for the panel to load opportunities and match suggestions to the page.
    When the host supplies a page path, the initial view is scoped to that page.
 3. Expand an opportunity by clicking its card or **Show details**. Review the
-  suggested content and any available draft links.
+  suggested content.
 4. Make any desired changes separately in the canvas and review them before
   publishing through your normal workflow. The panel does not send prompts to
   the EW assistant or apply changes automatically.
@@ -98,14 +90,6 @@ A card with only fixed matches displays **Fixed**,
 but the status filter still uses the opportunity's API status. The panel does
 not write status changes back to the API. Reload to pick up API status changes.
 
-### Reviewing Drafts
-
-When files exist under `/drafts/brand-visibility/<opportunity-id>/`, they appear
-under **Draft content**. Open a draft link to edit it
-in the DA canvas, or select **Compare drafts** to open the preview panel. Draft
-lists refresh when the host reports relevant file changes; reload if necessary.
-The panel does not create these drafts in this version.
-
 ## Local Development
 
 Serve this repository with the AEM CLI from the repository root:
@@ -121,8 +105,8 @@ short-lived IMS access token:
 http://localhost:3001/tools/brand-visibility/brand-visibility.html?site-id=YOUR_LLMO_SITE_ID&page-path=%2Fexample&token=YOUR_IMS_ACCESS_TOKEN
 ```
 
-Standalone mode bypasses the SDK wait but does not provide DA draft access or
-host panel navigation. Test those features inside EW.
+Standalone mode bypasses the SDK wait. Test authentication and automatic canvas
+page-path detection inside EW before deployment.
 
 | Parameter | Purpose |
 | --- | --- |
@@ -146,8 +130,6 @@ API origin must allow requests from the extension origin through CORS.
 | Session exchange failure or HTTP 401/403 | Check the IMS session, LLMO access permissions, API endpoint, and site ID. Sign in again or reopen the panel, then use **Retry**. |
 | No brand visibility opportunities | Verify the selected LLMO site has opportunities tagged `isElmo`. Untagged opportunities are not shown. |
 | No suggestions for this page | Check the displayed page path and try **Show all opportunities**. Only matching `NEW` and `FIXED` suggestions qualify; failed suggestion requests can also leave the page view empty. |
-| Drafts missing or comparison does not open | Verify DA read permissions, the draft folder, the host's `drafts-preview` mapping, and same-origin local-storage access. |
-
 For setup and support, share the extension URL with credentials removed, the
 displayed page path, and the HTTP status of the failed request. Do not share
 tokens or authorization headers.

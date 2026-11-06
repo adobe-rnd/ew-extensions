@@ -5,9 +5,6 @@ import { getSpacecatSessionToken } from './session-auth.js';
 // LLMO API origin. Defaults to prod; override for local dev with
 // ?llmo-api=http://localhost:3001
 const DEFAULT_API_BASE_URL = 'https://llmo.experiencecloud.live/api/v1';
-const DA_ADMIN = 'https://admin.da.live';
-const DA_CANVAS = 'https://da.live/canvas';
-const DRAFTS_PREFIX = '/drafts/brand-visibility/';
 
 const STATUS_FILTERS = ['all', 'new', 'in_progress', 'resolved', 'ignored'];
 const SORTS = ['recent', 'title', 'type'];
@@ -64,27 +61,6 @@ async function withConcurrency(items, limit, fn) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
 }
-
-// Origins allowed to postMessage into this app. The tool runs in a DA-hosted
-// iframe, so trusted messages come from the DA host (da.live) or, in local dev,
-// a localhost DA. Anything else is ignored.
-function isTrustedMessageOrigin(origin) {
-  if (origin === 'https://da.live') return true;
-  try {
-    const { hostname } = new URL(origin);
-    return hostname === 'localhost' || hostname === '127.0.0.1';
-  } catch {
-    return false;
-  }
-}
-
-// AI "sparkle / stardust" glyph — a large 4-point star with a small companion.
-const sparkleIcon = () => html`
-  <svg class="bv-sparkle" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 2c.4 3.9 2.1 5.6 6 6-3.9.4-5.6 2.1-6 6-.4-3.9-2.1-5.6-6-6 3.9-.4 5.6-2.1 6-6Z" />
-    <path d="M18.5 13c.2 1.9 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.1-2.8-3-3 1.9-.2 2.8-1.1 3-3Z" />
-  </svg>
-`;
 
 // Down chevron for the expand/collapse affordance (rotates 180° when open).
 const chevronIcon = () => html`
@@ -179,7 +155,7 @@ function renderPrerenderSuggestion(data) {
       ${data.aiSummary ? html`<p class="opp-suggestion-summary">${renderRichText(data.aiSummary)}</p>` : nothing}
       <div class="opp-stat-row">
         ${data.valuable != null
-          ? html`<span class="bv-pill bv-pill--status-${data.valuable ? 'resolved' : 'ignored'}">
+          ? html`<span class="bv-pill bv-pill-status-${data.valuable ? 'resolved' : 'ignored'}">
               ${data.valuable ? 'High impact' : 'Low impact'}
             </span>`
           : nothing}
@@ -287,7 +263,6 @@ class BrandVisibilityApp extends LitElement {
     _visibleCount: { state: true },
     _loading: { state: true },
     _error: { state: true },
-    _drafts: { state: true },
     _status: { state: true },
     _sort: { state: true },
     _q: { state: true },
@@ -307,7 +282,6 @@ class BrandVisibilityApp extends LitElement {
     this._visibleCount = PAGE_SIZE;
     this._loading = false;
     this._error = null;
-    this._drafts = {};
     this._status = 'all';
     this._sort = 'recent';
     this._q = '';
@@ -319,11 +293,9 @@ class BrandVisibilityApp extends LitElement {
     this._matchingDone = false; // flips true once the suggestion-matching pass finishes (even if nothing matched)
     // Non-reactive
     this._apiBase = DEFAULT_API_BASE_URL;
-    this._actions = null;
     this._accessToken = null; // IMS token used only to obtain a short-lived SpaceCat session token
-    this._org = null; // DA project org (slug), used for drafts + site-id storage key
-    this._site = null; // DA project repo (slug), used for drafts + site-id storage key
-    this._draftsStarted = false;
+    this._org = null; // DA project org (slug), used for site-id storage key
+    this._site = null; // DA project repo (slug), used for site-id storage key
     this._suggestionsStarted = false;
   }
 
@@ -333,27 +305,7 @@ class BrandVisibilityApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this._onAgentChange = (e) => {
-      if (!isTrustedMessageOrigin(e.origin)) return;
-      // The host only pushes `agentChange` to the iframe; completion is a manual
-      // outcome via the "Mark as acted" control, not a host-emitted signal.
-      if (e.data?.action !== 'agentChange') return;
-      const { detail } = e.data;
-      if (detail?.scope !== 'file') return;
-      for (const p of detail.paths ?? []) {
-        const idx = p.indexOf(DRAFTS_PREFIX);
-        if (idx === -1) continue;
-        const oppId = p.slice(idx + DRAFTS_PREFIX.length).split('/')[0];
-        if (oppId && this._opportunities.some((o) => o.id === oppId)) this._fetchDrafts(oppId);
-      }
-    };
-    window.addEventListener('message', this._onAgentChange);
     this._init();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    window.removeEventListener('message', this._onAgentChange);
   }
 
   async _init() {
@@ -373,14 +325,13 @@ class BrandVisibilityApp extends LitElement {
     // tool's html standalone against a local static server, outside any EW
     // iframe) — DA_SDK never resolves there since it's just waiting on a
     // postMessage from a host that isn't there. Inside a real EW iframe, DA_SDK
-    // *does* resolve, so it still needs to run (for org/site/actions/pagePath)
+    // *does* resolve, so it still needs to run (for org/site/pagePath)
     // even if ?token= is also set to swap in a different token.
     const inIframe = window.self !== window.top;
     if (inIframe) {
       try {
         const sdk = await DA_SDK;
         this._accessToken = tokenOverride || sdk.token;
-        this._actions = sdk.actions;
         this._org = sdk.project?.org;
         this._site = sdk.project?.repo;
         // The exact field the host uses for the open document's path isn't
@@ -452,7 +403,6 @@ class BrandVisibilityApp extends LitElement {
       // reports tagged "isElmo") — everything else is out of scope for this tool.
       this._opportunities = (Array.isArray(data) ? data : []).map(normalize).filter((o) => o.isElmo);
       this._visibleCount = PAGE_SIZE;
-      this._checkFetchDrafts();
       this._checkFetchSuggestions();
     } catch (err) {
       this._error = err.message;
@@ -492,69 +442,6 @@ class BrandVisibilityApp extends LitElement {
     }
   }
 
-  _checkFetchDrafts() {
-    if (this._actions && this._org && this._site && this._opportunities.length > 0 && !this._draftsStarted) {
-      this._draftsStarted = true;
-      Promise.all(this._opportunities.map((o) => this._fetchDrafts(o.id)));
-    }
-  }
-
-  async _fetchDrafts(oppId) {
-    this._drafts = { ...this._drafts, [oppId]: { loading: true, items: [] } };
-    try {
-      const url = `${DA_ADMIN}/list/${this._org}/${this._site}${DRAFTS_PREFIX}${oppId}`;
-      const resp = await this._actions.daFetch(url);
-      if (!resp.ok) {
-        this._drafts = { ...this._drafts, [oppId]: { loading: false, items: [] } };
-        return;
-      }
-      const payload = await resp.json();
-      const items = Array.isArray(payload) ? payload.filter((i) => i.ext) : [];
-      this._drafts = { ...this._drafts, [oppId]: { loading: false, items } };
-    } catch {
-      this._drafts = { ...this._drafts, [oppId]: { loading: false, items: [] } };
-    }
-  }
-
-  _buildPrompt(o, suggestions = []) {
-    if (o.type === 'toc') {
-      const labels = extractTocLabels(suggestions[0]?.data?.transformRules);
-      return [
-        'Update the page content - add below table of contents:',
-        ...labels.map((l, i) => `${i + 1}. ${l}`),
-      ].join('\n');
-    }
-    if (o.type === 'summarization') {
-      const summaries = [];
-      const bullets = [];
-      for (const s of suggestions) {
-        const data = s?.data ?? {};
-        const text = data.summarizationText || data.aiGeneratedSummarizationText;
-        if (!text) continue;
-        if (data.keyPoints === true) bullets.push(...extractBulletPoints(text));
-        else summaries.push(text);
-      }
-      return [
-        'Update the page content - add a summary section at the beginning of the main content, after the H1 and the hero if available:',
-        summaries.join('\n'),
-        'Add a key points section below the summary:',
-        bullets.map((b) => `- ${b}`).join('\n'),
-      ].join('\n');
-    }
-    const lines = [
-      `Opportunity: ${o.title}`,
-      o.description ? `Description: ${o.description}` : null,
-      `Type: ${typeLabel(o.type)}`,
-      o.guidanceSteps.length ? `Recommended steps:\n${o.guidanceSteps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : null,
-    ].filter(Boolean);
-    return [
-      lines.join('\n'),
-      '',
-      'Based on this brand-visibility opportunity, generate three pages that can help drive traffic or conversions on our website.',
-      `Create 3 different variations of content based on the opportunity at ${DRAFTS_PREFIX}${o.id}/`,
-    ].join('\n');
-  }
-
   _renderWithLinks(text) {
     const parts = [];
     const re = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
@@ -568,18 +455,6 @@ class BrandVisibilityApp extends LitElement {
     return parts;
   }
 
-  _toast(message) {
-    const el = document.createElement('div');
-    el.className = 'bv-toast';
-    el.textContent = message;
-    document.body.appendChild(el);
-    requestAnimationFrame(() => el.classList.add('bv-toast--visible'));
-    setTimeout(() => {
-      el.classList.remove('bv-toast--visible');
-      el.addEventListener('transitionend', () => el.remove(), { once: true });
-    }, 2500);
-  }
-
   _toggleExpanded(oppId) {
     const next = new Set(this._expanded);
     if (next.has(oppId)) next.delete(oppId);
@@ -587,76 +462,8 @@ class BrandVisibilityApp extends LitElement {
     this._expanded = next;
   }
 
-  _canvasUrl(item) {
-    const hash = item.ext ? item.path.slice(1, -(item.ext.length + 1)) : item.path.replace(/^\//, '');
-    return `${DA_CANVAS}#/${hash}`;
-  }
-
-  _draftName(item) {
-    const seg = item.path.split('/').pop() ?? '';
-    const base = item.ext ? seg.slice(0, -(item.ext.length + 1)) : seg;
-    return base.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  // Hand off the drafts to the drafts-preview tool, then ask the host to open it.
-  // The receiver reads localStorage['da-drafts-preview'] on mount; showPanel routes
-  // through the host (PANEL_EVENT.OPEN) — a raw window.postMessage never reaches it.
-  _openDraftsPreview(items) {
-    try {
-      localStorage.setItem(
-        'da-drafts-preview',
-        JSON.stringify({ items, org: this._org, site: this._site }),
-      );
-    } catch {
-      /* ignore quota/serialization errors */
-    }
-    this._actions?.showPanel?.('drafts-preview');
-  }
-
-  _renderDrafts(oppId) {
-    const entry = this._drafts[oppId];
-    if (!entry) return nothing;
-    if (entry.loading) return html`<p class="drafts-loading">Loading drafts…</p>`;
-    if (entry.items.length === 0) return nothing;
-    return html`
-      <div class="drafts">
-        <p class="opp-detail-label">Draft content</p>
-        <ul class="drafts-list">
-          ${entry.items.map(
-            (item) => html`<li>
-              <a class="draft-link" href=${this._canvasUrl(item)} target="_blank">${this._draftName(item)}</a>
-            </li>`,
-          )}
-        </ul>
-        <sl-button
-          class="ew-outline-accent bv-preview-btn"
-          @click=${() => this._openDraftsPreview(entry.items)}
-          >Compare drafts</sl-button
-        >
-      </div>`;
-  }
-
-  _renderGenerateButton(o, suggestions = []) {
-    const drafts = this._drafts[o.id];
-    if (drafts?.loading || (drafts && drafts.items.length > 0)) return nothing;
-    return html`
-      <button
-        type="button"
-        class="opp-generate-btn"
-        @click=${() => {
-          const prompt = this._buildPrompt(o, suggestions);
-          // setPrompt opens the chat panel host-side and sets the prompt (relayed to
-          // nx-open-chat-panel), so no separate open-chat message is needed.
-          if (this._actions?.setPrompt) this._actions.setPrompt(prompt, { autoSend: true });
-          else navigator.clipboard?.writeText(prompt).then(() => this._toast('Prompt copied to clipboard'));
-        }}
-      >
-        ${sparkleIcon()} Apply suggestion
-      </button>`;
-  }
-
   _pill(text, kind) {
-    return html`<span class="bv-pill bv-pill--${kind}">${text}</span>`;
+    return html`<span class="bv-pill bv-pill-${kind.replaceAll('_', '-')}">${text}</span>`;
   }
 
   _visibleOpportunities() {
@@ -780,7 +587,7 @@ class BrandVisibilityApp extends LitElement {
     return html`
       <div class="card opportunity-item ${open && canExpand ? 'is-open' : ''}">
         <div
-          class="opp-clickable ${canExpand ? '' : 'opp-clickable--static'}"
+          class="opp-clickable ${canExpand ? '' : 'opp-clickable-static'}"
           @click=${canExpand ? () => this._toggleExpanded(o.id) : nothing}
         >
           <div class="opp-meta">
@@ -801,8 +608,8 @@ class BrandVisibilityApp extends LitElement {
                   ? html`
                       ${SUGGESTION_INTROS[o.type] ? html`<p class="opp-suggestion-summary">${SUGGESTION_INTROS[o.type]}</p>` : nothing}
                       ${suggestions.map((s) => html`
-                        <div class="opp-suggestion-wrap ${s.status === 'FIXED' ? 'opp-suggestion-wrap--fixed' : ''}">
-                          ${s.status === 'FIXED' ? html`<span class="bv-pill bv-pill--status-fixed">Fixed</span>` : nothing}
+                        <div class="opp-suggestion-wrap ${s.status === 'FIXED' ? 'opp-suggestion-wrap-fixed' : ''}">
+                          ${s.status === 'FIXED' ? html`<span class="bv-pill bv-pill-status-fixed">Fixed</span>` : nothing}
                           ${renderSuggestionData(o.type, s.data)}
                         </div>
                       `)}
@@ -824,7 +631,6 @@ class BrandVisibilityApp extends LitElement {
                           </div>`
                         : nothing}
                     `}
-                ${this._renderDrafts(o.id)}
               </div>
             `
           : nothing}
