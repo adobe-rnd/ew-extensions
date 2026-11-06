@@ -27,6 +27,7 @@ Extensions add capabilities to EW â€” editors, panels, tools, and integrations â
 | Extension | Path | Entry point | Description |
 |-----------|------|-------------|-------------|
 | **Skills Editor** | `apps/skills/` | `tools/skills.html` | Manage skills, agents, MCP servers, prompts, and memory |
+| **[Brand Visibility](tools/brand-visibility/README.md)** | `tools/brand-visibility/` | `tools/brand-visibility/brand-visibility.html` | Review LLMO opportunities, page-specific suggestions, and existing drafts |
 
 > More extensions coming soon.
 

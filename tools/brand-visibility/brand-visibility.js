@@ -768,17 +768,10 @@ class BrandVisibilityApp extends LitElement {
     // instead of the generic, site-wide opportunity description.
     const suggestions = this._scope === 'page' ? (this._matchingSuggestions[o.id] ?? []) : [];
     const showSuggestions = suggestions.length > 0;
-    // FIXED suggestions are shown for context but can't be re-applied — only
-    // NEW ones feed the "Apply suggestion" prompt.
-    const actionableSuggestions = suggestions.filter((s) => s.status !== 'FIXED');
-    // toc/summarization prompts are built entirely from suggestion data, so if
-    // every match is already FIXED there's nothing left to apply.
-    const needsSuggestionData = o.type === 'toc' || o.type === 'summarization';
-    const hideApply = needsSuggestionData && showSuggestions && actionableSuggestions.length === 0;
     // The opportunity's own status field doesn't always get flipped to RESOLVED
     // once every one of its suggestions for this page is FIXED — show it as
     // resolved locally rather than the stale "New" from the API.
-    const allFixed = showSuggestions && actionableSuggestions.length === 0;
+    const allFixed = showSuggestions && suggestions.every((s) => s.status === 'FIXED');
     const displayStatus = allFixed ? 'FIXED' : o.status;
     // The all-opportunities view is a generic, site-wide list — there's no
     // suggestion/page context to drill into, so it's just title + description,
@@ -832,7 +825,6 @@ class BrandVisibilityApp extends LitElement {
                         : nothing}
                     `}
                 ${this._renderDrafts(o.id)}
-                <div class="opp-actions">${hideApply ? nothing : this._renderGenerateButton(o, actionableSuggestions)}</div>
               </div>
             `
           : nothing}
