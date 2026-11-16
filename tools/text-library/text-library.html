@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Text Library</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="https://da.live/nx2/styles/styles.css">
+    <link rel="stylesheet" href="./text-library.css">
+    <script>
+      const sdk = new URLSearchParams(location.search).get('sdk');
+      let sdkUrl;
+      if (sdk === 'local' && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+        sdkUrl = 'http://localhost:6456/nx/utils/sdk.js';
+      } else if (sdk && sdk !== 'local' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sdk)) {
+        sdkUrl = `https://${sdk}--da-nx--adobe.aem.live/nx/utils/sdk.js`;
+      }
+      if (sdkUrl) {
+        const map = document.createElement('script');
+        map.type = 'importmap';
+        map.textContent = JSON.stringify({
+          imports: { 'https://da.live/nx/utils/sdk.js': sdkUrl },
+        });
+        document.currentScript.after(map);
+      }
+    </script>
+    <script type="module" src="./text-library.js"></script>
+  </head>
+  <body>
+    <main id="text-library"><p role="status">Connecting to the editor...</p></main>
+  </body>
+</html>
