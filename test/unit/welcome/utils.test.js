@@ -7,7 +7,7 @@ import {
   getNextActiveStep,
   isComplete,
   parseWelcomeBlock,
-} from '../../../tools/claude-design-onboarding/utils.js';
+} from '../../../tools/welcome/utils.js';
 
 const TEST_URL = 'https://da.live/test-page';
 
