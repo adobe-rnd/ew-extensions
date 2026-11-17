@@ -9,7 +9,7 @@ import {
   parseWelcomeBlock,
 } from './utils.js';
 
-const CONTENT_URL = 'https://main--aemnew--aemsites.aem.live/welcome/weclome-frescopa';
+const CONTENT_URL = 'https://main--aemnew--aemsites.aem.live/welcome/welcome-frescopa';
 
 class WelcomeApp extends LitElement {
   static properties = {
