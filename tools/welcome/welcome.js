@@ -9,7 +9,7 @@ import {
   parseWelcomeBlock,
 } from './utils.js';
 
-const CONTENT_URL = 'https://adobe--sendto--aemcoder.aem.page/adobe/onboarding/';
+const CONTENT_URL = 'https://main--aemnew--aemsites.aem.live/welcome/weclome-frescopa';
 
 class WelcomeApp extends LitElement {
   static properties = {
