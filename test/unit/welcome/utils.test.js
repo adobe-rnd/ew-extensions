@@ -7,6 +7,8 @@ import {
   getNextActiveStep,
   isComplete,
   parseWelcomeBlock,
+  getContentUrl,
+  DEFAULT_CONTENT_URL,
 } from '../../../tools/welcome/utils.js';
 
 const TEST_URL = 'https://da.live/test-page';
@@ -225,5 +227,22 @@ describe('parseWelcomeBlock', () => {
     `);
     const { steps } = parseWelcomeBlock(block);
     expect(steps[0].action).to.equal('');
+  });
+});
+
+describe('getContentUrl', () => {
+  it('returns the default when no content param is present', () => {
+    expect(getContentUrl('')).to.equal(DEFAULT_CONTENT_URL);
+    expect(getContentUrl('?foo=bar')).to.equal(DEFAULT_CONTENT_URL);
+  });
+
+  it('returns the content param when it is a valid https URL', () => {
+    const url = 'https://main--site--org.aem.page/welcome/other';
+    expect(getContentUrl(`?content=${encodeURIComponent(url)}`)).to.equal(url);
+  });
+
+  it('falls back to the default for invalid or non-http URLs', () => {
+    expect(getContentUrl('?content=not-a-url')).to.equal(DEFAULT_CONTENT_URL);
+    expect(getContentUrl('?content=javascript:alert(1)')).to.equal(DEFAULT_CONTENT_URL);
   });
 });

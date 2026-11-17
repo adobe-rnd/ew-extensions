@@ -7,9 +7,8 @@ import {
   getNextActiveStep,
   isComplete,
   parseWelcomeBlock,
+  getContentUrl,
 } from './utils.js';
-
-const CONTENT_URL = 'https://main--aemnew--aemsites.aem.live/welcome/welcome-frescopa';
 
 class WelcomeApp extends LitElement {
   static properties = {
@@ -44,7 +43,7 @@ class WelcomeApp extends LitElement {
 
   async _loadContent() {
     try {
-      const resp = await fetch(CONTENT_URL);
+      const resp = await fetch(getContentUrl(window.location.search));
       const text = await resp.text();
       const doc = new DOMParser().parseFromString(text, 'text/html');
       const block = doc.querySelector('.welcome');

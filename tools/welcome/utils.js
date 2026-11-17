@@ -1,5 +1,23 @@
 const EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+export const DEFAULT_CONTENT_URL = 'https://main--aemnew--aemsites.aem.live/welcome/welcome-frescopa';
+
+/**
+ * Returns the URL to load the welcome content from: the `content` query
+ * parameter if it is a valid http(s) URL, otherwise the default.
+ */
+export function getContentUrl(search = '') {
+  const param = new URLSearchParams(search).get('content');
+  if (!param) return DEFAULT_CONTENT_URL;
+  try {
+    const url = new URL(param);
+    if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
+  } catch {
+    // invalid URL — fall back to default
+  }
+  return DEFAULT_CONTENT_URL;
+}
+
 export function storageKey(url) {
   return `da-onboarding-${url}`;
 }
