@@ -33,6 +33,9 @@ export default {
               "da-lit": "/test/mocks/lit-stub.js"
             },
             "scopes": {
+              "/tools/proposal-review/": {
+                "https://da.live/nx/utils/sdk.js": "/test/unit/proposal-review/fixtures/sdk.js"
+              },
               "/tools/block-editor/": {
                 "https://da.live/nx/utils/sdk.js": "/test/unit/block-editor/fixtures/utils/sdk.js",
                 "https://da.live/nx2/scripts/nx.js": "/test/unit/block-editor/fixtures/scripts/nx.js",

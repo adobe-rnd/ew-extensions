@@ -28,8 +28,35 @@ Extensions add capabilities to EW â€” editors, panels, tools, and integrations â
 |-----------|------|-------------|-------------|
 | **Skills Editor** | `apps/skills/` | `tools/skills.html` | Manage skills, agents, MCP servers, prompts, and memory |
 | **[Brand Visibility](tools/brand-visibility/README.md)** | `tools/brand-visibility/` | `tools/brand-visibility/brand-visibility.html` | Review LLMO opportunities and page-specific suggestions |
+| **Proposed Changes** | `tools/proposal-review/` | `tools/proposal-review/proposal-review.html` | Review accessible staged HTML pages in the current site, view diffs, and discard or apply drafts |
 
 > More extensions coming soon.
+
+### Proposed Changes
+
+Register `/tools/proposal-review/proposal-review.html` as an EW extension URL.
+It uses the DA SDK's authenticated fetch and current org/site context; no token
+or site parameters are required. The panel lists accessible HTML files recursively
+under the site's `/.da/` folder, including paginated listings, and checks each
+page's read access before displaying it. It does not filter
+by author: this staging location is shared and the listing API has no ownership
+field. Skills and other non-HTML `.da` files are left untouched.
+
+View diff compares the latest saved original against the saved draft, using DA's
+shared HTML diff renderer in a sandboxed frame. Full HTML source is also available
+to inspect metadata or markup omitted from the visual view. Unsaved editor changes
+are not included. Discard deletes only the staged file. Apply saves the complete
+draft over its original, then deletes the draft and verifies its removal. An
+ETag precondition prevents overwriting an original changed during the operation.
+Both original and draft must exist. Nothing is previewed or published.
+
+Actions require confirmation. Apply all is sequential and stops on failure.
+Failed saves retain drafts; failed cleanup can be retried without saving again
+while the panel remains loaded. Cleanup state is in-memory, not persisted across
+reloads. A draft changed during apply is retained. DA's delete endpoint has no
+conditional-delete support, so concurrent draft edits during the final
+read/delete window cannot be protected atomically. Avoid editing drafts while
+applying or discarding them.
 
 ## Architecture
 
