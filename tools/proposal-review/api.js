@@ -12,7 +12,7 @@ export class ProposalReview {
       throw new Error('Open this extension in an Experience Workspace site.');
     }
     if (typeof daFetch !== 'function') throw new Error('Authenticated fetching is unavailable.');
-    this.root = `/${org}/${site}/.da`;
+    this.root = `/${org}/${site}/.da/proposals`;
     this.siteRoot = `/${org}/${site}`;
     this.fetch = daFetch;
     this.saved = new Map();
@@ -23,7 +23,7 @@ export class ProposalReview {
     if (!path?.startsWith(`${this.root}/`) || !path.endsWith('.html')
       || !safeSegments(path.slice(this.root.length + 1))
       || path.split('/').pop() === '.html') {
-      throw new Error('Choose a staged HTML page in the current site.');
+      throw new Error("Choose a staged HTML page in the current site's /.da/proposals/ folder.");
     }
     return `${this.siteRoot}/${path.slice(this.root.length + 1)}`;
   }
@@ -87,13 +87,7 @@ export class ProposalReview {
     const response = await this.fetch(`${ADMIN}/source${path}`, { cache: 'no-store' });
     if (missing && response.status === 404) return null;
     if (!response.ok) throw new Error(`Could not read ${path} (${response.status}).`);
-    return { body: await response.text(), etag: response.headers.get('etag') };
-  }
-
-  async compare(path) {
-    const original = this.original(path);
-    const [current, proposed] = await Promise.all([this.read(original), this.read(path)]);
-    return { current: current.body, proposed: proposed.body, original };
+    return { body: await response.text() };
   }
 
   async remove(path) {
@@ -128,17 +122,14 @@ export class ProposalReview {
         throw new Error('The draft changed after applying. Review and apply the new draft; it has been retained.');
       }
       if (!this.saved.has(path)) {
-        const current = await this.read(original);
-        if (!current.etag) throw new Error('The original has no revision identifier. Cannot safely apply changes.');
+        await this.read(original);
         const body = new FormData();
         body.append('data', new Blob([draft.body], { type: 'text/html' }), 'proposal.html');
         const response = await this.fetch(`${ADMIN}/source${original}`, {
-          method: 'PUT', headers: { 'If-Match': current.etag }, body,
+          method: 'PUT', body,
         });
         if (!response.ok) {
-          const reason = response.status === 412 ? 'The original changed. Review the diff again.'
-            : `Could not save the original (${response.status}).`;
-          throw new Error(`${reason} Draft retained.`);
+          throw new Error(`Could not save the original (${response.status}). Draft retained.`);
         }
         this.saved.set(path, draft.body);
       }

@@ -1,6 +1,15 @@
-import DA_SDK from 'https://da.live/nx/utils/sdk.js';
+import { resolveNxOrigin } from '../../blocks/skills/utils/codemirror-loader.js';
 import { ProposalReview } from './api.js';
-import { comparisonDocument } from './comparison.js';
+import { hasPageProposalSkill } from './skills.js';
+import pageProposalsSkill from './page-proposals.js';
+
+const DA_SDK = import(`${resolveNxOrigin()}/nx/utils/sdk.js`).then((module) => module.default);
+
+// Same glyphs as da-nx's A2UI ActionButton renderer.
+const ICONS = {
+  Layers: 'm2 7 8-4 8 4-8 4-8-4Zm0 4 8 4 8-4M2 15l8 4 8-4',
+  Delete: 'M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12M8 8v6m4-6v6',
+};
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -11,7 +20,11 @@ function element(tag, text, className) {
 
 export class ProposalReviewApp extends HTMLElement {
   connectedCallback() {
-    if (this._started) return;
+    if (this._started) {
+      this._subscribeChatTurns();
+      this._refresh();
+      return;
+    }
     this._started = true;
     this._paths = [];
     this._busy = true;
@@ -23,12 +36,14 @@ export class ProposalReviewApp extends HTMLElement {
   async _connect() {
     try {
       const sdk = await DA_SDK;
+      this._sdk = sdk;
       const org = sdk.context?.org || sdk.project?.org;
       const site = sdk.context?.site || sdk.context?.repo || sdk.project?.site || sdk.project?.repo;
       this._review = new ProposalReview({ org, site, daFetch: sdk.actions?.daFetch });
-      this._base = `https://main--${site}--${org}.aem.live`;
+      this._skillsContext = { org, site, daFetch: sdk.actions.daFetch };
       this._site = `${org}/${site}`;
       this._busy = false;
+      this._subscribeChatTurns();
       await this._refresh();
     } catch (error) {
       this._busy = false;
@@ -39,19 +54,56 @@ export class ProposalReviewApp extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._dialog?.close();
+    this._unsubscribeChatTurn?.();
+    this._unsubscribeChatTurn = null;
+    this._refreshPending = false;
+    this._skillCheckPending = false;
   }
 
-  _button(label, action, { disabled = this._busy, accent = false } = {}) {
+  _subscribeChatTurns() {
+    if (!this.isConnected || this._unsubscribeChatTurn
+      || this._sdk?.capabilities?.chatTurnCompleted !== 1
+      || typeof this._sdk.actions?.subscribeChatTurnCompleted !== 'function') return;
+    this._unsubscribeChatTurn = this._sdk.actions.subscribeChatTurnCompleted(() => this._refresh());
+  }
+
+  _button(label, action, { disabled = this._busy, accent = false, icon } = {}) {
     const button = element('button', label, accent ? 'accent' : '');
     button.type = 'button';
     button.disabled = disabled;
+    if (icon) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      Object.entries({
+        viewBox: '0 0 20 20',
+        width: '18',
+        height: '18',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '1.5',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      }).forEach(([name, value]) => svg.setAttribute(name, value));
+      const path = document.createElementNS(svg.namespaceURI, 'path');
+      path.setAttribute('d', ICONS[icon]);
+      svg.append(path);
+      button.prepend(svg);
+    }
     button.addEventListener('click', action);
     return button;
   }
 
-  async _refresh() {
-    if (this._busy) return;
+  async _refresh({ preserveStatus = false } = {}) {
+    if (!this.isConnected || !this._review) return;
+    if (this._busy || this._confirmation) {
+      this._refreshPending = true;
+      return;
+    }
+    this._refreshPending = false;
+    this._checkSkills();
+    const previousError = preserveStatus ? this._error : '';
+    const previousMessage = preserveStatus ? this._message : '';
     this._busy = true;
     this._error = '';
     this._message = 'Loading staged pages...';
@@ -64,8 +116,13 @@ export class ProposalReviewApp extends HTMLElement {
       this._message = '';
       this._paths = [];
     } finally {
+      if (preserveStatus) {
+        this._error = [previousError, this._error].filter(Boolean).join(' ');
+        this._message = previousMessage;
+      }
       this._busy = false;
       this._render();
+      if (this._refreshPending) this._refresh({ preserveStatus });
     }
   }
 
@@ -97,61 +154,89 @@ export class ProposalReviewApp extends HTMLElement {
     } finally {
       this._busy = false;
       this._render();
+      if (this._refreshPending) this._refresh({ preserveStatus: true });
     }
   }
 
-  async _compare(path) {
-    this._busy = true;
+  _compare(path) {
     this._error = '';
-    this._render();
-    const dialog = element('dialog', null, 'proposal-comparison');
-    this._dialog = dialog;
-    const heading = element('h2', 'View diff');
-    heading.id = 'proposal-diff-heading';
-    dialog.setAttribute('aria-labelledby', heading.id);
-    const close = this._button('Close diff', () => dialog.close(), { disabled: false });
-    const status = element('p', 'Loading latest saved content...');
-    status.setAttribute('role', 'status');
-    const header = element('div', null, 'comparison-header');
-    header.append(heading, close);
-    dialog.append(header, element('p', path.slice(this._review.root.length)), status);
-    const closeDialog = () => {
-      dialog.remove();
-      this._dialog = null;
-      this._busy = false;
-      this._render();
-      this.querySelector(`article[data-path="${CSS.escape(path)}"] button`)?.focus();
-    };
-    dialog.addEventListener('close', closeDialog, { once: true });
-    this.append(dialog);
-    dialog.showModal();
-    close.focus();
     try {
-      const { current, proposed, original } = await this._review.compare(path);
-      const doc = await comparisonDocument({ current, proposed, base: `${this._base}${original.slice(this._review.siteRoot.length)}` });
-      if (!dialog.open) return;
-      status.textContent = current === proposed ? 'No changes in saved source.' : 'Current content (red) / Proposed changes (green)';
-      const frame = element('iframe');
-      frame.title = 'Current content and proposed changes';
-      frame.setAttribute('sandbox', '');
-      frame.srcdoc = doc;
-      dialog.append(frame);
-      const details = element('details');
-      details.append(element('summary', 'Compare full HTML source'));
-      const sources = element('div', null, 'source-comparison');
-      ['Current content', 'Proposed changes'].forEach((label, index) => {
-        const section = element('section');
-        section.append(element('h3', label), element('pre', [current, proposed][index]));
-        sources.append(section);
-      });
-      details.append(sources);
-      dialog.append(details);
+      const baseline = this._review.original(path);
+      if (typeof this._sdk.actions?.openComparison !== 'function') {
+        throw new Error('Host comparison is unavailable. Use an Experience Workspace host and SDK that support source-path comparisons.');
+      }
+      this._sdk.actions.openComparison({ candidate: path, baseline });
     } catch (error) {
-      if (dialog.open) {
-        status.setAttribute('role', 'alert');
-        status.textContent = error.message;
+      this._error = error.message === 'invalid-comparison'
+        ? 'This SDK does not support source-path comparisons. Use ?nx=<branch> to load a matching SDK and open the extension in an updated Experience Workspace host.'
+        : error.message;
+    }
+    this._render();
+  }
+
+  async _checkSkills() {
+    if (!this.isConnected || !this._skillsContext) return;
+    if (this._checkingSkills) {
+      this._skillCheckPending = true;
+      return;
+    }
+    this._checkingSkills = true;
+    this._skillError = '';
+    this._render();
+    try {
+      this._skillState = await hasPageProposalSkill(this._skillsContext) ? 'installed' : 'missing';
+    } catch (error) {
+      this._skillState = 'error';
+      this._skillError = error.message;
+    } finally {
+      this._checkingSkills = false;
+      if (this.isConnected) this._render();
+      if (this._skillCheckPending) {
+        this._skillCheckPending = false;
+        this._checkSkills();
       }
     }
+  }
+
+  _addSkill() {
+    if (this._skillState !== 'missing' || this._checkingSkills) return;
+    try {
+      if (typeof this._sdk.actions?.setPrompt !== 'function') {
+        throw new Error('This host cannot send a message to chat. Update the Experience Workspace SDK.');
+      }
+      this._sdk.actions.setPrompt(`add this personal skill\n\n${pageProposalsSkill}`, { autoSend: true });
+      this._skillState = 'requested';
+      this._skillError = '';
+    } catch (error) {
+      this._skillError = error.message;
+    }
+    this._render();
+  }
+
+  _renderSkills() {
+    if (!this._skillsContext || this._skillState === 'installed') return;
+    const notice = element('section', null, 'skill-notice');
+    notice.setAttribute('aria-label', 'Page proposals skill');
+    let message = 'Checking Coworker skills...';
+    if (this._skillState === 'missing') {
+      message = 'Add the page-proposals personal skill so Coworker stages page edits for review.';
+    } else if (this._skillState === 'requested') {
+      message = 'Request sent to chat. We will check the skill again when the turn ends.';
+    } else if (this._skillState === 'error') {
+      message = 'Could not check configured Coworker skills. You can still review staged pages.';
+    }
+    notice.append(element('p', message));
+    if (this._skillError) notice.append(element('p', this._skillError, 'error'));
+    if (this._skillState === 'missing') {
+      notice.append(this._button('Add personal skill', () => this._addSkill(), {
+        disabled: this._busy || !!this._confirmation || this._checkingSkills, accent: true,
+      }));
+    } else if (['error', 'requested'].includes(this._skillState)) {
+      notice.append(this._button('Check skills', () => this._checkSkills(), {
+        disabled: this._checkingSkills,
+      }));
+    }
+    this.append(notice);
   }
 
   _render() {
@@ -162,8 +247,7 @@ export class ProposalReviewApp extends HTMLElement {
     title.append(element('h1', 'Proposed changes'), element('span', `${count} ${count === 1 ? 'page' : 'pages'} staged`, 'badge'));
     header.append(title, this._button('Refresh', () => this._refresh(), { disabled: this._busy || !this._review || !!this._confirmation }));
     this.append(header);
-    if (this._site) this.append(element('p', this._site, 'site'));
-    this.append(element('p', 'Staged HTML pages you can access under /.da/ in this site. Other .da content is not included.', 'help'));
+    this._renderSkills();
     const status = element('p', this._message);
     status.setAttribute('role', 'status');
     this.append(status);
@@ -183,9 +267,11 @@ export class ProposalReviewApp extends HTMLElement {
       const actions = element('div', null, 'actions');
       const disabled = this._busy || !!this._confirmation;
       actions.append(
-        this._button('View diff', () => this._compare(path), { disabled: disabled || cleanup }),
-        this._button('Discard', () => this._confirm([path], false), { disabled: disabled || cleanup }),
-        this._button(cleanup ? 'Retry cleanup' : 'Apply', () => this._confirm([path], true), { disabled }),
+        this._button('View diff', () => this._compare(path), { disabled: disabled || cleanup, icon: 'Layers' }),
+        this._button('Discard', () => this._confirm([path], false), { disabled: disabled || cleanup, icon: 'Delete' }),
+        this._button(cleanup ? 'Retry cleanup' : 'Apply this change', () => this._confirm([path], true), {
+          disabled, accent: true,
+        }),
       );
       article.append(actions);
       this.append(article);
@@ -200,15 +286,20 @@ export class ProposalReviewApp extends HTMLElement {
       if (paths.length === 1) confirmation.append(element('p', paths[0].slice(this._review.root.length), 'path'));
       confirmation.append(
         this._button(apply ? 'Confirm apply' : 'Confirm discard', () => this._mutate(), { accent: true }),
-        this._button('Cancel', () => { this._confirmation = null; this._render(); }),
+        this._button('Cancel', () => {
+          this._confirmation = null;
+          this._render();
+          if (this._refreshPending) this._refresh();
+        }),
       );
       this.append(confirmation);
     }
     const footer = element('footer');
-    footer.append(element('p', 'Diffs use the latest saved originals, not unsaved editor changes. Apply replaces saved content and removes the draft. It does not preview or publish. Apply all runs one page at a time and stops on an error.', 'help'));
+    footer.append(element('p', 'Proposals are staged under /.da/proposals/. Discard deletes a draft. Apply replaces saved originals and removes drafts, without previewing or publishing. Diffs exclude unsaved editor changes. Apply all runs sequentially and stops on an error.', 'help'));
     footer.append(this._button('Apply all changes', () => this._confirm(this._paths, true), {
       disabled: this._busy || !this._paths.length || !!this._confirmation, accent: true,
     }));
+    if (this._site) footer.append(element('p', this._site, 'site'));
     this.append(footer);
   }
 }

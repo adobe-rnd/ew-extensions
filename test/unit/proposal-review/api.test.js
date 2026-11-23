@@ -1,8 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import { ProposalReview } from '../../../tools/proposal-review/api.js';
-import { sanitizeContent } from '../../../tools/proposal-review/comparison.js';
 
-const ROOT = '/org/site/.da';
+const ROOT = '/org/site/.da/proposals';
 const DRAFT = `${ROOT}/campaigns/demo.html`;
 const ORIGINAL = '/org/site/campaigns/demo.html';
 
@@ -68,7 +67,10 @@ describe('Proposal review API', () => {
         return new Response(JSON.stringify([
           { path: `${ROOT}/index.html`, ext: 'html' },
           { path: `${ROOT}/../outside.html`, ext: 'html' },
-          { path: '/other/site/.da/secret.html', ext: 'html' },
+          { path: '/other/site/.da/proposals/secret.html', ext: 'html' },
+          { path: '/org/site/.da/legacy.html', ext: 'html' },
+          { path: '/org/site/.da/skills/page.html', ext: 'html' },
+          { path: '/org/site/.da/proposals-other/page.html', ext: 'html' },
           { path: `${ROOT}/%2e%2e`, name: 'escape' },
           { path: `${ROOT}/.da-versions`, name: '.da-versions' },
         ]), { headers: { 'da-continuation-token': 'next' } });
@@ -84,6 +86,22 @@ describe('Proposal review API', () => {
     const { review } = server();
     review.fetch = async () => new Response('[]', { headers: { 'da-continuation-token': 'same' } });
     await failure(() => review.list(), 'repeated a page token');
+  });
+
+  it('only discovers page proposals and leaves legacy and other staged content untouched', async () => {
+    const state = server();
+    const outside = ['/org/site/.da/legacy.html', '/org/site/.da/skills/page.html'];
+    outside.forEach((path) => state.files.set(path, '<h1>Unrelated draft</h1>'));
+    state.listings.set('/org/site/.da', [
+      { path: ROOT, name: 'proposals' },
+      ...outside.map((path) => ({ path, ext: 'html' })),
+    ]);
+    expect(await state.review.list()).to.deep.equal([DRAFT]);
+    expect(state.calls.filter(({ path }) => path.startsWith('/list'))
+      .every(({ path }) => path.startsWith(`/list${ROOT}`))).to.equal(true);
+    await state.review.mutate(DRAFT, true);
+    outside.forEach((path) => expect(state.files.get(path)).to.equal('<h1>Unrelated draft</h1>'));
+    expect(state.files.get(ORIGINAL)).to.equal('<h1>Proposed</h1>');
   });
 
   it('skips missing or inaccessible folders without exposing other content', async () => {
@@ -115,29 +133,23 @@ describe('Proposal review API', () => {
   it('rejects unsafe paths, non-HTML files, and other sites before any request', async () => {
     const { review, calls } = server();
     const paths = [
-      '/other/site/.da/demo.html', `${ROOT}/../demo.html`, `${ROOT}/%2e%2e/demo.html`,
+      '/other/site/.da/proposals/demo.html', `${ROOT}/../demo.html`, `${ROOT}/%2e%2e/demo.html`,
+      '/org/site/.da/demo.html', '/org/site/.da/skills/demo.html', '/org/site/.da/proposals-other/demo.html',
       `${ROOT}/nested/.da/demo.html`, `${ROOT}/nested//demo.html`, `${ROOT}/demo.md`,
       `${ROOT}/demo.html?x=1`, `${ROOT}/de\\mo.html`, `${ROOT}/.html`,
     ];
     for (const path of paths) {
       // eslint-disable-next-line no-await-in-loop
       await failure(() => review.mutate(path, true), 'Choose a staged HTML');
+      // eslint-disable-next-line no-await-in-loop
+      await failure(() => review.mutate(path, false), 'Choose a staged HTML');
+      expect(() => review.original(path)).to.throw('Choose a staged HTML');
     }
     expect(calls).to.have.length(0);
     expect(() => new ProposalReview({ org: '../org', site: 'site' })).to.throw('Open this extension');
   });
 
-  it('compares latest saved sources without writing or reading published content', async () => {
-    const { review, files, calls } = server();
-    files.set(ORIGINAL, '<h1>Latest saved</h1>');
-    expect(await review.compare(DRAFT)).to.deep.equal({
-      current: '<h1>Latest saved</h1>', proposed: '<h1>Proposed</h1>', original: ORIGINAL,
-    });
-    expect(calls.map(({ path }) => path)).to.have.members([`/source${DRAFT}`, `/source${ORIGINAL}`]);
-    expect(calls.every(({ method }) => method === 'GET')).to.equal(true);
-  });
-
-  it('saves the full draft with a revision precondition before deleting and verifying it', async () => {
+  it('overwrites with the full draft without a revision precondition before deleting and verifying it', async () => {
     const state = server();
     const source = '<html><head><title>Page</title></head><body><h1>Proposed</h1></body></html>';
     state.files.set(DRAFT, source);
@@ -148,7 +160,7 @@ describe('Proposal review API', () => {
     expect(writes.map(({ method, path }) => [method, path])).to.deep.equal([
       ['PUT', `/source${ORIGINAL}`], ['DELETE', `/source${DRAFT}`],
     ]);
-    expect(writes[0].options.headers).to.deep.equal({ 'If-Match': '"revision-1"' });
+    expect(writes[0].options.headers).to.equal(undefined);
     expect(writes[0].options.body.get('data').type).to.equal('text/html');
     expect(state.calls.at(-1).path).to.equal(`/source${DRAFT}`);
     expect(state.review.saved.size).to.equal(0);
@@ -175,10 +187,18 @@ describe('Proposal review API', () => {
     });
   });
 
-  it('refuses to create a missing original or write without a revision', async () => {
+  it('overwrites an existing original without an ETag and removes the draft', async () => {
     const state = server();
     state.noEtag = true;
-    await failure(() => state.review.mutate(DRAFT, true), 'no revision identifier');
+    state.files.set(ORIGINAL, '<h1>Saved after the proposal</h1>');
+    await state.review.mutate(DRAFT, true);
+    expect(state.files.get(ORIGINAL)).to.equal('<h1>Proposed</h1>');
+    expect(state.files.has(DRAFT)).to.equal(false);
+    expect(state.calls.find(({ method }) => method === 'PUT').options.headers).to.equal(undefined);
+  });
+
+  it('refuses to create a missing original and retains its draft', async () => {
+    const state = server();
     state.files.delete(ORIGINAL);
     await failure(() => state.review.mutate(DRAFT, true), '404');
     expect(state.calls.some(({ method }) => method !== 'GET')).to.equal(false);
@@ -247,25 +267,5 @@ describe('Proposal review API', () => {
     state.review.fetch = fetchImpl;
     release();
     await first;
-  });
-});
-
-describe('Proposal comparison safety', () => {
-  it('strips active markup and unsafe attributes, resolves images against the original', () => {
-    const result = sanitizeContent(`
-      <base href="https://attacker.example"><script>alert(1)</script>
-      <h1 onclick="alert(1)" style="color:red">Title</h1>
-      <iframe src="https://attacker.example"></iframe>
-      <svg onload="alert(1)"><script>alert(1)</script></svg>
-      <img src="./media.jpg" onerror="alert(1)">
-      <img src="javascript:alert(1)"><img src="data:image/svg+xml,bad">
-      <a href="javascript:alert(1)">Unsafe</a><a href="/elsewhere">Safe</a>
-      <div data-mdast="ignore">Ignored merge</div>
-      <table><tr><td colspan="2">Cell</td></tr></table>`,
-    'https://main--site--org.aem.live/campaigns/demo.html');
-    expect(result).not.to.match(/script|iframe|svg|onclick|onerror|style=|javascript:|data:|href=|Ignored merge/);
-    expect(result).to.include('src="https://main--site--org.aem.live/campaigns/media.jpg"');
-    expect(result).to.include('<h1>Title</h1>');
-    expect(result).to.include('colspan="2"');
   });
 });

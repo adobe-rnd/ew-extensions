@@ -37,17 +37,58 @@ Extensions add capabilities to EW â€” editors, panels, tools, and integrations â
 Register `/tools/proposal-review/proposal-review.html` as an EW extension URL.
 It uses the DA SDK's authenticated fetch and current org/site context; no token
 or site parameters are required. The panel lists accessible HTML files recursively
-under the site's `/.da/` folder, including paginated listings, and checks each
+under the site's `/.da/proposals/` folder, including paginated listings, and checks each
 page's read access before displaying it. It does not filter
 by author: this staging location is shared and the listing API has no ownership
-field. Skills and other non-HTML `.da` files are left untouched.
+field. Other `.da` content, including HTML drafts outside `/.da/proposals/`, is
+not listed or changed. Drafts preserve the original's path below the site:
+`/<org>/<site>/.da/proposals/campaigns/page.html` maps back to
+`/<org>/<site>/campaigns/page.html`. Drafts in the old `/.da/<path>.html`
+location are not migrated or included.
 
-View diff compares the latest saved original against the saved draft, using DA's
-shared HTML diff renderer in a sandboxed frame. Full HTML source is also available
-to inspect metadata or markup omitted from the visual view. Unsaved editor changes
-are not included. Discard deletes only the staged file. Apply saves the complete
-draft over its original, then deletes the draft and verifies its removal. An
-ETag precondition prevents overwriting an original changed during the operation.
+On hosts advertising `chatTurnCompleted` support, the extension uses the DA
+SDK's `subscribeChatTurnCompleted` action to refresh when a chat turn finishes,
+including aborted or failed turns. Refreshes wait until an open
+confirmation or apply/discard operation finishes, and notifications received
+while busy are coalesced. Subscriptions are removed when the extension
+disconnects. Manual Refresh remains available on older hosts.
+
+View diff calls the SDK's `openComparison` action with the full draft path as
+`candidate` and the derived original path as `baseline`. Experience Workspace
+loads and displays both saved DA sources in its host comparison surface; the
+extension no longer renders a dialog, iframe, or full-source comparison.
+Unsaved editor changes are not included. The host owns loading, sanitization,
+refresh, close, and source-read errors. There is no comparison acknowledgement,
+so both the SDK and host must support source-path operands.
+
+The extension's `?nx=<branch>` option selects the SDK branch using the same NX
+origin rules as the Skills Editor; `?nx=local` uses `http://localhost:6456`.
+Without an override it uses the production SDK at `https://da.live`. Until the
+source-path SDK is deployed, configure the local extension as:
+
+```text
+http://localhost:3000/tools/proposal-review/proposal-review.html?nx=a2uidiff
+```
+
+Use the matching `a2uidiff` da-live host as well; the extension's `nx` parameter
+selects only its SDK, not the host. An older SDK reports an actionable error
+instead of falling back to an inline diff.
+
+The extension checks configured Coworker skills directly using the SDK's
+authenticated fetch, IMS account context, merged org/site flags, and Coworker
+manifest. It supports AO and entitled CMA accounts. If `page-proposals` is
+missing, **Add personal skill** sends `add this personal skill` followed by the
+bundled skill to chat using the existing `setPrompt` action. Nothing is sent
+automatically, and a sent request is not treated as an installed skill.
+Manual refresh and chat-turn completion recheck the catalog. Lookup failures
+offer a retry without blocking page review or claiming the skill is missing.
+Host-only chat query overrides are not visible to the iframe; if using
+`nx-chat-ao` or `nx-chat-ao-manifest`, repeat them on the extension URL.
+
+Discard deletes only the staged file. Apply saves the complete
+draft over its original, then deletes the draft and verifies its removal.
+Apply is an unconditional overwrite: it does not require an ETag or send
+`If-Match`, and can overwrite source changes saved after the proposal or diff.
 Both original and draft must exist. Nothing is previewed or published.
 
 Actions require confirmation. Apply all is sequential and stops on failure.

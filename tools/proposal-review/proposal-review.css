@@ -1,77 +1,102 @@
+:root {
+  --nx-background: #fff;
+
+  color-scheme: light;
+  background: #fff;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: #fff;
+}
+
 proposal-review-app {
   display: block;
+  box-sizing: border-box;
+  width: 100%;
   max-width: 960px;
-  margin: 32px auto;
-  padding: 0 24px;
+  margin: 0 auto;
+  padding: 16px;
   color: var(--s2-gray-900, #242424);
   font: 14px/1.5 var(--body-font-family, system-ui, sans-serif);
 }
 
 proposal-review-app header,
 proposal-review-app .title,
-proposal-review-app .actions,
-proposal-review-app .comparison-header {
+proposal-review-app .actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
-proposal-review-app header,
-proposal-review-app .comparison-header {
+proposal-review-app header {
   justify-content: space-between;
 }
 
-proposal-review-app h1 { font-size: 20px; margin: 0; }
-proposal-review-app h2 { font-size: 16px; margin: 0; }
-proposal-review-app p { margin: 8px 0; }
-proposal-review-app .badge { background: #e4f0ff; padding: 3px 8px; border-radius: 6px; }
+proposal-review-app .title { flex: 1; min-width: 0; }
+
+proposal-review-app h1 { font-size: 14px; margin: 0; }
+proposal-review-app h2 { font-size: 14px; font-weight: 400; margin: 0; overflow-wrap: anywhere; }
+proposal-review-app p { margin: 4px 0; }
+
+proposal-review-app .badge {
+  background: var(--s2-blue-200, #e5f0fe);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 
 proposal-review-app .help,
 proposal-review-app .site,
-proposal-review-app .path { color: #616161; }
+proposal-review-app .path { color: var(--s2-gray-700, #616161); font-size: 12px; }
 proposal-review-app .path { overflow-wrap: anywhere; }
+proposal-review-app .site { margin-top: 8px; }
+proposal-review-app [role="status"]:empty { display: none; }
 
 proposal-review-app article,
-proposal-review-app footer { border-top: 1px solid #ddd; padding: 20px 0; }
+proposal-review-app footer { border-top: 1px solid var(--s2-gray-200, #e1e1e1); padding: 8px 0 12px; }
+proposal-review-app .actions { gap: 4px; margin-top: 4px; }
 proposal-review-app .error { color: #b12b24; }
 proposal-review-app .empty { padding: 32px 0; }
 
 proposal-review-app button {
-  padding: 7px 14px;
-  border: 1px solid #b5b5b5;
-  border-radius: 20px;
-  background: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--s2-gray-800, #292929);
   font: inherit;
+  line-height: 18px;
   font-weight: 600;
   cursor: pointer;
 }
 
+proposal-review-app header > button { padding: 7px 8px; font-size: 12px; }
+proposal-review-app button svg { flex-shrink: 0; }
 proposal-review-app button:disabled { opacity: 0.5; cursor: default; }
 proposal-review-app button:focus-visible { outline: 2px solid #365aff; outline-offset: 3px; }
 proposal-review-app .confirmation button { margin-right: 8px; }
-proposal-review-app button:hover:not(:disabled) { background: #f0f0f0; }
-proposal-review-app button.accent { background: #465cff; color: white; border-color: #465cff; }
-proposal-review-app button.accent:hover:not(:disabled) { background: #3045d8; }
-proposal-review-app .confirmation { background: #f0f5ff; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+proposal-review-app button:hover:not(:disabled) { background: var(--s2-gray-100, #f0f0f0); }
 
-proposal-review-app dialog {
-  width: min(1100px, 90vw);
-  max-height: 90vh;
-  padding: 24px;
-  border: 1px solid #ccc;
-  border-radius: 12px;
-  color: inherit;
+proposal-review-app button.accent {
+  margin-top: 4px;
+  border-radius: 20px;
+  background: var(--s2-blue-900, #465cff);
+  color: white;
+  font-weight: 700;
 }
+proposal-review-app button.accent:hover:not(:disabled) { background: var(--s2-blue-1000, #3045d8); }
+proposal-review-app .confirmation { background: #f0f5ff; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+proposal-review-app .skill-notice { background: #f0f5ff; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
 
-proposal-review-app dialog::backdrop { background: rgb(0 0 0 / 40%); }
-proposal-review-app iframe { width: 100%; height: 55vh; border: 1px solid #ddd; background: white; }
-proposal-review-app details { margin-top: 16px; }
-proposal-review-app summary { cursor: pointer; }
-proposal-review-app .source-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-proposal-review-app pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f5f5f5; padding: 12px; }
-
-@media (width <= 600px) {
-  proposal-review-app { margin: 16px auto; padding: 0 12px; }
-  proposal-review-app .source-comparison { grid-template-columns: 1fr; }
+@media (width <= 360px) {
+  proposal-review-app { padding: 12px; }
 }
