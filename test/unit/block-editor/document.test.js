@@ -87,15 +87,18 @@ describe('block editor live HTML replacement adapter', () => {
     const config = await actions.getEditorConfig();
     expect(config.configs).to.have.length(2);
     expect(calls).to.deep.equal([
+      ['daFetch', 'https://admin.hlx.page/ping/org/site'],
       ['daFetch', 'https://admin.da.live/config/org'],
       ['daFetch', 'https://admin.da.live/config/org/site'],
     ]);
   });
-  it('loads Helix 6 library templates despite forbidden legacy org and site configs', async () => {
+  it('loads Helix 6 library templates without requesting legacy org or site configs', async () => {
     const library = [{ title: 'Blocks', path: '/library.json' }];
     sdk.actions.daFetch = async (url) => {
       calls.push(['daFetch', url]);
-      if (url.startsWith('https://admin.da.live/config/')) return new Response(null, { status: 403 });
+      if (url === 'https://admin.hlx.page/ping/org/site') {
+        return new Response(null, { headers: { 'x-api-upgrade-available': 'true' } });
+      }
       if (url === 'https://api.aem.live/org/sites/site/config.json') {
         return Response.json({ editor: { da: { library } } });
       }
@@ -112,6 +115,10 @@ describe('block editor live HTML replacement adapter', () => {
     expect(await actions.getEditorConfig()).to.deep.equal({
       configs: [{ library: { data: library } }], hasAemAssets: false,
     });
+    expect(calls).to.deep.equal([
+      ['daFetch', 'https://admin.hlx.page/ping/org/site'],
+      ['daFetch', 'https://api.aem.live/org/sites/site/config.json'],
+    ]);
     configureLibrary(actions);
     resetBlockLibraryCache();
     try {
@@ -123,59 +130,86 @@ describe('block editor live HTML replacement adapter', () => {
       expect(variant.dom.rows[1].textContent).to.equal('Template');
     } finally { resetBlockLibraryCache(); }
   });
-  it('uses the context site for the Helix 6 fallback when the legacy site config is missing', async () => {
+  it('uses the context site for Helix 6 detection and config loading', async () => {
     sdk.context = { site: 'helix6' };
     actions.dispose();
     actions = createDocumentActions(sdk);
     sdk.actions.daFetch = async (url) => {
       calls.push(['daFetch', url]);
-      return url === 'https://api.aem.live/org/sites/helix6/config.json'
-        ? Response.json({ editor: { da: { library: [{ title: 'Blocks', path: '/blocks.json' }] } } })
-        : new Response(null, { status: 404 });
+      if (url === 'https://admin.hlx.page/ping/org/helix6') {
+        return new Response(null, { headers: { 'x-api-upgrade-available': 'true' } });
+      }
+      if (url === 'https://api.aem.live/org/sites/helix6/config.json') {
+        return Response.json({ editor: { da: { library: [{ title: 'Blocks', path: '/blocks.json' }] } } });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     };
     expect((await actions.getEditorConfig()).configs[0].library.data[0].path).to.equal('/blocks.json');
     expect(calls).to.deep.equal([
-      ['daFetch', 'https://admin.da.live/config/org'],
-      ['daFetch', 'https://admin.da.live/config/org/helix6'],
+      ['daFetch', 'https://admin.hlx.page/ping/org/helix6'],
       ['daFetch', 'https://api.aem.live/org/sites/helix6/config.json'],
     ]);
   });
   it('treats a Helix 6 site without editor library config as an empty library', async () => {
     sdk.actions.daFetch = async (url) => (
       url.startsWith('https://api.aem.live/')
-        ? Response.json({ editor: {} }) : new Response(null, { status: 403 })
+        ? Response.json({ editor: {} })
+        : new Response(null, { headers: { 'x-api-upgrade-available': 'true' } })
     );
     expect(await actions.getEditorConfig()).to.deep.equal({
       configs: [{ library: { data: [] } }], hasAemAssets: false,
     });
   });
-  it('keeps the legacy org config when both site config endpoints are missing', async () => {
+  it('keeps the legacy org config when the legacy site config is missing', async () => {
     const orgConfig = { library: { data: [{ title: 'Blocks', path: '/org-library.json' }] } };
-    sdk.actions.daFetch = async (url) => (
-      url === 'https://admin.da.live/config/org'
-        ? Response.json(orgConfig) : new Response(null, { status: 404 })
-    );
+    sdk.actions.daFetch = async (url) => {
+      if (url === 'https://admin.hlx.page/ping/org/site') return new Response(null);
+      return url === 'https://admin.da.live/config/org'
+        ? Response.json(orgConfig) : new Response(null, { status: 404 });
+    };
     expect(await actions.getEditorConfig()).to.deep.equal({ configs: [orgConfig], hasAemAssets: false });
   });
-  it('surfaces authorization and server errors from the Helix 6 fallback', async () => {
-    for (const status of [401, 403, 500]) {
-      sdk.actions.daFetch = async (url) => new Response(null, {
-        status: url.startsWith('https://api.aem.live/') ? status : 403,
-      });
+  it('surfaces missing config, authorization and server errors on Helix 6', async () => {
+    for (const status of [401, 403, 404, 500]) {
+      sdk.actions.daFetch = async (url) => (
+        url === 'https://admin.hlx.page/ping/org/site'
+          ? new Response(null, { headers: { 'x-api-upgrade-available': 'true' } })
+          : new Response(null, { status })
+      );
       await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
     }
   });
-  it('does not hide legacy config failures or fall back on server errors', async () => {
+  it('does not treat legacy config failures as evidence of Helix 6', async () => {
     for (const [orgStatus, siteStatus] of [[403, 200], [200, 500], [403, 404]]) {
       calls = [];
       sdk.actions.daFetch = async (url) => {
         calls.push(['daFetch', url]);
-        if (url.startsWith('https://api.aem.live/')) return new Response(null, { status: 404 });
+        if (url === 'https://admin.hlx.page/ping/org/site') return new Response(null);
         return new Response('{}', { status: url.endsWith('/site') ? siteStatus : orgStatus });
       };
       await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
-      expect(calls).to.have.length(siteStatus === 404 ? 3 : 2);
+      expect(calls.filter(([, url]) => !url.includes('/ping/'))).to.deep.equal([
+        ['daFetch', 'https://admin.da.live/config/org'],
+        ['daFetch', 'https://admin.da.live/config/org/site'],
+      ]);
     }
+  });
+  it('shares the pending site-type probe across concurrent config loads', async () => {
+    await Promise.all([actions.getEditorConfig(), actions.getEditorConfig()]);
+    expect(calls.filter(([, url]) => url.includes('/ping/'))).to.have.length(1);
+  });
+  it('retries failed site-type detection without requesting either config backend', async () => {
+    let probeStatus = 500;
+    sdk.actions.daFetch = async (url) => {
+      calls.push(['daFetch', url]);
+      return url === 'https://admin.hlx.page/ping/org/site'
+        ? new Response(null, { status: probeStatus }) : Response.json({});
+    };
+    await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
+    expect(calls).to.deep.equal([['daFetch', 'https://admin.hlx.page/ping/org/site']]);
+    probeStatus = 200;
+    expect((await actions.getEditorConfig()).configs).to.have.length(2);
+    expect(calls.filter(([, url]) => url.includes('/ping/'))).to.have.length(2);
   });
   it('sends only the full changed block with a host-side document and selection precondition', async () => {
     select();

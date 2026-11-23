@@ -250,6 +250,15 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
   let live;
   let busy = false;
   let disposed = false;
+  let siteType;
+  const isHlx6 = () => {
+    siteType ??= sdk.actions.daFetch(`https://admin.hlx.page/ping/${org}/${siteName}`)
+      .then((response) => {
+        if (!response.ok) throw fail('CONFIG_FAILED', `Unable to detect site type: ${response.status}`);
+        return response.headers.has('x-api-upgrade-available');
+      }).catch((error) => { siteType = undefined; throw error; });
+    return siteType;
+  };
   const base = `${previewOrigin}${pathname}`;
   const publish = () => {
     if (disposed || !live) return null;
@@ -288,21 +297,16 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
     dispose() { disposed = true; },
     describeBlock: async (request) => describeBlock(request),
     getEditorConfig: async () => {
-      const responses = await Promise.all([`/${org}`, `/${org}/${siteName}`]
-        .map((configPath) => sdk.actions.daFetch(`${admin}/config${configPath}`)));
-      if ([403, 404].includes(responses[1].status)) {
+      if (await isHlx6()) {
         const response = await sdk.actions.daFetch(`https://api.aem.live/${org}/sites/${siteName}/config.json`);
-        if (response.ok) {
-          const siteConfig = await response.json();
-          const editorConfig = siteConfig.editor?.da || {};
-          const config = { ...editorConfig, library: { data: editorConfig.library || [] } };
-          return { configs: [config], hasAemAssets: false };
-        }
-        if (response.status !== 404) {
-          throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
-        }
+        if (!response.ok) throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
+        const siteConfig = await response.json();
+        const editorConfig = siteConfig.editor?.da || {};
+        const config = { ...editorConfig, library: { data: editorConfig.library || [] } };
+        return { configs: [config], hasAemAssets: false };
       }
-      const configs = await Promise.all(responses.map(async (response) => {
+      const configs = await Promise.all([`/${org}`, `/${org}/${siteName}`].map(async (configPath) => {
+        const response = await sdk.actions.daFetch(`${admin}/config${configPath}`);
         if (response.status === 404) return null;
         if (!response.ok) throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
         return response.json();
