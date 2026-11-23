@@ -102,12 +102,6 @@ describe('block editor live HTML replacement adapter', () => {
       if (url === 'https://api.aem.live/org/sites/site/config.json') {
         return Response.json({ editor: { da: { library } } });
       }
-      if (url === 'https://main--site--org.aem.live/library.json') {
-        return Response.json({ data: [{ name: 'Cards', path: 'https://main--site--org.aem.live/library/cards' }] });
-      }
-      if (url === 'https://main--site--org.aem.live/library/cards.plain.html') {
-        return new Response('<main><div><div class="cards compact"><div><div>Template</div></div></div></div></main>');
-      }
       throw new Error(`Unexpected fetch: ${url}`);
     };
     actions.dispose();
@@ -119,6 +113,17 @@ describe('block editor live HTML replacement adapter', () => {
       ['daFetch', 'https://admin.hlx.page/ping/org/site'],
       ['daFetch', 'https://api.aem.live/org/sites/site/config.json'],
     ]);
+    const originalFetch = window.fetch;
+    window.fetch = async (url, options) => {
+      calls.push(['fetch', url, options]);
+      if (url === 'https://main--site--org.aem.live/library.json') {
+        return Response.json({ data: [{ name: 'Cards', path: 'https://main--site--org.aem.live/library/cards' }] });
+      }
+      if (url === 'https://main--site--org.aem.live/library/cards.plain.html') {
+        return new Response('<main><div><div class="cards compact"><div><div>Template</div></div></div></div></main>');
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    };
     configureLibrary(actions);
     resetBlockLibraryCache();
     try {
@@ -128,7 +133,14 @@ describe('block editor live HTML replacement adapter', () => {
       const [variant] = await loaded.blocks[0].loadVariants;
       expect(variant.dom.rows[0].textContent).to.equal('cards (compact)');
       expect(variant.dom.rows[1].textContent).to.equal('Template');
-    } finally { resetBlockLibraryCache(); }
+      expect(calls.filter(([action]) => action === 'fetch')).to.deep.equal([
+        ['fetch', 'https://main--site--org.aem.live/library.json', undefined],
+        ['fetch', 'https://main--site--org.aem.live/library/cards.plain.html', undefined],
+      ]);
+    } finally {
+      window.fetch = originalFetch;
+      resetBlockLibraryCache();
+    }
   });
   it('uses the context site for Helix 6 detection and config loading', async () => {
     sdk.context = { site: 'helix6' };
