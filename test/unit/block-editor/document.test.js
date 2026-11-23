@@ -1,6 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import { createDocumentActions, describeBlock, MAX_IMAGE_BYTES } from '../../../tools/block-editor/document.js';
 import { EditorSession } from '../../../tools/block-editor/fields.js';
+import { configureLibrary, loadBlockLibrary, resetBlockLibraryCache } from '../../../tools/block-editor/library.js';
 
 describe('block editor live HTML replacement adapter', () => {
   const original = `<main><div><p>Keep outside content</p><div class="cards compact">
@@ -89,6 +90,92 @@ describe('block editor live HTML replacement adapter', () => {
       ['daFetch', 'https://admin.da.live/config/org'],
       ['daFetch', 'https://admin.da.live/config/org/site'],
     ]);
+  });
+  it('loads Helix 6 library templates despite forbidden legacy org and site configs', async () => {
+    const library = [{ title: 'Blocks', path: '/library.json' }];
+    sdk.actions.daFetch = async (url) => {
+      calls.push(['daFetch', url]);
+      if (url.startsWith('https://admin.da.live/config/')) return new Response(null, { status: 403 });
+      if (url === 'https://api.aem.live/org/sites/site/config.json') {
+        return Response.json({ editor: { da: { library } } });
+      }
+      if (url === 'https://main--site--org.aem.live/library.json') {
+        return Response.json({ data: [{ name: 'Cards', path: 'https://main--site--org.aem.live/library/cards' }] });
+      }
+      if (url === 'https://main--site--org.aem.live/library/cards.plain.html') {
+        return new Response('<main><div><div class="cards compact"><div><div>Template</div></div></div></div></main>');
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    };
+    actions.dispose();
+    actions = createDocumentActions(sdk);
+    expect(await actions.getEditorConfig()).to.deep.equal({
+      configs: [{ library: { data: library } }], hasAemAssets: false,
+    });
+    configureLibrary(actions);
+    resetBlockLibraryCache();
+    try {
+      const loaded = await loadBlockLibrary('org', 'site');
+      expect(loaded.ext.sources).to.deep.equal(['https://main--site--org.aem.live/library.json']);
+      expect(loaded.blocks).to.have.length(1);
+      const [variant] = await loaded.blocks[0].loadVariants;
+      expect(variant.dom.rows[0].textContent).to.equal('cards (compact)');
+      expect(variant.dom.rows[1].textContent).to.equal('Template');
+    } finally { resetBlockLibraryCache(); }
+  });
+  it('uses the context site for the Helix 6 fallback when the legacy site config is missing', async () => {
+    sdk.context = { site: 'helix6' };
+    actions.dispose();
+    actions = createDocumentActions(sdk);
+    sdk.actions.daFetch = async (url) => {
+      calls.push(['daFetch', url]);
+      return url === 'https://api.aem.live/org/sites/helix6/config.json'
+        ? Response.json({ editor: { da: { library: [{ title: 'Blocks', path: '/blocks.json' }] } } })
+        : new Response(null, { status: 404 });
+    };
+    expect((await actions.getEditorConfig()).configs[0].library.data[0].path).to.equal('/blocks.json');
+    expect(calls).to.deep.equal([
+      ['daFetch', 'https://admin.da.live/config/org'],
+      ['daFetch', 'https://admin.da.live/config/org/helix6'],
+      ['daFetch', 'https://api.aem.live/org/sites/helix6/config.json'],
+    ]);
+  });
+  it('treats a Helix 6 site without editor library config as an empty library', async () => {
+    sdk.actions.daFetch = async (url) => (
+      url.startsWith('https://api.aem.live/')
+        ? Response.json({ editor: {} }) : new Response(null, { status: 403 })
+    );
+    expect(await actions.getEditorConfig()).to.deep.equal({
+      configs: [{ library: { data: [] } }], hasAemAssets: false,
+    });
+  });
+  it('keeps the legacy org config when both site config endpoints are missing', async () => {
+    const orgConfig = { library: { data: [{ title: 'Blocks', path: '/org-library.json' }] } };
+    sdk.actions.daFetch = async (url) => (
+      url === 'https://admin.da.live/config/org'
+        ? Response.json(orgConfig) : new Response(null, { status: 404 })
+    );
+    expect(await actions.getEditorConfig()).to.deep.equal({ configs: [orgConfig], hasAemAssets: false });
+  });
+  it('surfaces authorization and server errors from the Helix 6 fallback', async () => {
+    for (const status of [401, 403, 500]) {
+      sdk.actions.daFetch = async (url) => new Response(null, {
+        status: url.startsWith('https://api.aem.live/') ? status : 403,
+      });
+      await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
+    }
+  });
+  it('does not hide legacy config failures or fall back on server errors', async () => {
+    for (const [orgStatus, siteStatus] of [[403, 200], [200, 500], [403, 404]]) {
+      calls = [];
+      sdk.actions.daFetch = async (url) => {
+        calls.push(['daFetch', url]);
+        if (url.startsWith('https://api.aem.live/')) return new Response(null, { status: 404 });
+        return new Response('{}', { status: url.endsWith('/site') ? siteStatus : orgStatus });
+      };
+      await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
+      expect(calls).to.have.length(siteStatus === 404 ? 3 : 2);
+    }
   });
   it('sends only the full changed block with a host-side document and selection precondition', async () => {
     select();

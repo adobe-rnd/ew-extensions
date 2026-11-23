@@ -288,8 +288,21 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
     dispose() { disposed = true; },
     describeBlock: async (request) => describeBlock(request),
     getEditorConfig: async () => {
-      const configs = await Promise.all([`/${org}`, `/${org}/${siteName}`].map(async (configPath) => {
-        const response = await sdk.actions.daFetch(`${admin}/config${configPath}`);
+      const responses = await Promise.all([`/${org}`, `/${org}/${siteName}`]
+        .map((configPath) => sdk.actions.daFetch(`${admin}/config${configPath}`)));
+      if ([403, 404].includes(responses[1].status)) {
+        const response = await sdk.actions.daFetch(`https://api.aem.live/${org}/sites/${siteName}/config.json`);
+        if (response.ok) {
+          const siteConfig = await response.json();
+          const editorConfig = siteConfig.editor?.da || {};
+          const config = { ...editorConfig, library: { data: editorConfig.library || [] } };
+          return { configs: [config], hasAemAssets: false };
+        }
+        if (response.status !== 404) {
+          throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
+        }
+      }
+      const configs = await Promise.all(responses.map(async (response) => {
         if (response.status === 404) return null;
         if (!response.ok) throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
         return response.json();
