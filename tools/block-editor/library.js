@@ -85,7 +85,7 @@ export function parseVariants(source, path) {
 }
 
 async function fetchJson(url) {
-  const response = await dependencies.daFetch(url, { noRedirect: true });
+  const response = await fetch(url);
   if (!response.ok) throw new Error(`Unable to fetch ${url}: ${response.status}`);
   return response.json();
 }
@@ -94,7 +94,7 @@ async function getBlockVariants(path) {
   const hosted = ['hlx.page', 'hlx.live', 'aem.page', 'aem.live'].some((suffix) => {
     try { return new URL(path).hostname.endsWith(suffix); } catch { return false; }
   });
-  const response = await dependencies.daFetch(`${path}${hosted ? '.plain.html' : ''}`, { noRedirect: true });
+  const response = await fetch(`${path}${hosted ? '.plain.html' : ''}`);
   if (!response.ok) throw new Error(`Unable to load block template ${path}: ${response.status}`);
   return parseVariants(await response.text(), path);
 }
