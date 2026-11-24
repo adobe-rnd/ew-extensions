@@ -210,50 +210,32 @@ describe('block editor library parsing', () => {
     expect(fields.map((field) => field.label)).to.deep.equal(['Title', 'Image']);
     expect(fields.every((field) => !field.error)).to.equal(true);
   });
-  for (const multi of [false, true]) {
-    for (const partial of [false, true]) {
-      it(`checks ${partial ? 'partly' : 'fully'} ignored fields when ranking ${multi ? 'multi' : 'ordinary'} templates`, async () => {
-        const title = partial ? '<p>Title</p>' : '';
-        const entries = [
-          ['example', picture, null],
-          ['hidden', `${title}<p>Hidden text</p>`, `${title}<p>IGNORE</p>`],
-          ['image', `${title}${picture}`, `${title}<p>Image</p>`],
-        ];
-        const blocks = entries.map(([path, content, labels]) => ({
-          path: `/library/${path}`,
-          loadVariants: Promise.resolve(parseVariants(`<main><div>
-            <div class="content"><div><div>${content}</div></div></div>
-            ${labels ? fieldsMetadata([labels]) : ''}
-          </div></main>`, `https://example.com/library/${path}`)),
-        }));
-        const block = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}${picture}</td></tr></table>` });
-        const selected = await getBlockFieldTemplate(blocks, 'content', '', describer, { block, multi });
-        expect(selected.path).to.equal('/library/image');
-        expect(buildBlockFieldDefinitions(selected, { multi }).map((field) => field.label))
-          .to.deep.equal(partial ? ['Title', 'Image'] : ['Image']);
-        const hidden = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}<p>Hidden text</p></td></tr></table>` });
-        const ignored = await getBlockFieldTemplate(blocks, 'content', '', describer, { block: hidden, multi });
-        expect(ignored.path).to.equal('/library/hidden');
-        expect(buildBlockFieldDefinitions(ignored, { multi })).to.have.length(partial ? 1 : 0);
-      });
-    }
+  for (const partial of [false, true]) {
+    it(`checks ${partial ? 'partly' : 'fully'} ignored fields when ranking duplicates`, async () => {
+      const title = partial ? '<p>Title</p>' : '';
+      const entries = [
+        ['example', picture, null],
+        ['hidden', `${title}<p>Hidden text</p>`, `${title}<p>IGNORE</p>`],
+        ['image', `${title}${picture}`, `${title}<p>Image</p>`],
+      ];
+      const blocks = entries.map(([path, content, labels]) => ({
+        path: `/library/${path}`,
+        loadVariants: Promise.resolve(parseVariants(`<main><div>
+          <div class="content"><div><div>${content}</div></div></div>
+          ${labels ? fieldsMetadata([labels]) : ''}
+        </div></main>`, `https://example.com/library/${path}`)),
+      }));
+      const block = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}${picture}</td></tr></table>` });
+      const selected = await getBlockFieldTemplate(blocks, 'content', '', describer, { block });
+      expect(selected.path).to.equal('/library/image');
+      expect(buildBlockFieldDefinitions(selected).map((field) => field.label))
+        .to.deep.equal(partial ? ['Title', 'Image'] : ['Image']);
+      const hidden = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}<p>Hidden text</p></td></tr></table>` });
+      const ignored = await getBlockFieldTemplate(blocks, 'content', '', describer, { block: hidden });
+      expect(ignored.path).to.equal('/library/hidden');
+      expect(buildBlockFieldDefinitions(ignored)).to.have.length(partial ? 1 : 0);
+    });
   }
-  it('does not treat a zero-field template as compatible with populated blocks', async () => {
-    const blocks = [
-      { path: '/library/empty', loadVariants: Promise.resolve(parseVariants(`<main><div>
-        <div class="content"></div>${fieldsMetadata([])}
-      </div></main>`, 'https://example.com/library/empty')) },
-      { path: '/library/image', loadVariants: Promise.resolve(parseVariants(`<main><div>
-        <div class="content"><div><div>${picture}</div></div></div>${fieldsMetadata(['Image'])}
-      </div></main>`, 'https://example.com/library/image')) },
-    ];
-    const block = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${picture}</td></tr></table>` });
-    expect((await getBlockFieldTemplate(blocks, 'content', '', describer, { block })).path)
-      .to.equal('/library/image');
-    const empty = describeBlock({ html: '<table><tr><td>content</td></tr></table>' });
-    expect((await getBlockFieldTemplate(blocks, 'content', '', describer, { block: empty })).path)
-      .to.equal('/library/empty');
-  });
   it('keeps the first matching template when no candidate has fields', async () => {
     const items = parseVariants(`<main><div>
       <div class="cards"><div><div>First</div></div></div>

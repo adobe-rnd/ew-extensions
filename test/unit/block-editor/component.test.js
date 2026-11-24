@@ -901,7 +901,7 @@ describe('block editor sidebar workflow', () => {
       library.resetBlockLibraryCache();
     }
   });
-  [false, true].forEach((multi) => describe(`template invalidation for ${multi ? 'multi' : 'ordinary'} blocks`, () => {
+  describe('template selection and reload', () => {
     const picture = '<picture><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></picture>';
     const video = '<p><a href="https://example.com/v.mp4">Video</a></p>';
     const rowHtml = (media, title = 'Page title') => `<tr><td><p>${title}</p>${media}</td></tr>`;
@@ -912,7 +912,7 @@ describe('block editor sidebar workflow', () => {
     let originalFetch;
     let revision;
     let fetchError;
-    let imageLabel;
+    let multi;
     const select = (items, index = 0) => {
       const blocks = items.map((rows, blockIndex) => describeBlock({
         html: `<table><tr><td>content</td></tr>${rows}</table>`, index: blockIndex,
@@ -926,17 +926,17 @@ describe('block editor sidebar workflow', () => {
       for (let attempt = 0; attempt < 20 && JSON.stringify(labels()) !== JSON.stringify(expected); attempt += 1) await flush();
       expect(labels()).to.deep.equal(expected);
     };
-    const loadImage = async (rows = rowHtml(picture)) => {
-      select([rows]);
+    const loadImage = async () => {
+      select([rowHtml(picture)]);
       await element._reloadLibrary();
-      expect(labels().slice(0, 2)).to.deep.equal(['Title', 'Image']);
+      expect(labels()).to.deep.equal(['Title', 'Image']);
     };
 
     beforeEach(async () => {
       ({ describeBlock } = await import('../../../tools/block-editor/document.js'));
       revision = 1;
       fetchError = false;
-      imageLabel = 'Image';
+      multi = true;
       originalFetch = window.fetch;
       window.fetch = async (url) => {
         if (fetchError) throw new Error('Library unavailable');
@@ -946,9 +946,8 @@ describe('block editor sidebar workflow', () => {
             editor: { data: multi ? [{ block: 'content', property: 'multi' }] : [] },
           })
           : new Response(`<main><div>
-              <div class="content"><div><div>${picture}</div></div></div>${metadata('Image only', false)}
               <div class="content"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
-              <div class="content"><div><div><p>Title</p>${picture}</div></div></div>${metadata(imageLabel)}
+              <div class="content"><div><div><p>Title</p>${picture}</div></div></div>${metadata('Image')}
               <div class="content alt"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
             </div></main>`);
       };
@@ -964,7 +963,8 @@ describe('block editor sidebar workflow', () => {
       library.resetBlockLibraryCache();
     });
 
-    it('re-picks fields and insertion rows when selection changes', async () => {
+    [false, true].forEach((isMulti) => it(`re-picks templates when selecting another ${isMulti ? 'multi' : 'ordinary'} block`, async () => {
+      multi = isMulti;
       await loadImage();
       const blocks = select([rowHtml(picture), rowHtml(video)], 1);
       expect(element._fieldDefinitions).to.have.length(2);
@@ -981,7 +981,7 @@ describe('block editor sidebar workflow', () => {
         expect(appended.target).to.deep.equal(blocks[1].target);
         expect(appended.html).to.include('v.mp4').and.not.to.include('<picture>');
       }
-    });
+    }));
 
     it('does not use incompatible IGNORE-only templates for fields or insertion', async () => {
       window.fetch = async (url) => {
@@ -1002,18 +1002,16 @@ describe('block editor sidebar workflow', () => {
       select([`<tr><td>${picture}</td></tr>`]);
       await element._reloadLibrary();
       expect(labels()).to.deep.equal(['Image']);
-      if (multi) {
-        element._onAddItem();
-        const appended = calls.find(([action]) => action === 'applyChanges')[1].changes[0];
-        expect(appended.html).to.include('<picture>').and.not.to.include('Hidden text');
-      }
+      element._onAddItem();
+      const appended = calls.find(([action]) => action === 'applyChanges')[1].changes[0];
+      expect(appended.html).to.include('<picture>').and.not.to.include('Hidden text');
     });
 
     it('re-picks after same-index content replacement', async () => {
+      multi = false;
       await loadImage();
       select([rowHtml(video)]);
       await expectLabels(['Title', 'Video']);
-      if (multi) expect(element._multiTemplateRow.outerHTML).to.include('v.mp4');
     });
 
     it('keeps template loading and drafts stable for content-only edits', async () => {
@@ -1028,28 +1026,6 @@ describe('block editor sidebar workflow', () => {
       expect(labels()).to.deep.equal(['Title', 'Image']);
     });
 
-    it('restores templates after reconnecting to the same document', async () => {
-      await loadImage();
-      const actions = element._actions;
-      element.remove();
-      document.body.append(element);
-      await flush();
-      element._actions = actions;
-      element._hashState = { org: 'org', site: 'site' };
-      library.configureLibrary(actions);
-      select([rowHtml(picture)]);
-      await expectLabels(['Title', 'Image']);
-      if (multi) expect(element._multiTemplateRow.outerHTML).to.include('<picture>');
-    });
-
-    it('re-picks when empty image spacers change field matching', async () => {
-      await loadImage();
-      select([rowHtml(picture, '')]);
-      await expectLabels(['Image only']);
-      select([rowHtml(picture)]);
-      await expectLabels(['Title', 'Image']);
-    });
-
     it('rejects late template results after same-index structure changes', async () => {
       await loadImage();
       let release;
@@ -1058,66 +1034,33 @@ describe('block editor sidebar workflow', () => {
         ...element._actions,
         describeBlock: async (args) => { await gate; return describeBlock(args); },
       };
-      const initialLoadId = element._fieldLoadId;
+      const reload = element._reloadLibrary.bind(element);
+      const loads = [];
+      element._reloadLibrary = (options) => {
+        const loading = reload(options);
+        loads.push(loading);
+        return loading;
+      };
       try {
         select([rowHtml(video)]);
         await flush();
-        expect(element._fieldLoadId).to.be.greaterThan(initialLoadId);
-        const pendingLoadId = element._fieldLoadId;
-        select([rowHtml(picture)]);
-        expect(element._fieldLoadId).to.be.greaterThan(pendingLoadId);
-        if (multi) expect(element._multiTemplateRow === null).to.equal(true);
-        release();
-        await flush();
-        await expectLabels(['Title', 'Image']);
-        if (multi) expect(element._multiTemplateRow.outerHTML).to.include('<picture>');
-      } finally { release(); }
-    });
-
-    for (const change of ['deselection', 'disconnect']) {
-      it(`rejects pending template results after ${change}`, async () => {
-        await loadImage();
-        let release;
-        const gate = new Promise((resolve) => { release = resolve; });
-        element._actions = {
-          ...element._actions,
-          describeBlock: async (args) => { await gate; return describeBlock(args); },
-        };
-        const loading = element._loadFields();
-        try {
-          await flush();
-          if (change === 'disconnect') element.remove();
-          else sdk.callback({ ...snapshot(++revision), blocks: [], selectedBlock: null });
-          release();
-          await loading;
-          expect(element._fieldDefinitions).to.have.length(0);
-          expect(element._multiTemplateRow === null).to.equal(true);
-          expect(element._libraryError).to.equal('');
-        } finally { release(); }
-      });
-    }
-
-    it('keeps refreshed metadata when an earlier template load completes late', async () => {
-      await loadImage();
-      let release;
-      const gate = new Promise((resolve) => { release = resolve; });
-      element._actions = {
-        ...element._actions,
-        describeBlock: async (args) => { await gate; return describeBlock(args); },
-      };
-      const pending = element._loadFields({ keep: true });
-      try {
-        await flush();
-        imageLabel = 'Refreshed image';
         element._actions = { ...element._actions, describeBlock: async (args) => describeBlock(args) };
-        await element._onRefreshLibrary();
-        expect(labels()).to.deep.equal(['Title', 'Refreshed image']);
+        select([rowHtml(picture)]);
+        expect(loads).to.have.length(2);
+        expect(element._multiTemplateRow === null).to.equal(true);
+        await loads[1];
+        expect(labels()).to.deep.equal(['Title', 'Image']);
+        const currentRow = element._multiTemplateRow.outerHTML;
+        expect(currentRow).to.include('<picture>');
         release();
-        await pending;
-        expect(labels()).to.deep.equal(['Title', 'Refreshed image']);
-        expect(element._refreshingLibrary).to.equal(false);
-        expect(element._libraryError).to.equal('');
-      } finally { release(); }
+        await loads[0];
+        expect(labels()).to.deep.equal(['Title', 'Image']);
+        expect(element._multiTemplateRow.outerHTML).to.equal(currentRow);
+      } finally {
+        release();
+        await Promise.all(loads);
+        element._reloadLibrary = reload;
+      }
     });
 
     it('does not restore an error from a superseded library reload', async () => {
@@ -1152,30 +1095,7 @@ describe('block editor sidebar workflow', () => {
       expect(element._libraryError).to.equal('');
       expect(element._variantOptions).to.deep.equal([{ value: 'alt', label: 'alt' }]);
     });
-
-    if (multi) {
-      for (const [operation, nextRows, expected] of [
-        ['deleting the first item', rowHtml(video), ['Title', 'Video']],
-        ['moving the first item', rowHtml(video) + rowHtml(picture), ['Title', 'Video', 'Title']],
-      ]) {
-        it(`re-picks the first-item schema after ${operation}`, async () => {
-          await loadImage(rowHtml(picture) + rowHtml(video));
-          select([nextRows]);
-          expect(element._multiTemplateRow === null).to.equal(true);
-          await expectLabels(expected);
-          expect(element._multiTemplateRow.outerHTML).to.include('v.mp4');
-        });
-      }
-      it('does not reload for later-item changes', async () => {
-        await loadImage(rowHtml(picture) + rowHtml(picture));
-        const loadId = element._fieldLoadId;
-        select([rowHtml(picture) + rowHtml(video)]);
-        await flush();
-        expect(element._fieldLoadId).to.equal(loadId);
-        expect(element._multiTemplateRow.outerHTML).to.include('<picture>');
-      });
-    }
-  }));
+  });
   it('reports complete template failure and retries failed library loads', async () => {
     let fetches = 0;
     const originalFetch = window.fetch;

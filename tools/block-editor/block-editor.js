@@ -71,7 +71,6 @@ export class EwBlockProperties extends LitElement {
     super.connectedCallback();
     this.shadowRoot.adoptedStyleSheets = [formStyle, buttonsStyle, pageStyle, style];
     this._hashState = undefined;
-    this._documentId = undefined;
     this._variantOptions = [];
     this._isMulti = false;
     this._multiTemplateRow = null;
