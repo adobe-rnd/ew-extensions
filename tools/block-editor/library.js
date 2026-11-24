@@ -84,8 +84,15 @@ export function parseVariants(source, path) {
   });
 }
 
+function fetchLibraryResource(url) {
+  // DA content needs authentication; public AEM hosts do not allow Authorization in CORS.
+  return new URL(url, window.location.href).origin === 'https://content.da.live'
+    ? dependencies.daFetch(url, { noRedirect: true })
+    : fetch(url);
+}
+
 async function fetchJson(url) {
-  const response = await fetch(url);
+  const response = await fetchLibraryResource(url);
   if (!response.ok) throw new Error(`Unable to fetch ${url}: ${response.status}`);
   return response.json();
 }
@@ -94,7 +101,7 @@ async function getBlockVariants(path) {
   const hosted = ['hlx.page', 'hlx.live', 'aem.page', 'aem.live'].some((suffix) => {
     try { return new URL(path).hostname.endsWith(suffix); } catch { return false; }
   });
-  const response = await fetch(`${path}${hosted ? '.plain.html' : ''}`);
+  const response = await fetchLibraryResource(`${path}${hosted ? '.plain.html' : ''}`);
   if (!response.ok) throw new Error(`Unable to load block template ${path}: ${response.status}`);
   return parseVariants(await response.text(), path);
 }
