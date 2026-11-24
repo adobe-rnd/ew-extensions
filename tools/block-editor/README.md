@@ -118,6 +118,8 @@ For a `multi` block, the fields table must contain **exactly two rows**: the
 **Fields** header and one row describing the first item's cells and fields.
 Every item reuses that schema, even if the library template contains several
 sample items. The first item also supplies the template for adding new items.
+When duplicate templates exist, **Add item** uses the same selected template as
+its fields. Adding items is unavailable while that template loads.
 
 Without `multi` configuration, field metadata must describe **all** content rows
 in the library template. A list inside a cell is still one field; it is not the

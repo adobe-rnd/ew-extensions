@@ -901,7 +901,7 @@ describe('block editor sidebar workflow', () => {
       library.resetBlockLibraryCache();
     }
   });
-  it('re-picks duplicate templates when the caret moves to a block of the same name', async () => {
+  [false, true].forEach((multi) => it(`re-picks duplicate templates when the caret moves to a block of the same name${multi ? ' for multi blocks' : ''}`, async () => {
     const { describeBlock } = await import('../../../tools/block-editor/document.js');
     const picture = '<picture><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></picture>';
     const video = '<p><a href="https://example.com/v.mp4">Video</a></p>';
@@ -910,7 +910,10 @@ describe('block editor sidebar workflow', () => {
     </table></div></div></div>`;
     const originalFetch = window.fetch;
     window.fetch = async (url) => (url.endsWith('.json')
-      ? Response.json({ data: [{ name: 'content', path: `${window.location.origin}/fixture/content.html` }] })
+      ? Response.json({
+        data: [{ name: 'content', path: `${window.location.origin}/fixture/content.html` }],
+        editor: { data: multi ? [{ block: 'content', property: 'multi' }] : [] },
+      })
       : new Response(`<main><div>
           <div class="content"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
           <div class="content"><div><div><p>Title</p>${picture}</div></div></div>${metadata('Image')}
@@ -931,16 +934,29 @@ describe('block editor sidebar workflow', () => {
       select(0);
       await element._reloadLibrary();
       expect(labels()).to.deep.equal(['Title', 'Image']);
+      if (multi) expect(element._multiTemplateRow.querySelector('img')).not.to.equal(null);
       select(1);
       expect(element._fieldDefinitions).to.have.length(2);
+      if (multi) {
+        expect(element._multiTemplateRow === null).to.equal(true);
+        element._onAddItem();
+        expect(calls).to.have.length(0);
+      }
       for (let attempt = 0; attempt < 20 && labels()[1] !== 'Video'; attempt += 1) await flush();
       expect(labels()).to.deep.equal(['Title', 'Video']);
+      if (multi) {
+        element._onAddItem();
+        const appended = calls.find(([action]) => action === 'applyChanges')[1].changes[0];
+        expect(appended.type).to.equal('appendBlockRow');
+        expect(appended.target).to.deep.equal(blocks[1].target);
+        expect(appended.html).to.include('v.mp4').and.not.to.include('<picture>');
+      }
     } finally {
       window.fetch = originalFetch;
       library.configureLibrary(sdk.actions);
       library.resetBlockLibraryCache();
     }
-  });
+  }));
   it('reports complete template failure and retries failed library loads', async () => {
     let fetches = 0;
     const originalFetch = window.fetch;
