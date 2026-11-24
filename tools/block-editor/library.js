@@ -1,7 +1,7 @@
 import { config as libraryConfig } from './config.js';
 import {
   normalizeBlockName, normalizeVariant, isMultiBlockConfigured,
-  buildBlockFieldDefinitions, resolveBlockFields,
+  buildBlockFieldDefinitions, resolveBlockFields, blockFieldStructure,
 } from './fields.js';
 
 const libraries = new Map();
@@ -169,8 +169,11 @@ export const resetBlockOptionsCache = resetBlockLibraryCache;
 function fieldFit(candidate, { block, multi }) {
   if (!('fields' in candidate.item)) return 0;
   let definitions;
-  try { definitions = buildBlockFieldDefinitions(candidate, { multi }); } catch { return 1; }
+  try { definitions = buildBlockFieldDefinitions(candidate, { multi, includeIgnored: true }); } catch { return 1; }
   if (!block) return 2;
+  if (!definitions.length) {
+    return blockFieldStructure(block, { multi }) === blockFieldStructure(candidate.template, { multi }) ? 3 : 2;
+  }
   return resolveBlockFields(block, definitions).every((field) => !field.error) ? 3 : 2;
 }
 

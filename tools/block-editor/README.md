@@ -35,10 +35,11 @@ Field definitions belong in the **library template document**, not in each page
 that uses the block. Existing page content must have a compatible structure for
 those fields to be editable.
 
-The extension reads the **Blocks** library entry from the site configuration and
-the organization configuration. The site configuration is required. If the
-author cannot read the organization configuration, the extension uses the site
-configuration only.
+The extension reads the **Blocks** library entry from site configuration.
+For legacy sites, it also checks organization configuration; site entries take
+precedence. Missing configurations (404) are skipped. A forbidden organization
+configuration (403) is skipped too. A site 403 or any other configuration request
+error stops loading.
 
 To use a different block library index, add a `library` parameter to the
 extension URL:
@@ -55,6 +56,12 @@ example, a group on one library page can contain a block that has its own page
 elsewhere. The extension uses the first template whose fields metadata fits the
 selected block. If no template fits, it uses the first template that has fields
 metadata. If no template has fields metadata, it uses the first match.
+
+The extension rechecks the match when the selected block's structure changes,
+even if its name, variant, and position stay the same. For repeating blocks,
+the first item's structure determines the match. Ordinary content edits preserve
+the match unless empty image spacers change field matching. Hidden `IGNORE`
+fields still participate in template compatibility checks.
 
 ### Using AI
 

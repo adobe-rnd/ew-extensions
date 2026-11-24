@@ -1,7 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import {
   buildBlockFieldDefinitions, resolveBlockFields, matchFieldCount, isMultiBlockConfigured,
-  processBlockOptions, EditorSession, sameTarget,
+  processBlockOptions, EditorSession, sameTarget, blockFieldStructure,
 } from '../../../tools/block-editor/fields.js';
 
 const blockTarget = { attribute: 'data-block-index', index: 10 };
@@ -96,6 +96,64 @@ describe('block editor metadata and source-faithful sidecars', () => {
     expect(sameTarget(blockTarget, { ...blockTarget })).to.equal(true);
     expect(sameTarget(blockTarget, { ...blockTarget, index: 11 })).to.equal(false);
     expect(sameTarget(blockTarget, null)).to.equal(false);
+  });
+});
+
+describe('block template matching structure', () => {
+  const image = { type: 'image', value: '/image.png', target };
+  const list = { type: 'list', items: [text('Item')], target };
+  const original = () => ({ rows: [row(text(), image), row(text('Second'))] });
+
+  for (const [name, change] of [
+    ['row count', (block) => block.rows.pop()],
+    ['cell count', (block) => block.rows[0].cells.push({ fields: [text()] })],
+    ['field count', (block) => block.rows[0].cells[0].fields.push(text('Extra'))],
+    ['field order', (block) => block.rows[0].cells[0].fields.reverse()],
+    ['field type', (block) => { block.rows[0].cells[0].fields[1] = list; }],
+  ]) {
+    it(`detects changes to ${name}`, () => {
+      const before = original();
+      const after = structuredClone(before);
+      change(after);
+      expect(blockFieldStructure(after)).not.to.equal(blockFieldStructure(before));
+    });
+  }
+
+  it('ignores values, field targets, formatting, links, lists, and read-only state', () => {
+    const before = { rows: [row(text(), image, list)] };
+    const after = structuredClone(before);
+    Object.assign(after.rows[0].cells[0].fields[0], {
+      value: '', href: '/new', tagName: 'H2', multiline: true, readOnly: true, target: { index: 99 },
+    });
+    after.rows[0].cells[0].fields[1].value = '/other.png';
+    after.rows[0].cells[0].fields[2].items.push(text('Another item'));
+    after.rows[0].cells[0].colspan = 2;
+    expect(blockFieldStructure(after)).to.equal(blockFieldStructure(before));
+  });
+
+  it('tracks text emptiness only when it changes image-spacer matching', () => {
+    const empty = { rows: [row(text(''), image, text(''))] };
+    const filled = { rows: [row(text('Caption'), image, text(''))] };
+    expect(blockFieldStructure(empty)).not.to.equal(blockFieldStructure(filled));
+    expect(blockFieldStructure({ rows: [row(text(''))] }))
+      .to.equal(blockFieldStructure({ rows: [row(text('Content'))] }));
+    expect(blockFieldStructure({ rows: [row(text(''), image, list)] }))
+      .to.equal(blockFieldStructure({ rows: [row(text('Content'), image, list)] }));
+  });
+
+  it('tracks only the first item for multi blocks', () => {
+    const before = original();
+    const after = original();
+    after.rows[1] = row(image);
+    after.rows.push(row(list));
+    expect(blockFieldStructure(after, { multi: true })).to.equal(blockFieldStructure(before, { multi: true }));
+    after.rows.reverse();
+    expect(blockFieldStructure(after, { multi: true })).not.to.equal(blockFieldStructure(before, { multi: true }));
+  });
+
+  it('handles empty blocks and removed selections', () => {
+    expect(blockFieldStructure(null)).to.equal(blockFieldStructure({ rows: [] }));
+    expect(blockFieldStructure(null)).not.to.equal(blockFieldStructure(original()));
   });
 });
 
