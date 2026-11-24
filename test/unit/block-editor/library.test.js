@@ -1,13 +1,96 @@
 import { expect } from '@esm-bundle/chai';
 import {
   parseVariants, getBlockTableHtml, getBlockFieldTemplate, getBlockVariantOptions,
-  getBlockVariantChoices,
+  getBlockVariantChoices, configureLibrary, loadBlockLibrary, resetBlockLibraryCache,
 } from '../../../tools/block-editor/library.js';
 import {
   getConfig, validateBase, isLocalHost, setAdminEnvironment, ADMIN_URLS,
 } from '../../../tools/block-editor/config.js';
 import { describeBlock } from '../../../tools/block-editor/document.js';
 import { buildBlockFieldDefinitions, resolveBlockFields } from '../../../tools/block-editor/fields.js';
+
+describe('block editor library authentication', () => {
+  const da = { name: 'DA', base: 'https://content.da.live/org/site', authenticated: true };
+  const aem = { name: 'AEM', base: 'https://main--site--org.aem.page', authenticated: false };
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = window.fetch;
+    resetBlockLibraryCache();
+  });
+  afterEach(() => {
+    window.fetch = originalFetch;
+    configureLibrary(undefined);
+    resetBlockLibraryCache();
+  });
+
+  [
+    [da, da], [aem, aem], [da, aem], [aem, da],
+  ].forEach(([index, template]) => {
+    it(`loads ${index.name} indexes and ${template.name} templates with destination-specific authentication`, async () => {
+      const indexUrl = `${index.base}/library/blocks.json`;
+      const templatePath = `${template.base}/library/cards`;
+      const templateUrl = `${templatePath}${template === aem ? '.plain.html' : ''}`;
+      const sdkCalls = [];
+      const requests = [];
+      window.fetch = async (url, options) => {
+        const authorization = new Headers(options?.headers).get('Authorization');
+        requests.push({ url, authorization });
+        const authenticated = url === indexUrl ? index.authenticated : template.authenticated;
+        if (authenticated && authorization !== 'Bearer test-token') return new Response('', { status: 401 });
+        if (!authenticated && authorization) throw new Error('Public libraries must not receive Authorization.');
+        expect([indexUrl, templateUrl]).to.include(url);
+        return new Response(url === indexUrl
+          ? JSON.stringify({ data: [{ name: 'Cards', path: templatePath }] })
+          : '<main><div><div class="cards"><div><div>Card</div></div></div></div></main>');
+      };
+      configureLibrary({
+        getEditorConfig: async () => ({ configs: [{ library: { data: [{ title: 'Blocks', path: indexUrl }] } }] }),
+        daFetch: (url, options) => {
+          sdkCalls.push({ url, options });
+          return window.fetch(url, { ...options, headers: { Authorization: 'Bearer test-token' } });
+        },
+      });
+
+      const loaded = await loadBlockLibrary('org', 'site');
+      expect(loaded.blocks).to.have.length(1);
+      expect(loaded.warnings).to.deep.equal([]);
+      expect(requests).to.deep.equal([
+        { url: indexUrl, authorization: index.authenticated ? 'Bearer test-token' : null },
+        { url: templateUrl, authorization: template.authenticated ? 'Bearer test-token' : null },
+      ]);
+      expect(sdkCalls).to.deep.equal([
+        ...(index.authenticated ? [{ url: indexUrl, options: { noRedirect: true } }] : []),
+        ...(template.authenticated ? [{ url: templateUrl, options: { noRedirect: true } }] : []),
+      ]);
+    });
+  });
+
+  it('does not authenticate other origins or DA lookalikes', async () => {
+    const origins = [
+      'https://content.da.live.example.com', 'https://other.content.da.live',
+      'http://content.da.live', 'https://content.da.live:8443', 'https://library.example.com',
+      'https://main--site--org.aem.live', 'https://main--site--org.hlx.page',
+      'https://main--site--org.hlx.live', window.location.origin,
+    ];
+    const sources = origins.map((origin) => `${origin}/library/blocks.json`);
+    const requests = [];
+    window.fetch = async (url, options) => {
+      requests.push(url);
+      expect(new Headers(options?.headers).has('Authorization')).to.equal(false);
+      return new Response(JSON.stringify({ data: [] }));
+    };
+    configureLibrary({
+      getEditorConfig: async () => ({
+        configs: [{ library: { data: [{ title: 'Blocks', path: sources.join(',') }] } }],
+      }),
+      daFetch: () => { throw new Error('Only the trusted DA content origin may receive Authorization.'); },
+    });
+
+    await loadBlockLibrary('org', 'site');
+    expect(requests).to.deep.equal(sources);
+  });
+});
 
 describe('block editor library parsing', () => {
   it('preserves original templates, metadata labels, and variant headers', () => {
