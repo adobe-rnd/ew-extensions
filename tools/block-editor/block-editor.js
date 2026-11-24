@@ -397,6 +397,8 @@ export class EwBlockProperties extends LitElement {
       this._fieldError = '';
       this._fieldErrorCode = '';
       this._reloadLibrary();
+    } else if (block && !sameTarget(block.target, previous?.target)) {
+      this._loadFields({ keep: true });
     }
     this.requestUpdate();
   }
@@ -427,7 +429,9 @@ export class EwBlockProperties extends LitElement {
     this._isMulti = multi;
     if (!multi) return;
     const { blocks } = await loadBlockLibrary(org, site);
-    const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
+    const match = await getBlockFieldTemplate(blocks, name, variant, this._actions, {
+      block: this._itemTable, multi,
+    });
     const row = match?.item.dom.rows[1] ?? await getMultiBlockTemplateRow(org, site, name);
     if (loadId !== this._multiLoadId || !this.isConnected) return;
     this._multiTemplateRow = row;
@@ -634,13 +638,15 @@ export class EwBlockProperties extends LitElement {
       </section>`;
   }
 
-  async _loadFields() {
+  async _loadFields({ keep = false } = {}) {
     const loadId = (this._fieldLoadId ?? 0) + 1;
     this._fieldLoadId = loadId;
-    this._fieldDefinitions = [];
-    this._blockOptions = null;
-    this._generateFieldsContext = null;
-    this._libraryError = '';
+    if (!keep) {
+      this._fieldDefinitions = [];
+      this._blockOptions = null;
+      this._generateFieldsContext = null;
+      this._libraryError = '';
+    }
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     const variant = this._variant;
@@ -650,7 +656,9 @@ export class EwBlockProperties extends LitElement {
         isMultiBlock(org, site, name), loadBlockLibrary(org, site), loadBlockOptions(org, site),
       ]);
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
-      const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
+      const match = await getBlockFieldTemplate(blocks, name, variant, this._actions, {
+        block: this._itemTable, multi,
+      });
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
       this._isMulti = multi;
       this._blockOptions = processBlockOptions(options);

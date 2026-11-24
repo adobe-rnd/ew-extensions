@@ -901,6 +901,46 @@ describe('block editor sidebar workflow', () => {
       library.resetBlockLibraryCache();
     }
   });
+  it('re-picks duplicate templates when the caret moves to a block of the same name', async () => {
+    const { describeBlock } = await import('../../../tools/block-editor/document.js');
+    const picture = '<picture><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></picture>';
+    const video = '<p><a href="https://example.com/v.mp4">Video</a></p>';
+    const metadata = (label) => `<div class="library-metadata"><div><div>fields</div><div><table>
+      <tr><td>Fields</td></tr><tr><td><p>Title</p><p>${label}</p></td></tr>
+    </table></div></div></div>`;
+    const originalFetch = window.fetch;
+    window.fetch = async (url) => (url.endsWith('.json')
+      ? Response.json({ data: [{ name: 'content', path: `${window.location.origin}/fixture/content.html` }] })
+      : new Response(`<main><div>
+          <div class="content"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
+          <div class="content"><div><div><p>Title</p>${picture}</div></div></div>${metadata('Image')}
+        </div></main>`));
+    const actions = { ...sdk.actions, describeBlock: async (args) => describeBlock(args) };
+    const blocks = [picture, video].map((media, index) => describeBlock({
+      html: `<table><tr><td>content</td></tr><tr><td><p>Page title</p>${media}</td></tr></table>`, index,
+    }));
+    const select = (index) => sdk.callback({
+      ...snapshot(), blocks, selectedBlock: blocks[index].target,
+    });
+    const labels = () => element._fields.filter((entry) => !entry.error).map((entry) => entry.label);
+    library.configureLibrary(actions);
+    library.resetBlockLibraryCache();
+    element._hashState = { org: 'org', site: 'site' };
+    element._actions = actions;
+    try {
+      select(0);
+      await element._reloadLibrary();
+      expect(labels()).to.deep.equal(['Title', 'Image']);
+      select(1);
+      expect(element._fieldDefinitions).to.have.length(2);
+      for (let attempt = 0; attempt < 20 && labels()[1] !== 'Video'; attempt += 1) await flush();
+      expect(labels()).to.deep.equal(['Title', 'Video']);
+    } finally {
+      window.fetch = originalFetch;
+      library.configureLibrary(sdk.actions);
+      library.resetBlockLibraryCache();
+    }
+  });
   it('reports complete template failure and retries failed library loads', async () => {
     let fetches = 0;
     const originalFetch = window.fetch;

@@ -181,6 +181,23 @@ describe('block editor live HTML replacement adapter', () => {
     };
     expect(await actions.getEditorConfig()).to.deep.equal({ configs: [orgConfig], hasAemAssets: false });
   });
+  it('skips a forbidden legacy org config and keeps the site config', async () => {
+    const siteConfig = { library: { data: [{ title: 'Blocks', path: '/site-library.json' }] } };
+    sdk.actions.daFetch = async (url) => {
+      if (url === 'https://admin.hlx.page/ping/org/site') return new Response(null);
+      return url === 'https://admin.da.live/config/org/site'
+        ? Response.json(siteConfig) : new Response(null, { status: 403 });
+    };
+    expect(await actions.getEditorConfig()).to.deep.equal({ configs: [siteConfig], hasAemAssets: false });
+  });
+  it('requires read access to the legacy site config', async () => {
+    sdk.actions.daFetch = async (url) => {
+      if (url === 'https://admin.hlx.page/ping/org/site') return new Response(null);
+      return url === 'https://admin.da.live/config/org'
+        ? Response.json({}) : new Response(null, { status: 403 });
+    };
+    await expectError(actions.getEditorConfig(), 'CONFIG_FAILED');
+  });
   it('surfaces missing config, authorization and server errors on Helix 6', async () => {
     for (const status of [401, 403, 404, 500]) {
       sdk.actions.daFetch = async (url) => (
@@ -192,7 +209,7 @@ describe('block editor live HTML replacement adapter', () => {
     }
   });
   it('does not treat legacy config failures as evidence of Helix 6', async () => {
-    for (const [orgStatus, siteStatus] of [[403, 200], [200, 500], [403, 404]]) {
+    for (const [orgStatus, siteStatus] of [[500, 200], [200, 500], [401, 404]]) {
       calls = [];
       sdk.actions.daFetch = async (url) => {
         calls.push(['daFetch', url]);
