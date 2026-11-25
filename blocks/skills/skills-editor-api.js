@@ -628,7 +628,8 @@ async function aoAuthContext() {
   };
 }
 
-export async function fetchSkillsFromAo() {
+// org/site (same slugs as canWriteConfig) send x-site; the bridge then includes scope:"site" skills.
+export async function fetchSkillsFromAo(org, site) {
   const ctx = await aoAuthContext();
   if (!ctx) return null;
   try {
@@ -637,6 +638,7 @@ export async function fetchSkillsFromAo() {
       'x-tenant-id': ctx.orgId,
     };
     if (ctx.bridge) headers['x-user-id'] = ctx.userId || '';
+    if (org && site) headers['x-site'] = `${org}/${site}`;
     const resp = await fetch(`${ctx.base}/api/v1/skills?manifest_id=${AO_MANIFEST_ID}`, { headers });
     if (!resp.ok) return null;
     return parseAoSkillsResponse(await resp.json());
@@ -991,7 +993,7 @@ export async function updateSkillOnAo(skillId, body, displayTitle) {
  */
 export async function loadSkillsFromAo(org, site, loadedConfig = null) {
   const [aoSkills, daResult] = await Promise.all([
-    fetchSkillsFromAo(),
+    fetchSkillsFromAo(org, site),
     loadSkillsWithStatuses(org, site, loadedConfig, { includeMdFiles: false }),
   ]);
   if (!aoSkills) {
@@ -1028,6 +1030,7 @@ export async function loadSkillsFromAo(org, site, loadedConfig = null) {
 }
 
 export const AO_SCOPE_PERSONAL = 'owner';
+export const AO_SCOPE_SITE = 'site';
 
 function skillKeyMatch(id) {
   return (r) => normaliseRowKey(r) === id;

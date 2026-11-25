@@ -15,6 +15,7 @@ import {
   CMA_REQUIRED_SERVICE_CODES,
   fetchEwFlags,
   fetchSkillsFromAo,
+  AO_SCOPE_SITE,
   fetchSkillFileFromAo,
   fetchSkillFileResultFromAo,
   uploadSkillFileToAo,
@@ -376,6 +377,34 @@ describe('AO / bridge backend switch', () => {
       expect(result[0].skillId).to.be.undefined;
     });
 
+    it('fetchSkillsFromAo sends x-site when org/site are passed', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
+      await fetchSkillsFromAo('my-org', 'my-site');
+      expect(calls[0].opts.headers['x-site']).to.equal('my-org/my-site');
+    });
+
+    it('fetchSkillsFromAo omits x-site when org/site are not passed', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => AO_SKILLS_RESPONSE }));
+      await fetchSkillsFromAo();
+      expect(calls[0].opts.headers['x-site']).to.be.undefined;
+    });
+
+    it('fetchSkillsFromAo passes through scope: "site" items unfiltered', async () => {
+      trackFetch(() => ({
+        ok: true,
+        json: async () => ({
+          skills: [
+            {
+              name: 'site-skill', scope: 'site', description: 'd', display_name: 'Site Skill', lineCount: 1,
+            },
+          ],
+        }),
+      }));
+      const result = await fetchSkillsFromAo('my-org', 'my-site');
+      expect(result[0].id).to.equal('site-skill');
+      expect(result[0].scope).to.equal(AO_SCOPE_SITE);
+    });
+
     it('fetchSkillFileFromAo hits the per-skill files endpoint', async () => {
       const calls = trackFetch(() => ({ ok: true, json: async () => ({ content: '# Hello' }) }));
       const text = await fetchSkillFileFromAo('my-skill');
@@ -450,6 +479,13 @@ describe('AO / bridge backend switch', () => {
       expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
       expect(result[0].id).to.equal('my-skill');
       expect(result[0].skillId).to.equal('skill-uuid-1');
+    });
+
+    it('fetchSkillsFromAo sends x-site alongside x-user-id on the bridge path', async () => {
+      const calls = trackFetch(() => ({ ok: true, json: async () => BRIDGE_SKILLS_RESPONSE }));
+      await fetchSkillsFromAo('my-org', 'my-site');
+      expect(calls[0].opts.headers['x-site']).to.equal('my-org/my-site');
+      expect(calls[0].opts.headers['x-user-id']).to.equal('user-123');
     });
 
     it('fetchSkillFileFromAo resolves skill_id then GETs /api/v1/skills/:skillId', async () => {

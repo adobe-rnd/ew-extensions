@@ -27,6 +27,7 @@ import {
   isSensitiveHeaderName,
   skillRowStatus,
   AO_SCOPE_PERSONAL,
+  AO_SCOPE_SITE,
   DA_SKILLS_EDITOR_PROMPT_ADD_TO_CHAT,
   DA_SKILLS_LAB_PROMPT_ADD_TO_CHAT,
   mergeMarketplacePluginView,
@@ -157,6 +158,7 @@ function renderSkillCard(vm, id) {
   const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
+  const isSite = vm.skillScopes[id] === AO_SCOPE_SITE;
   const usedBy = agentsUsingSkill(vm, id);
   const lineCount = vm.skillLineCounts[id] || 0;
 
@@ -181,6 +183,7 @@ function renderSkillCard(vm, id) {
           ${usedBy.map((name) => html`<span class="plugin-card-count">⚡ ${name}</span>`)}
         ` : nothing}
         ${isPersonal ? html`<span class="plugin-card-badge">Personal</span>` : nothing}
+        ${isSite ? html`<span class="badge">Site</span>` : nothing}
         <span class="plugin-card-count" title="Line count">${lineCount} lines</span>
       </footer>
     </article>
@@ -191,6 +194,7 @@ function renderSkillRow(vm, id) {
   const displayName = vm.skillDisplayNames[id] || id;
   const isViewing = vm.viewingSkillId === id;
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
+  const isSite = vm.skillScopes[id] === AO_SCOPE_SITE;
   const usedBy = agentsUsingSkill(vm, id);
   const lineCount = vm.skillLineCounts[id] || 0;
 
@@ -208,6 +212,7 @@ function renderSkillRow(vm, id) {
         <div class="catalog-row-title-line">
           <span class="catalog-row-name">${displayName}</span>
           ${isPersonal ? html`<span class="catalog-row-meta">Personal</span>` : nothing}
+          ${isSite ? html`<span class="badge">Site</span>` : nothing}
           ${usedBy.length ? html`
             <span class="catalog-row-meta">⚡ ${usedBy[0]}${usedBy.length > 1 ? ` +${usedBy.length - 1}` : ''}</span>
           ` : nothing}
@@ -239,6 +244,7 @@ function renderSkillDetail(vm) {
     || extractTitle(body)
     || '';
   const isPersonal = vm.skillScopes[id] === AO_SCOPE_PERSONAL;
+  const isSite = vm.skillScopes[id] === AO_SCOPE_SITE;
   const readOnly = !isPersonal;
 
   return html`
@@ -248,6 +254,7 @@ function renderSkillDetail(vm) {
           <span class="skill-detail-icon">${TAB_ICON_MAP[TAB_SKILLS]}</span>
           <div>
             <span class="skill-detail-name">${name}</span>
+            ${isSite ? html`<span class="badge">Site</span>` : nothing}
           </div>
         </div>
         ${!readOnly ? html`
