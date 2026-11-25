@@ -149,6 +149,25 @@ describe('NxSkillsEditor._reload — CMA harness detection', () => {
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
   });
 
+  it('sends x-site: {org}/{site} on the catalog fetch so the bridge can resolve site-scope skills', async () => {
+    const headerCalls = [];
+    const realFetchForHeaders = window.fetch;
+    stubFetch({ orgFlags: [{ key: 'ew.coworker', value: 'cma' }], siteFlags: [] });
+    const wrapped = window.fetch;
+    window.fetch = async (url, opts = {}) => {
+      headerCalls.push({ url: String(url), headers: opts.headers || {} });
+      return wrapped(url, opts);
+    };
+    const el = makeEditor('ew-site-header', 'site-x');
+
+    await el._reload();
+    window.fetch = realFetchForHeaders;
+
+    const skillsCall = headerCalls.find((c) => c.url.includes('/api/v1/skills'));
+    expect(skillsCall, 'expected a call to /api/v1/skills').to.exist;
+    expect(skillsCall.headers['x-site']).to.equal('ew-site-header/site-x');
+  });
+
   it('stays on the AO/da-agent path (no bridge calls) when no CMA flag anywhere', async () => {
     const calls = stubFetch({ orgFlags: [], siteFlags: [] });
     const el = makeEditor('ew-unflagged', 'site-2');
