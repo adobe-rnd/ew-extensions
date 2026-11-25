@@ -650,7 +650,7 @@ export async function fetchSkillsFromAo() {
  * "Connected" list on the CMA/bridge path. Without this the tab renders
  * a hardcoded preset list (da-tools/eds-preview) that doesn't reflect what the
  * agent actually runs. Returns null off-bridge or on any failure, so the caller
- * keeps its built-in default and the AO path is unchanged.
+ * keeps its last known list and the AO path is unchanged.
  */
 export async function fetchMcpServersFromBridge() {
   const ctx = await aoAuthContext();
