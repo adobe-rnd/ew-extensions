@@ -11,7 +11,7 @@
  */
 import { expect } from '@esm-bundle/chai';
 import '../../blocks/skills/nx-skills-editor.js';
-import { renderChatDrawer, renderMarketplacePluginDetail } from '../../blocks/skills/renderers.js';
+import { renderChatDrawer, renderMarketplacePluginDetail, renderMcpsCatalog } from '../../blocks/skills/renderers.js';
 import { setSkillsBackend } from '../../blocks/skills/skills-editor-api.js';
 import { initAuth } from '../../blocks/skills/utils/da-fetch.js';
 
@@ -114,6 +114,7 @@ describe('NxSkillsEditor._reload — CMA harness detection', () => {
     const aem = (el._builtinMcpServers || []).find((s) => s.id === 'AEM');
     expect(aem, 'AEM bridge MCP server should be present').to.exist;
     expect(aem.tools.map((t) => t.name)).to.include('list_pages');
+    expect(el._mcpCma).to.equal(true);
     // Proof it actually talked to the bridge.
     expect(calls.some((c) => c.u.includes('/api/v1/skills'))).to.be.true;
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.true;
@@ -157,6 +158,7 @@ describe('NxSkillsEditor._reload — CMA harness detection', () => {
 
     // No bridge traffic and no bridge-sourced MCP servers on the AO path.
     expect(el._builtinMcpServers).to.deep.equal([]);
+    expect(el._mcpCma).to.equal(false);
     expect(calls.some((c) => c.u.includes('/api/v1/mcp-servers'))).to.be.false;
   });
 
@@ -410,5 +412,84 @@ describe('renderMarketplacePluginDetail', () => {
     })));
     expect(out).to.not.include('plugin-adobe-logo');
     expect(out).to.include('acme/plugins');
+  });
+});
+
+// The MCPs tab must not flash the da-agent presets on a CMA site while the
+// harness/bridge list is still loading.
+describe('renderMcpsCatalog — presets vs bridge list', () => {
+  function flatten(node) {
+    if (node == null || typeof node === 'boolean' || typeof node === 'function') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flatten).join('');
+    if (node.strings) return node.strings.reduce((acc, s, i) => acc + s + flatten(node.values[i]), '');
+    return '';
+  }
+  const vm = (over = {}) => ({
+    promptSearch: '',
+    catalogFilter: 'all',
+    catalogViewMode: 'grid',
+    mcpRows: [],
+    builtinMcpServers: [],
+    mcpCma: null,
+    skillDisplayNames: {},
+    skillLineCounts: {},
+    skillScopes: {},
+    setCatalogViewMode() {},
+    onDeleteMcpDirect() {},
+    ...over,
+  });
+  const AEM = { id: 'AEM', url: 'https://aem-mcp.example/mcp', description: 'https://aem-mcp.example/mcp', scope: 'agent', tools: [] };
+
+  it('shows a loading placeholder, not the presets, while the harness is unknown', () => {
+    const out = flatten(renderMcpsCatalog(vm()));
+    expect(out).to.include('Loading');
+    expect(out).to.not.include('da-tools');
+    expect(out).to.not.include('eds-preview');
+  });
+
+  it('CMA: renders the bridge list only, even when it is empty', () => {
+    const withAem = flatten(renderMcpsCatalog(vm({ mcpCma: true, builtinMcpServers: [AEM] })));
+    expect(withAem).to.include('AEM');
+    expect(withAem).to.not.include('da-tools');
+    const empty = flatten(renderMcpsCatalog(vm({ mcpCma: true, builtinMcpServers: [] })));
+    expect(empty).to.include('Connected (0)');
+    expect(empty).to.not.include('da-tools');
+  });
+
+  it('not CMA: renders the da-agent presets', () => {
+    const out = flatten(renderMcpsCatalog(vm({ mcpCma: false })));
+    expect(out).to.include('da-tools');
+    expect(out).to.include('eds-preview');
+  });
+});
+
+describe('NxSkillsEditor — MCP harness snapshot', () => {
+  afterEach(() => sessionStorage.clear());
+
+  function makeEditor(org, site) {
+    const el = document.createElement('nx-skills-editor');
+    el._hash = { value: { org, site } };
+    return el;
+  }
+
+  it('restores the bridge list and harness from the snapshot, so a reload paints them at once', () => {
+    const a = makeEditor('snap-org', 'snap-site');
+    a._builtinMcpServers = [{ id: 'AEM', scope: 'agent' }];
+    a._mcpCma = true;
+    a._saveDataSnapshot();
+
+    const b = makeEditor('snap-org', 'snap-site');
+    expect(b._mcpCma).to.equal(null);
+    expect(b._restoreDataSnapshot()).to.equal(true);
+    expect(b._mcpCma).to.equal(true);
+    expect(b._builtinMcpServers.map((x) => x.id)).to.deep.equal(['AEM']);
+  });
+
+  it('an older snapshot without the harness keeps it unknown (placeholder, not presets)', () => {
+    sessionStorage.setItem('da-skills-editor-data:old-org/old-site', JSON.stringify({ mcpRows: [] }));
+    const el = makeEditor('old-org', 'old-site');
+    expect(el._restoreDataSnapshot()).to.equal(true);
+    expect(el._mcpCma).to.equal(null);
   });
 });

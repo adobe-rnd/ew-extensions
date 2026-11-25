@@ -121,6 +121,8 @@ class NxSkillsEditor extends LitElement {
     _agentRows: { state: true },
     _mcpRows: { state: true },
     _builtinMcpServers: { state: true },
+    // null until known: true = bridge list, false = da-agent presets.
+    _mcpCma: { state: true },
     _mcpTools: { state: true },
     _configuredMcpServers: { state: true },
     _configuredMcpServerHeaders: { state: true },
@@ -246,6 +248,7 @@ class NxSkillsEditor extends LitElement {
     this._agentRows = [];
     this._mcpRows = [];
     this._builtinMcpServers = [];
+    this._mcpCma = null;
     this._mcpTools = null;
     this._configuredMcpServers = {};
     this._configuredMcpServerHeaders = {};
@@ -413,6 +416,8 @@ class NxSkillsEditor extends LitElement {
     if (key !== this._loadedKey) {
       this._loadedKey = key;
       this._memory = null;
+      this._builtinMcpServers = [];
+      this._mcpCma = null;
       const restored = this._restoreDataSnapshot();
       if (restored) {
         this._isLoading = false;
@@ -526,6 +531,8 @@ class NxSkillsEditor extends LitElement {
       prompts: this._prompts,
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
+      builtinMcpServers: this._builtinMcpServers,
+      mcpCma: this._mcpCma,
       configuredMcpServers: this._configuredMcpServers,
       configuredMcpServerHeaders: this._configuredMcpServerHeaders,
       toolOverrides: this._toolOverrides,
@@ -556,6 +563,8 @@ class NxSkillsEditor extends LitElement {
       this._prompts = Array.isArray(snap.prompts) ? snap.prompts : [];
       this._agentRows = Array.isArray(snap.agentRows) ? snap.agentRows : [];
       this._mcpRows = Array.isArray(snap.mcpRows) ? snap.mcpRows : [];
+      this._builtinMcpServers = Array.isArray(snap.builtinMcpServers) ? snap.builtinMcpServers : [];
+      this._mcpCma = typeof snap.mcpCma === 'boolean' ? snap.mcpCma : null;
       this._configuredMcpServers = snap.configuredMcpServers || {};
       this._configuredMcpServerHeaders = snap.configuredMcpServerHeaders || {};
       this._toolOverrides = snap.toolOverrides || {};
@@ -696,12 +705,12 @@ class NxSkillsEditor extends LitElement {
         this._configuredMcpServers = configResult.configuredMcpServers || {};
         this._configuredMcpServerHeaders = configResult.configuredMcpServerHeaders || {};
         this._toolOverrides = configResult.toolOverrides || {};
-        // On the bridge path, the "Connected" MCPs come from the CMA agent
-        // (fetchMcpServersFromBridge), not the hardcoded client presets. Empty
-        // off-bridge or on failure → renderer falls back to its built-in list.
-        this._builtinMcpServers = cma
-          ? (await fetchMcpServersFromBridge()) || []
-          : [];
+        // CMA: the agent's servers from the bridge (a failed fetch keeps the
+        // last known list); otherwise the da-agent presets. Set together so
+        // the presets never flash on a CMA site.
+        const bridgeMcp = cma ? await fetchMcpServersFromBridge() : null;
+        this._builtinMcpServers = cma ? (bridgeMcp || this._builtinMcpServers) : [];
+        this._mcpCma = cma;
         this._saveDataSnapshot();
 
         this._applySuggestion();
@@ -2158,6 +2167,7 @@ class NxSkillsEditor extends LitElement {
       agentRows: this._agentRows,
       mcpRows: this._mcpRows,
       builtinMcpServers: this._builtinMcpServers,
+      mcpCma: this._mcpCma,
       mcpTools: this._mcpTools,
       mcpEnableBusy: this._mcpEnableBusy,
       configuredMcpServers: this._configuredMcpServers,

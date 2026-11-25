@@ -1379,6 +1379,10 @@ function renderMcpRow(vm, s, isBuiltin) {
 }
 
 export function renderMcpsCatalog(vm) {
+  // Harness not known yet: neither the presets nor the bridge list is right.
+  if (vm.mcpCma == null) {
+    return html`<div class="empty" aria-live="polite">Loading…</div>`;
+  }
   const searchQuery = vm.promptSearch.trim().toLowerCase();
   const filterPasses = (status) => vm.catalogFilter === 'all' || status === vm.catalogFilter;
 
@@ -1389,7 +1393,7 @@ export function renderMcpsCatalog(vm) {
   // too; split them out so they render as deletable "Custom"/Personal entries
   // instead of masquerading as built-ins.
   const bridgeServers = vm.builtinMcpServers || [];
-  const hasBridge = bridgeServers.length > 0;
+  const hasBridge = vm.mcpCma === true;
   const connected = hasBridge
     ? bridgeServers.filter((s) => (s.scope ?? 'agent') === 'agent')
     : BUILTIN_MCP_SERVERS;
