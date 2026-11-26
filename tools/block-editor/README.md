@@ -16,7 +16,7 @@ the underlying block structure.
 Add the following URL as a sidebar extension in the `library` sheet of your
 organization or site configuration:
 
-`https://blockimg--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html`
+`https://main--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html`
 
 Library sheet:
 | title | path | format | experience | icon | ref
@@ -34,6 +34,34 @@ Configure each variant separately, including the version without a variant.
 Field definitions belong in the **library template document**, not in each page
 that uses the block. Existing page content must have a compatible structure for
 those fields to be editable.
+
+The extension reads the **Blocks** library entry from site configuration.
+For legacy sites, it also checks organization configuration; site entries take
+precedence. Missing configurations (404) are skipped. A forbidden organization
+configuration (403) is skipped too. A site 403 or any other configuration request
+error stops loading.
+
+To use a different block library index, add a `library` parameter to the
+extension URL:
+
+`https://main--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html?library=https://main--site--org.aem.live/docs/library/blocks.json`
+
+The parameter replaces the configured library. Use it to test a library before
+you add it to the configuration.
+
+### Duplicate templates
+
+A library can contain the same block name and variant more than once. For
+example, a group on one library page can contain a block that has its own page
+elsewhere. The extension uses the first template whose fields metadata fits the
+selected block. If no template fits, it uses the first template that has fields
+metadata. If no template has fields metadata, it uses the first match.
+
+The extension rechecks the match when the selected block's structure changes,
+even if its name, variant, and position stay the same. For repeating blocks,
+the first item's structure determines the match. Ordinary content edits preserve
+the match unless empty image spacers change field matching. Hidden `IGNORE`
+fields still participate in template compatibility checks.
 
 ### Using AI
 
@@ -69,7 +97,7 @@ In the library document, add a `fields` property to the block variant's
 
 For example, here's a hero block configuration:
 
-![Example of manually configured fields metadata](docs/maunual-fields.png)
+![Example of manually configured fields metadata](docs/manual-fields.png)
 
 Count each heading, paragraph, image/picture, or whole list as one field.
 Inline formatting and links do not need additional labels. For blockquotes,
@@ -97,6 +125,8 @@ For a `multi` block, the fields table must contain **exactly two rows**: the
 **Fields** header and one row describing the first item's cells and fields.
 Every item reuses that schema, even if the library template contains several
 sample items. The first item also supplies the template for adding new items.
+When duplicate templates exist, **Add item** uses the same selected template as
+its fields. Adding items is unavailable while that template loads.
 
 Without `multi` configuration, field metadata must describe **all** content rows
 in the library template. A list inside a cell is still one field; it is not the

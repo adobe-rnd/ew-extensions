@@ -1,5 +1,8 @@
 import { config as libraryConfig } from './config.js';
-import { normalizeBlockName, normalizeVariant, isMultiBlockConfigured } from './fields.js';
+import {
+  normalizeBlockName, normalizeVariant, isMultiBlockConfigured,
+  buildBlockFieldDefinitions, resolveBlockFields,
+} from './fields.js';
 
 const libraries = new Map();
 const descriptions = new WeakMap();
@@ -163,7 +166,15 @@ export const isMultiBlock = async (org, site, name) => (
 export const resetBlockLibraryCache = () => libraries.clear();
 export const resetBlockOptionsCache = resetBlockLibraryCache;
 
-export async function getBlockFieldTemplate(blocks, name, variant, actions) {
+function fieldFit(candidate, { block, multi }) {
+  if (!('fields' in candidate.item)) return 0;
+  let definitions;
+  try { definitions = buildBlockFieldDefinitions(candidate, { multi, includeIgnored: true }); } catch { return 1; }
+  if (!block) return 2;
+  return resolveBlockFields(block, definitions).every((field) => !field.error) ? 3 : 2;
+}
+
+export async function getBlockFieldTemplate(blocks, name, variant, actions, selection = {}) {
   if (!descriptions.has(actions)) descriptions.set(actions, new Map());
   const cache = descriptions.get(actions);
   const variants = (await Promise.all(blocks.map(async (block) => (
@@ -181,8 +192,10 @@ export async function getBlockFieldTemplate(blocks, name, variant, actions) {
       }
       return { ...candidate, template: await cache.get(html) };
     }));
-  return candidates.find(({ template }) => normalizeBlockName(template.name) === normalizeBlockName(name)
-    && normalizeVariant(template.variant) === normalizeVariant(variant)) || null;
+  return candidates.filter(({ template }) => normalizeBlockName(template.name) === normalizeBlockName(name)
+    && normalizeVariant(template.variant) === normalizeVariant(variant))
+    .map((candidate) => ({ candidate, fit: fieldFit(candidate, selection) }))
+    .reduce((best, entry) => (!best || entry.fit > best.fit ? entry : best), null)?.candidate || null;
 }
 
 export async function getBlockVariantOptions(blocks, name) {

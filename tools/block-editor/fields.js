@@ -10,7 +10,16 @@ export function matchFieldCount(fields, count) {
   return content.length === count && content.every((field) => field.type === 'image') ? content : fields;
 }
 
-export function buildBlockFieldDefinitions(match, { multi = false } = {}) {
+export function blockFieldStructure(block, { multi = false } = {}) {
+  const rows = block?.rows || [];
+  return JSON.stringify((multi ? rows.slice(0, 1) : rows).map((row) => row.cells.map((cell) => {
+    const types = cell.fields.map((field) => field.type);
+    const images = cell.fields.filter((field) => field.type === 'image').length;
+    return [types, images ? matchFieldCount(cell.fields, images).map((field) => field.type) : null];
+  })));
+}
+
+export function buildBlockFieldDefinitions(match, { multi = false, includeIgnored = false } = {}) {
   if (!match || !('fields' in match.item)) return [];
   const { item, template } = match;
   const rows = item.fields?.rows;
@@ -34,7 +43,7 @@ export function buildBlockFieldDefinitions(match, { multi = false } = {}) {
       const fields = matchFieldCount(templateRow.cells[cellIndex].fields, labels.length);
       if (labels.length !== fields.length) throw new Error('Block field names do not match the library template content.');
       labels.forEach((label, fieldIndex) => {
-        if (!label || label.toUpperCase() === 'IGNORE') return;
+        if (!includeIgnored && (!label || label.toUpperCase() === 'IGNORE')) return;
         definitions.push({
           key: `${rowIndex}-${cellIndex}-${fieldIndex}`,
           label,

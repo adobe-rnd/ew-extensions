@@ -901,6 +901,201 @@ describe('block editor sidebar workflow', () => {
       library.resetBlockLibraryCache();
     }
   });
+  describe('template selection and reload', () => {
+    const picture = '<picture><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></picture>';
+    const video = '<p><a href="https://example.com/v.mp4">Video</a></p>';
+    const rowHtml = (media, title = 'Page title') => `<tr><td><p>${title}</p>${media}</td></tr>`;
+    const metadata = (label, title = true) => `<div class="library-metadata"><div><div>fields</div><div><table>
+      <tr><td>Fields</td></tr><tr><td>${title ? '<p>Title</p>' : ''}<p>${label}</p></td></tr>
+    </table></div></div></div>`;
+    let describeBlock;
+    let originalFetch;
+    let revision;
+    let fetchError;
+    let multi;
+    const select = (items, index = 0) => {
+      const blocks = items.map((rows, blockIndex) => describeBlock({
+        html: `<table><tr><td>content</td></tr>${rows}</table>`, index: blockIndex,
+      }));
+      revision += 1;
+      sdk.callback({ ...snapshot(revision), blocks, selectedBlock: blocks[index].target });
+      return blocks;
+    };
+    const labels = () => element._fields.filter((entry) => !entry.error).map((entry) => entry.label);
+    const expectLabels = async (expected) => {
+      for (let attempt = 0; attempt < 20 && JSON.stringify(labels()) !== JSON.stringify(expected); attempt += 1) await flush();
+      expect(labels()).to.deep.equal(expected);
+    };
+    const loadImage = async () => {
+      select([rowHtml(picture)]);
+      await element._reloadLibrary();
+      expect(labels()).to.deep.equal(['Title', 'Image']);
+    };
+
+    beforeEach(async () => {
+      ({ describeBlock } = await import('../../../tools/block-editor/document.js'));
+      revision = 1;
+      fetchError = false;
+      multi = true;
+      originalFetch = window.fetch;
+      window.fetch = async (url) => {
+        if (fetchError) throw new Error('Library unavailable');
+        return url.endsWith('.json')
+          ? Response.json({
+            data: [{ name: 'content', path: `${window.location.origin}/fixture/content.html` }],
+            editor: { data: multi ? [{ block: 'content', property: 'multi' }] : [] },
+          })
+          : new Response(`<main><div>
+              <div class="content"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
+              <div class="content"><div><div><p>Title</p>${picture}</div></div></div>${metadata('Image')}
+              <div class="content alt"><div><div><p>Title</p>${video}</div></div></div>${metadata('Video')}
+            </div></main>`);
+      };
+      const actions = { ...sdk.actions, describeBlock: async (args) => describeBlock(args) };
+      library.configureLibrary(actions);
+      library.resetBlockLibraryCache();
+      element._hashState = { org: 'org', site: 'site' };
+      element._actions = actions;
+    });
+    afterEach(() => {
+      window.fetch = originalFetch;
+      library.configureLibrary(sdk.actions);
+      library.resetBlockLibraryCache();
+    });
+
+    [false, true].forEach((isMulti) => it(`re-picks templates when selecting another ${isMulti ? 'multi' : 'ordinary'} block`, async () => {
+      multi = isMulti;
+      await loadImage();
+      const blocks = select([rowHtml(picture), rowHtml(video)], 1);
+      expect(element._fieldDefinitions).to.have.length(2);
+      if (multi) {
+        expect(element._multiTemplateRow === null).to.equal(true);
+        element._onAddItem();
+        expect(calls).to.have.length(0);
+      }
+      await expectLabels(['Title', 'Video']);
+      if (multi) {
+        element._onAddItem();
+        const appended = calls.find(([action]) => action === 'applyChanges')[1].changes[0];
+        expect(appended.type).to.equal('appendBlockRow');
+        expect(appended.target).to.deep.equal(blocks[1].target);
+        expect(appended.html).to.include('v.mp4').and.not.to.include('<picture>');
+      }
+    }));
+
+    it('does not use incompatible IGNORE-only templates for fields or insertion', async () => {
+      window.fetch = async (url) => {
+        if (url.endsWith('.json')) {
+          return Response.json({
+            data: ['example', 'hidden', 'image'].map((name) => ({
+              name: 'content', path: `${window.location.origin}/fixture/${name}.html`,
+            })),
+            editor: { data: multi ? [{ block: 'content', property: 'multi' }] : [] },
+          });
+        }
+        const hidden = url.endsWith('/hidden.html');
+        return new Response(`<main><div>
+          <div class="content"><div><div>${hidden ? '<p>Hidden text</p>' : picture}</div></div></div>
+          ${url.endsWith('/example.html') ? '' : metadata(hidden ? 'IGNORE' : 'Image', false)}
+        </div></main>`);
+      };
+      select([`<tr><td>${picture}</td></tr>`]);
+      await element._reloadLibrary();
+      expect(labels()).to.deep.equal(['Image']);
+      element._onAddItem();
+      const appended = calls.find(([action]) => action === 'applyChanges')[1].changes[0];
+      expect(appended.html).to.include('<picture>').and.not.to.include('Hidden text');
+    });
+
+    it('re-picks after same-index content replacement', async () => {
+      multi = false;
+      await loadImage();
+      select([rowHtml(video)]);
+      await expectLabels(['Title', 'Video']);
+    });
+
+    it('keeps template loading and drafts stable for content-only edits', async () => {
+      await loadImage();
+      const loadId = element._fieldLoadId;
+      const title = element._fields[0];
+      element._session.draft(title, 'value', 'Unsaved title');
+      select([rowHtml(picture, 'Remote title')]);
+      await flush();
+      expect(element._fieldLoadId).to.equal(loadId);
+      expect(element._session.value(element._fields[0], 'value')).to.equal('Unsaved title');
+      expect(labels()).to.deep.equal(['Title', 'Image']);
+    });
+
+    it('rejects late template results after same-index structure changes', async () => {
+      await loadImage();
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      element._actions = {
+        ...element._actions,
+        describeBlock: async (args) => { await gate; return describeBlock(args); },
+      };
+      const reload = element._reloadLibrary.bind(element);
+      const loads = [];
+      element._reloadLibrary = (options) => {
+        const loading = reload(options);
+        loads.push(loading);
+        return loading;
+      };
+      try {
+        select([rowHtml(video)]);
+        await flush();
+        element._actions = { ...element._actions, describeBlock: async (args) => describeBlock(args) };
+        select([rowHtml(picture)]);
+        expect(loads).to.have.length(2);
+        expect(element._multiTemplateRow === null).to.equal(true);
+        await loads[1];
+        expect(labels()).to.deep.equal(['Title', 'Image']);
+        const currentRow = element._multiTemplateRow.outerHTML;
+        expect(currentRow).to.include('<picture>');
+        release();
+        await loads[0];
+        expect(labels()).to.deep.equal(['Title', 'Image']);
+        expect(element._multiTemplateRow.outerHTML).to.equal(currentRow);
+      } finally {
+        release();
+        await Promise.all(loads);
+        element._reloadLibrary = reload;
+      }
+    });
+
+    it('does not restore an error from a superseded library reload', async () => {
+      await loadImage();
+      const originalLoadVariants = element._loadVariants;
+      let reject;
+      element._loadVariants = () => new Promise((resolve, rejectLoad) => { reject = rejectLoad; });
+      const loading = element._reloadLibrary();
+      element._loadVariants = originalLoadVariants;
+      try {
+        await flush();
+        select([rowHtml(picture), rowHtml(video)], 1);
+        await expectLabels(['Title', 'Video']);
+        reject(new Error('Superseded request'));
+        await loading;
+        expect(element._libraryError).to.equal('');
+      } finally {
+        reject(new Error('Superseded request'));
+        await loading;
+        element._loadVariants = originalLoadVariants;
+      }
+    });
+
+    it('clears a recovered library error after same-name selection', async () => {
+      fetchError = true;
+      select([rowHtml(picture)]);
+      await element._reloadLibrary();
+      expect(element._libraryError).to.include('Library unavailable');
+      fetchError = false;
+      select([rowHtml(picture), rowHtml(video)], 1);
+      await expectLabels(['Title', 'Video']);
+      expect(element._libraryError).to.equal('');
+      expect(element._variantOptions).to.deep.equal([{ value: 'alt', label: 'alt' }]);
+    });
+  });
   it('reports complete template failure and retries failed library loads', async () => {
     let fetches = 0;
     const originalFetch = window.fetch;

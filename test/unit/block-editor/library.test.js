@@ -170,6 +170,83 @@ describe('block editor library parsing', () => {
     }], 'cards', 'compact', { describeBlock: async (args) => describeBlock(args) });
     expect(matched).to.equal(null);
   });
+  const fieldsMetadata = (rows) => `<div class="library-metadata"><div><div>fields</div><div><table>
+    <tr><td>Fields</td></tr>${rows.map((row) => `<tr><td>${row}</td></tr>`).join('')}
+  </table></div></div></div>`;
+  const picture = '<picture><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></picture>';
+  const describer = { describeBlock: async (args) => describeBlock(args) };
+
+  it('prefers a duplicate template with fields over an earlier one without fields', async () => {
+    const example = parseVariants(`<main><div>
+      <div class="library-container-start"></div>
+      <div class="accordion"><div><div>Question</div></div></div>
+      <div class="cards"><div><div>Example card</div></div></div>
+      <div class="library-container-end"></div>
+      </div></main>`, 'https://example.com/library/accordion');
+    const configured = parseVariants(`<main><div>
+      <div class="cards"><div><div>Card title</div></div></div>
+      ${fieldsMetadata(['Title'])}
+      </div></main>`, 'https://example.com/library/cards');
+    const matched = await getBlockFieldTemplate([
+      { path: '/library/accordion', loadVariants: Promise.resolve(example) },
+      { path: '/library/cards', loadVariants: Promise.resolve(configured) },
+    ], 'cards', '', describer);
+    expect(matched.path).to.equal('/library/cards');
+    expect(buildBlockFieldDefinitions(matched).map((field) => field.label)).to.deep.equal(['Title']);
+  });
+  it('prefers the duplicate template whose fields fit the selected block', async () => {
+    const items = parseVariants(`<main><div>
+      <div class="content"><div><div><p>Video title</p><p><a href="https://example.com/v.mp4">Video</a></p></div></div></div>
+      ${fieldsMetadata(['<p>Title</p><p>Video</p>'])}
+      <div class="content"><div><div><p>Image title</p>${picture}</div></div></div>
+      ${fieldsMetadata(['<p>Title</p><p>Image</p>'])}
+      </div></main>`, 'https://example.com/library/content');
+    const blocks = [{ path: '/library/content', loadVariants: Promise.resolve(items) }];
+    const block = describeBlock({
+      html: `<table><tr><td>content</td></tr><tr><td><p>Page title</p>${picture}</td></tr></table>`,
+    });
+    const matched = await getBlockFieldTemplate(blocks, 'content', '', describer, { block });
+    const fields = resolveBlockFields(block, buildBlockFieldDefinitions(matched));
+    expect(fields.map((field) => field.label)).to.deep.equal(['Title', 'Image']);
+    expect(fields.every((field) => !field.error)).to.equal(true);
+  });
+  for (const partial of [false, true]) {
+    it(`checks ${partial ? 'partly' : 'fully'} ignored fields when ranking duplicates`, async () => {
+      const title = partial ? '<p>Title</p>' : '';
+      const entries = [
+        ['example', picture, null],
+        ['hidden', `${title}<p>Hidden text</p>`, `${title}<p>IGNORE</p>`],
+        ['image', `${title}${picture}`, `${title}<p>Image</p>`],
+      ];
+      const blocks = entries.map(([path, content, labels]) => ({
+        path: `/library/${path}`,
+        loadVariants: Promise.resolve(parseVariants(`<main><div>
+          <div class="content"><div><div>${content}</div></div></div>
+          ${labels ? fieldsMetadata([labels]) : ''}
+        </div></main>`, `https://example.com/library/${path}`)),
+      }));
+      const block = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}${picture}</td></tr></table>` });
+      const selected = await getBlockFieldTemplate(blocks, 'content', '', describer, { block });
+      expect(selected.path).to.equal('/library/image');
+      expect(buildBlockFieldDefinitions(selected).map((field) => field.label))
+        .to.deep.equal(partial ? ['Title', 'Image'] : ['Image']);
+      const hidden = describeBlock({ html: `<table><tr><td>content</td></tr><tr><td>${title}<p>Hidden text</p></td></tr></table>` });
+      const ignored = await getBlockFieldTemplate(blocks, 'content', '', describer, { block: hidden });
+      expect(ignored.path).to.equal('/library/hidden');
+      expect(buildBlockFieldDefinitions(ignored)).to.have.length(partial ? 1 : 0);
+    });
+  }
+  it('keeps the first matching template when no candidate has fields', async () => {
+    const items = parseVariants(`<main><div>
+      <div class="cards"><div><div>First</div></div></div>
+      <div class="cards"><div><div>Second</div></div></div>
+      </div></main>`, 'https://example.com/library/cards');
+    const matched = await getBlockFieldTemplate([
+      { path: '/library/cards', loadVariants: Promise.resolve(items) },
+    ], 'cards', '', describer);
+    expect(matched.item).to.include({ name: 'cards' });
+    expect(matched.template.rows[0].cells[0].fields[0].value).to.equal('First');
+  });
   it('associates preceding and nested metadata', () => {
     const source = `<main><div><h2>Display</h2><div class="library-metadata">
       <div><div>description</div><div>Description</div></div></div>

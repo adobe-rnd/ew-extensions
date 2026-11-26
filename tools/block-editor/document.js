@@ -307,7 +307,7 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
       }
       const configs = await Promise.all([`/${org}`, `/${org}/${siteName}`].map(async (configPath) => {
         const response = await sdk.actions.daFetch(`${admin}/config${configPath}`);
-        if (response.status === 404) return null;
+        if (response.status === 404 || (response.status === 403 && configPath === `/${org}`)) return null;
         if (!response.ok) throw fail('CONFIG_FAILED', `Unable to load library configuration: ${response.status}`);
         return response.json();
       }));

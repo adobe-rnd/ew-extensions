@@ -8,7 +8,7 @@ import { createDocumentActions, IMAGE_FILE_TYPES } from './document.js';
 import { createImagePreviews } from './image-preview.js';
 import {
   normalizeBlockName, buildBlockFieldDefinitions, resolveBlockFields,
-  processBlockOptions, normalizeForSlashMenu, sameTarget, EditorSession,
+  processBlockOptions, normalizeForSlashMenu, sameTarget, blockFieldStructure, EditorSession,
 } from './fields.js';
 import {
   configureLibrary, loadBlockLibrary, loadBlockOptions, resetBlockLibraryCache,
@@ -352,7 +352,6 @@ export class EwBlockProperties extends LitElement {
     this._documentOperation = null;
     this._fieldWriteQueue = Promise.resolve();
     this._variantLoadId = (this._variantLoadId ?? 0) + 1;
-    this._multiLoadId = (this._multiLoadId ?? 0) + 1;
     this._fieldLoadId = (this._fieldLoadId ?? 0) + 1;
     this._clearDragState();
     this._clearListDragState();
@@ -364,6 +363,8 @@ export class EwBlockProperties extends LitElement {
     const prevName = this._name;
     const prevVariant = this._variant;
     const previous = this._itemTable;
+    const structureChanged = blockFieldStructure(block, { multi: this._isMulti })
+      !== blockFieldStructure(previous, { multi: this._isMulti });
     this._name = block?.name || '';
     this._variant = block?.variant || '';
     this._hasBlock = !!block;
@@ -397,40 +398,23 @@ export class EwBlockProperties extends LitElement {
       this._fieldError = '';
       this._fieldErrorCode = '';
       this._reloadLibrary();
+    } else if (block && (!sameTarget(block.target, previous?.target) || structureChanged)) {
+      this._fieldsGenerationRequested = false;
+      this._reloadLibrary({ keep: true });
     }
     this.requestUpdate();
   }
 
-  async _reloadLibrary() {
-    const identity = `${this._documentId}:${this._name}:${this._variant}`;
+  async _reloadLibrary({ keep = false } = {}) {
+    const loading = Promise.all([this._loadVariants({ keep }), this._loadFields({ keep })]);
+    const loadId = this._fieldLoadId;
     try {
-      await Promise.all([this._loadVariants(), this._loadMultiBlock(), this._loadFields()]);
+      await loading;
     } catch (error) {
-      if (this.isConnected && identity === `${this._documentId}:${this._name}:${this._variant}`) {
+      if (this.isConnected && loadId === this._fieldLoadId) {
         this._libraryError = `Unable to load block library: ${error.message}`;
       }
     }
-  }
-
-  async _loadMultiBlock() {
-    const loadId = (this._multiLoadId ?? 0) + 1;
-    this._multiLoadId = loadId;
-    this._isMulti = false;
-    this._multiTemplateRow = null;
-    this._clearDragState();
-    const { org, site } = this._hashState ?? {};
-    const name = this._name;
-    const variant = this._variant;
-    if (!org || !site || !name) return;
-    const multi = await isMultiBlock(org, site, name);
-    if (loadId !== this._multiLoadId || !this.isConnected) return;
-    this._isMulti = multi;
-    if (!multi) return;
-    const { blocks } = await loadBlockLibrary(org, site);
-    const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
-    const row = match?.item.dom.rows[1] ?? await getMultiBlockTemplateRow(org, site, name);
-    if (loadId !== this._multiLoadId || !this.isConnected) return;
-    this._multiTemplateRow = row;
   }
 
   _getItemView({ editable = true } = {}) {
@@ -634,13 +618,18 @@ export class EwBlockProperties extends LitElement {
       </section>`;
   }
 
-  async _loadFields() {
+  async _loadFields({ keep = false } = {}) {
     const loadId = (this._fieldLoadId ?? 0) + 1;
     this._fieldLoadId = loadId;
-    this._fieldDefinitions = [];
-    this._blockOptions = null;
-    this._generateFieldsContext = null;
+    this._multiTemplateRow = null;
     this._libraryError = '';
+    this._clearDragState();
+    if (!keep) {
+      this._isMulti = false;
+      this._fieldDefinitions = [];
+      this._blockOptions = null;
+      this._generateFieldsContext = null;
+    }
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     const variant = this._variant;
@@ -650,9 +639,14 @@ export class EwBlockProperties extends LitElement {
         isMultiBlock(org, site, name), loadBlockLibrary(org, site), loadBlockOptions(org, site),
       ]);
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
-      const match = await getBlockFieldTemplate(blocks, name, variant, this._actions);
+      const match = await getBlockFieldTemplate(blocks, name, variant, this._actions, {
+        block: this._itemTable, multi,
+      });
+      const row = multi
+        ? match?.item.dom.rows[1] ?? await getMultiBlockTemplateRow(org, site, name) : null;
       if (loadId !== this._fieldLoadId || !this.isConnected) return;
       this._isMulti = multi;
+      this._multiTemplateRow = row;
       this._blockOptions = processBlockOptions(options);
       if (!match && warnings.some((warning) => (
         normalizeBlockName(warning.name) === normalizeBlockName(name)
@@ -779,7 +773,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     resetBlockLibraryCache();
     resetBlockOptionsCache();
     const loading = Promise.all([
-      this._loadVariants(), this._loadMultiBlock(), this._loadFields(),
+      this._loadVariants(), this._loadFields(),
     ]);
     const loadId = this._fieldLoadId;
     try {
@@ -962,10 +956,10 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
       ${this._renderEditError()}`;
   }
 
-  async _loadVariants() {
+  async _loadVariants({ keep = false } = {}) {
     const loadId = (this._variantLoadId ?? 0) + 1;
     this._variantLoadId = loadId;
-    this._variantOptions = [];
+    if (!keep) this._variantOptions = [];
     const { org, site } = this._hashState ?? {};
     const name = this._name;
     if (!org || !site || !name) return;
