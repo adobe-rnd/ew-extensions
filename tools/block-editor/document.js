@@ -292,6 +292,15 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
     }
     assertLiveTarget(request);
   };
+  const replaceLiveBlock = async (html, expected) => {
+    const result = await sdk.actions.sendHTML(html, { replace: true, expected });
+    if (disposed) throw fail('WRONG_DOCUMENT', 'The extension was closed.');
+    if (!result?.ok) throw fail(result?.error || 'REPLACE_FAILED', result?.message || 'Unable to replace the live block.');
+    if (typeof result.html !== 'string' || !result.selection) {
+      throw fail('INVALID_RESPONSE', 'The host did not return the updated live document.');
+    }
+    return result;
+  };
   return {
     ...sdk.actions,
     dispose() { disposed = true; },
@@ -391,12 +400,28 @@ export function createDocumentActions(sdk, { admin = 'https://admin.da.live', on
           applyChange(table, change);
           element = writeTable(element, table, change);
         });
-        const result = await sdk.actions.sendHTML(element.outerHTML, { replace: true, expected });
-        if (disposed) throw fail('WRONG_DOCUMENT', 'The extension was closed.');
-        if (!result?.ok) throw fail(result?.error || 'REPLACE_FAILED', result?.message || 'Unable to replace the live block.');
-        if (typeof result.html !== 'string' || !result.selection) {
-          throw fail('INVALID_RESPONSE', 'The host did not return the updated live document.');
+        const result = await replaceLiveBlock(element.outerHTML, expected);
+        if (live.html === expected.html || live.html === result.html) {
+          this.receiveLiveDocument(result);
         }
+        return publish();
+      } finally { busy = false; }
+    },
+    // Replaces the selected block with operator HTML when it still matches `blockHtml`.
+    async replaceBlock({ blockIndex, html, blockHtml }) {
+      if (busy) throw fail('BUSY', 'Wait for the current document operation.');
+      if (disposed || !live) throw fail('NO_EDITOR', 'No live document is connected.');
+      if (!live.editable) throw fail('READ_ONLY', 'The editor is read-only.');
+      if (sdk.capabilities?.sendHTMLReplace !== 1 || typeof sdk.actions.sendHTML !== 'function') {
+        throw fail('UNSUPPORTED', 'The host does not support live HTML replacement.');
+      }
+      if (live.index !== blockIndex || live.signatures[blockIndex] !== blockHtml) {
+        throw fail('STALE_LIVE', 'The block changed. Review it before saving.');
+      }
+      busy = true;
+      try {
+        const expected = { html: live.html, blockIndex };
+        const result = await replaceLiveBlock(html, expected);
         if (live.html === expected.html || live.html === result.html) {
           this.receiveLiveDocument(result);
         }

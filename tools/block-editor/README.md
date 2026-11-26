@@ -18,11 +18,6 @@ organization or site configuration:
 
 `https://main--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html`
 
-Library sheet:
-| title | path | format | experience | icon | ref
-| --- | --- | --- | --- | --- | --- |
-| Block Inspector | https://main--ew-extensions--adobe-rnd.aem.live/tools/block-editor/block-editor.html | | | | |
-
 
 ## Configs
 
@@ -146,6 +141,51 @@ library index's `options` sheet:
 `Label=value` provides a display label and a stored value. If `=value` is omitted,
 the label itself is stored. These options are separate from the field labels in
 Library Metadata.
+
+### Operators
+
+A block operator is a JS module that can take over a block's authoring. Configure
+it in the block library index's `editor` sheet:
+
+| block | property | value |
+| --- | --- | --- |
+| form | operator | /tools/block-operators/form.js |
+
+- Block names are matched like `multi` (case-insensitive; spaces, `-` and `_` are
+  equivalent). The first `operator` row for a block wins.
+- `value` is either a fully qualified `https://` (or `http://`) module URL, such as
+  `https://main--{site}--{org}.preview.da.live/tools/block-operators/form.js`,
+  or a site-relative path starting with `/`. Other values are ignored.
+- A site-relative path resolves against the sidebar's own origin when it is served
+  from the same site (e.g. `main--{site}--{org}.preview.da.live`), otherwise against
+  `https://main--{site}--{org}.preview.da.live`.
+- Cross-origin module imports need CORS headers on the module's server. `aem.live` and
+  `aem.page` don't send them, so point full URLs at `preview.da.live` or another
+  CORS-enabled host.
+- The module is imported when a matching block is first selected, then cached.
+  **Retry loading library** reloads it.
+
+When the selected block's operator implements the `inspector` contract, the
+sidebar mounts it below the block name and variant picker, in place of the fields
+form and repeating items. If the operator has no `inspector`, its `matches()`
+returns false, or it fails to load, create, mount or update, the sidebar shows the
+usual form for that block.
+
+The sidebar backs the operator's `ctx` with the plugin SDK:
+
+| `ctx` | Backed by |
+| --- | --- |
+| `name`, `variant`, `blockIndex`, `html`, `editable`, `update()` | `subscribeLiveDocument`, narrowed to the selected block. `html` is the block's EDS markup. |
+| `styles` | The nx2 `form.css` and `buttons.css` sheets the sidebar already loads |
+| `commit(html)` | `sendHTML(html, { replace: true, expected })`. Resolves `{ ok: true }` or `{ ok: false, error, message }` with `NOT_EDITABLE`, `STALE`, `INVALID_HTML` (not exactly one block of the same name) or `NO_EDITOR`. |
+| `select(itemId)` | Resolves `{ ok: true }`, or `NOT_FOUND` when the operator can't `locate` the item. The selection is shared with other surfaces only when the host is given a `connect` hook (see `OperatorInspector` in `operators.js`). |
+| `onEditorSelect(cb)` | Selection messages for this block from a `connect` hook, if any. `cb` fires when the item id changes. |
+| `surface` | `'inspector'` |
+
+An operator module's default export is `{ matches?({ name, variant }), create(ctx) }`.
+`create` returns an instance with optional `update(ctx)`, `destroy()`,
+`resolve(position)`, `locate(itemId)` and `inspector.mount(container)`, which returns
+`{ unmount() }`.
 
 ## Using the sidebar
 

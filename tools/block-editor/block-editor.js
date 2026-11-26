@@ -13,8 +13,9 @@ import {
 import {
   configureLibrary, loadBlockLibrary, loadBlockOptions, resetBlockLibraryCache,
   resetBlockOptionsCache, isMultiBlock, getMultiBlockTemplateRow,
-  getBlockFieldTemplate, getBlockVariantChoices,
+  getBlockFieldTemplate, getBlockVariantChoices, loadBlockOperators,
 } from './library.js';
+import { OperatorInspector, resetOperatorCache } from './operators.js';
 
 const codeBase = new URL('.', import.meta.url).href.replace(/\/$/, '');
 await setConfig({ codeBase });
@@ -91,6 +92,12 @@ export class EwBlockProperties extends LitElement {
     this._imageUploadTarget = null;
     this._disabled = true;
     this._hostError = 'Connecting to editor…';
+    this._operators = new OperatorInspector({
+      styles: [formStyle, buttonsStyle],
+      commit: (request) => this._commitOperator(request),
+      scope: () => this._hashState,
+      onChange: () => this.requestUpdate(),
+    });
     this._connect();
   }
 
@@ -100,6 +107,7 @@ export class EwBlockProperties extends LitElement {
     try {
       const sdk = await DA_SDK;
       if (!this.isConnected || this._connection !== connection) return;
+      this._sdk = sdk;
       if (sdk.capabilities?.liveDocument !== 1
         || sdk.capabilities?.sendHTMLReplace !== 1
         || typeof sdk.actions?.subscribeLiveDocument !== 'function'
@@ -355,6 +363,46 @@ export class EwBlockProperties extends LitElement {
     this._fieldLoadId = (this._fieldLoadId ?? 0) + 1;
     this._clearDragState();
     this._clearListDragState();
+    this._operators?.teardown();
+  }
+
+  async _syncOperator(block, snapshot) {
+    const { org, site } = this._hashState ?? {};
+    let url;
+    if (block && org && site) {
+      try {
+        url = (await loadBlockOperators(org, site)).get(normalizeBlockName(block.name));
+      } catch { /* library errors are reported by the fields form */ }
+      if (!this.isConnected || this._session.snapshot !== snapshot) return;
+    }
+    this._operators.sync(url ? {
+      key: `${snapshot.documentId}:${block.target.index}:${normalizeBlockName(block.name)}`,
+      url,
+      name: block.name,
+      variant: block.variant,
+      blockIndex: block.target.index,
+      html: snapshot.liveBlockSignature,
+      editable: snapshot.editable !== false,
+    } : null);
+  }
+
+  async _commitOperator(request) {
+    if (this._documentBusy) return { ok: false, error: 'BUSY', message: 'Wait for the current document operation.' };
+    if (typeof this._actions?.replaceBlock !== 'function') {
+      return { ok: false, error: 'NO_EDITOR', message: 'No live document is connected.' };
+    }
+    const connection = this._connection;
+    this._documentBusy = true;
+    const operation = this._actions.replaceBlock(request).then(() => ({ ok: true }));
+    this._documentOperation = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this._connection === connection && this._documentOperation === operation) {
+        this._documentBusy = false;
+        this._documentOperation = null;
+      }
+    }
   }
 
   _refresh() {
@@ -402,6 +450,7 @@ export class EwBlockProperties extends LitElement {
       this._fieldsGenerationRequested = false;
       this._reloadLibrary({ keep: true });
     }
+    this._syncOperator(block, snapshot);
     this.requestUpdate();
   }
 
@@ -772,6 +821,10 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
     this._refreshingLibrary = true;
     resetBlockLibraryCache();
     resetBlockOptionsCache();
+    resetOperatorCache();
+    this._operators.failed.clear();
+    this._operators.teardown();
+    this._syncOperator(block, this._session.snapshot);
     const loading = Promise.all([
       this._loadVariants(), this._loadFields(),
     ]);
@@ -1018,7 +1071,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
   }
 
   render() {
-    return html`${this._renderAdminSelector()}
+    return html`${this._operators?.mounted ? nothing : this._renderAdminSelector()}
       ${this._imagePreviewError ? html`<p class="nx-input-error-msg" role="alert">${this._imagePreviewError}</p>` : nothing}
       ${this._renderEditor()}`;
   }
@@ -1031,7 +1084,7 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
       ${!this._hasBlock ? this._renderEditError() : nothing}
       <div class="ew-page-metadata" aria-busy=${!!this._documentBusy}>
         <div class="ew-pm-fields" ?inert=${this._documentBusy}>
-          ${this._hasBlock ? html`<div class="nx-form-field ew-pm-control">
+          ${this._hasBlock ? html`${this._operators.mounted ? nothing : html`<div class="nx-form-field ew-pm-control">
             <span>Block</span>
             <button type="button" class="ew-block-name"
               aria-label=${`Open block library for ${this._name}`}
@@ -1040,7 +1093,8 @@ Adapt the rows, cells, and labels to the actual selected library variant; do not
               title="Open block library to replace the selected canvas block"
               @click=${this._openBlockLibrary}
               >${html`<span>${this._name}</span>`}${switchIcon}</button>
-          </div>${this._renderVariantPicker()}${this._renderFields()}${this._renderItems()}
+          </div>${this._renderVariantPicker()}`}${this._operators.mounted
+            ? this._operators.container : html`${this._renderFields()}${this._renderItems()}`}
             ${this._libraryError && !OUT_OF_SYNC_ERRORS.has(this._fieldErrorCode) ? html`
               <button type="button" class="nx-form-btn-secondary"
                 ?disabled=${this._refreshingLibrary} @click=${this._onRefreshLibrary}>
